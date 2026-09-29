@@ -1,4 +1,4 @@
-import { createWorker, OEM, PSM, type Worker } from 'tesseract.js'
+import * as Tesseract from 'tesseract.js'
 
 export interface OcrProgress {
   status: string
@@ -11,8 +11,10 @@ export interface OcrResult {
   mrzCandidates: string[]
 }
 
-let worker: Worker | null = null
-let workerPromise: Promise<Worker> | null = null
+type OcrWorker = Awaited<ReturnType<typeof Tesseract.createWorker>>
+
+let worker: OcrWorker | null = null
+let workerPromise: Promise<OcrWorker> | null = null
 let progressHandler: ((progress: OcrProgress) => void) | null = null
 
 function normalizeMrzCandidate(line: string) {
@@ -36,7 +38,7 @@ async function getWorker(onProgress?: (progress: OcrProgress) => void) {
   if (worker) return worker
 
   if (!workerPromise) {
-    workerPromise = createWorker('eng', OEM.LSTM_ONLY, {
+    workerPromise = Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
       logger(message) {
         progressHandler?.({
           status: message.status,
@@ -45,7 +47,7 @@ async function getWorker(onProgress?: (progress: OcrProgress) => void) {
       },
     }).then(async (createdWorker) => {
       await createdWorker.setParameters({
-        tessedit_pageseg_mode: PSM.AUTO,
+        tessedit_pageseg_mode: Tesseract.PSM.AUTO,
         preserve_interword_spaces: '1',
       })
 
