@@ -23,6 +23,7 @@ const ocrRunning = ref(false)
 const ocrError = ref('')
 const ocrProgress = ref<OcrProgress>({ status: '', progress: 0 })
 const ocrResult = ref<OcrResult | null>(null)
+const mrzCropUrl = ref('')
 
 const fileSummary = computed(() => {
   if (!selectedFile.value) return ''
@@ -42,6 +43,10 @@ const canRunPassportOcr = computed(
     !ocrRunning.value,
 )
 
+const mrzCandidateLengths = computed(() =>
+  ocrResult.value?.mrzCandidates.map((line) => line.length).join(' / ') ?? '',
+)
+
 async function checkApi() {
   loading.value = true
   error.value = ''
@@ -56,7 +61,15 @@ async function checkApi() {
   }
 }
 
+function revokeMrzCrop() {
+  if (mrzCropUrl.value) {
+    URL.revokeObjectURL(mrzCropUrl.value)
+    mrzCropUrl.value = ''
+  }
+}
+
 function resetOcrResult() {
+  revokeMrzCrop()
   ocrResult.value = null
   ocrError.value = ''
   ocrProgress.value = { status: '', progress: 0 }
@@ -98,24 +111,39 @@ function handleFileChange(event: Event) {
   previewUrl.value = URL.createObjectURL(file)
 }
 
+function validationText(value: boolean | null) {
+  if (value === true) return '通過'
+  if (value === false) return '失敗'
+  return '未驗證'
+}
+
+function validationClass(value: boolean | null) {
+  if (value === true) return 'validation-pass'
+  if (value === false) return 'validation-fail'
+  return 'validation-unknown'
+}
+
 async function runPassportOcr() {
   if (!selectedFile.value || documentType.value !== 'passport') return
 
   ocrRunning.value = true
   ocrError.value = ''
-  ocrResult.value = null
+  resetOcrResult()
   ocrProgress.value = {
     status: 'starting',
     progress: 0,
   }
 
   try {
-    ocrResult.value = await recognizePassport(
+    const result = await recognizePassport(
       selectedFile.value,
       (progress) => {
         ocrProgress.value = progress
       },
     )
+
+    ocrResult.value = result
+    mrzCropUrl.value = URL.createObjectURL(result.mrzCrop)
   } catch (err) {
     ocrError.value =
       err instanceof Error ? err.message : 'OCR 執行失敗，請查看瀏覽器 Console。'
@@ -240,15 +268,15 @@ onBeforeUnmount(() => {
       <div class="section-heading">
         <div>
           <p class="label">Step 3 · OCR PoC</p>
-          <h2>護照 OCR 基準測試</h2>
+          <h2>護照 OCR + MRZ 專用辨識</h2>
         </div>
 
-        <span class="poc-badge">Baseline</span>
+        <span class="poc-badge">Baseline A</span>
       </div>
 
       <p class="section-copy">
-        第一輪只測護照。Tesseract.js 是基準線，不代表最終 OCR 引擎。
-        我們先測「瀏覽器能不能跑、速度多少、原始文字辨識到什麼程度」。
+        現在會先做整頁 OCR，再自動裁切護照底部做第二次 MRZ 專用 OCR。
+        MRZ 通過 2 × 44 格式後，再用 TD3 check digit 驗證關鍵欄位。
       </p>
 
       <div
@@ -275,7 +303,7 @@ onBeforeUnmount(() => {
         </div>
         <progress :value="ocrProgress.progress" max="1" />
         <p class="first-run-note">
-          第一次執行會先載入 OCR WebAssembly 與英文模型，因此通常會比第二次慢。
+          第一次執行會先載入 OCR WebAssembly 與英文模型；之後同一頁面會重用 worker。
         </p>
       </div>
 
@@ -284,34 +312,140 @@ onBeforeUnmount(() => {
       </p>
 
       <div v-if="ocrResult" class="ocr-result">
-        <div class="result-summary">
+        <div class="result-summary four-columns">
           <div>
-            <span>本次耗時</span>
+            <span>總耗時</span>
             <strong>{{ (ocrResult.elapsedMs / 1000).toFixed(2) }} 秒</strong>
           </div>
           <div>
-            <span>MRZ 候選行</span>
-            <strong>{{ ocrResult.mrzCandidates.length }}</strong>
+            <span>整頁 OCR</span>
+            <strong>{{ (ocrResult.fullPageMs / 1000).toFixed(2) }} 秒</strong>
+          </div>
+          <div>
+            <span>MRZ 專用 OCR</span>
+            <strong>{{ (ocrResult.mrzPassMs / 1000).toFixed(2) }} 秒</strong>
+          </div>
+          <div>
+            <span>TD3 2 × 44</span>
+            <strong :class="ocrResult.parsedMrz ? 'success' : 'error'">
+              {{ ocrResult.parsedMrz ? '格式通過' : '尚未通過' }}
+            </strong>
           </div>
         </div>
 
-        <div v-if="ocrResult.mrzCandidates.length" class="result-block">
-          <p class="label">MRZ candidates</p>
-          <pre>{{ ocrResult.mrzCandidates.join('\n') }}</pre>
+        <div v-if="ocrResult.parsedMrz" class="validation-panel">
+          <div class="validation-heading">
+            <div>
+              <p class="label">MRZ check digits</p>
+              <h3>
+                {{
+                  ocrResult.parsedMrz.validation.requiredValid
+                    ? '關鍵檢查碼全部通過'
+                    : '仍有檢查碼失敗'
+                }}
+              </h3>
+            </div>
+
+            <span
+              class="validation-overall"
+              :class="
+                ocrResult.parsedMrz.validation.requiredValid
+                  ? 'validation-pass'
+                  : 'validation-fail'
+              "
+            >
+              {{
+                ocrResult.parsedMrz.validation.requiredValid
+                  ? '可信度高'
+                  : '需要人工確認'
+              }}
+            </span>
+          </div>
+
+          <div class="validation-grid">
+            <div>
+              <span>護照號碼</span>
+              <strong
+                :class="validationClass(ocrResult.parsedMrz.validation.documentNumber)"
+              >
+                {{ validationText(ocrResult.parsedMrz.validation.documentNumber) }}
+              </strong>
+            </div>
+            <div>
+              <span>出生日期</span>
+              <strong
+                :class="validationClass(ocrResult.parsedMrz.validation.birthDate)"
+              >
+                {{ validationText(ocrResult.parsedMrz.validation.birthDate) }}
+              </strong>
+            </div>
+            <div>
+              <span>有效期限</span>
+              <strong
+                :class="validationClass(ocrResult.parsedMrz.validation.expiryDate)"
+              >
+                {{ validationText(ocrResult.parsedMrz.validation.expiryDate) }}
+              </strong>
+            </div>
+            <div>
+              <span>整體檢查碼</span>
+              <strong
+                :class="validationClass(ocrResult.parsedMrz.validation.composite)"
+              >
+                {{ validationText(ocrResult.parsedMrz.validation.composite) }}
+              </strong>
+            </div>
+          </div>
+
+          <p class="validation-note">
+            這裡刻意不直接顯示姓名、完整護照號碼等個資；如果你截圖給我，
+            只要讓我看到「通過／失敗」即可。
+          </p>
         </div>
 
-        <div class="result-block">
-          <p class="label">Raw OCR text</p>
-          <pre>{{ ocrResult.text || '沒有辨識到文字。' }}</pre>
+        <div v-else class="format-warning">
+          <strong>MRZ 尚未形成可解析的 2 × 44 字元。</strong>
+          <span>
+            目前候選行數：{{ ocrResult.mrzCandidates.length }}；
+            候選長度：{{ mrzCandidateLengths || '無' }}。
+          </span>
         </div>
+
+        <details class="debug-details">
+          <summary>查看 MRZ 裁切預覽（含敏感證件內容）</summary>
+          <div class="mrz-preview" v-if="mrzCropUrl">
+            <img :src="mrzCropUrl" alt="MRZ crop preview" />
+          </div>
+        </details>
+
+        <details class="debug-details">
+          <summary>查看 MRZ OCR 原始文字（含敏感資料）</summary>
+          <div class="result-block details-block">
+            <p class="label">MRZ dedicated OCR</p>
+            <pre>{{ ocrResult.mrzText || '沒有辨識到 MRZ 文字。' }}</pre>
+          </div>
+        </details>
+
+        <details class="debug-details">
+          <summary>查看整頁 Raw OCR（含敏感資料）</summary>
+          <div class="result-block details-block">
+            <p class="label">Raw OCR text</p>
+            <pre>{{ ocrResult.text || '沒有辨識到文字。' }}</pre>
+          </div>
+        </details>
+
+        <p class="timing-note">
+          初始化 {{ (ocrResult.initializationMs / 1000).toFixed(2) }} 秒 ·
+          MRZ 前處理 {{ (ocrResult.preprocessingMs / 1000).toFixed(2) }} 秒
+        </p>
       </div>
     </section>
 
     <section class="next-card">
-      <h2>這一輪要看的不是「一次就做到完美」</h2>
+      <h2>下一輪只看兩件事</h2>
       <p>
-        先記錄第一張護照的第一次與第二次辨識時間，以及 MRZ / 姓名 / 護照號碼
-        是否能被辨識。這些結果會決定下一輪是先做影像前處理，還是直接比較第二個 OCR engine。
+        第一，看 MRZ 是否能穩定形成 2 × 44；第二，看護照號碼、生日、有效期限與整體
+        check digit 能不能全部通過。只有格式與檢查碼穩定之後，才值得進一步做欄位入庫。
       </p>
     </section>
   </main>
