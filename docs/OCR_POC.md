@@ -97,3 +97,24 @@
 6. 新增 MRZ pass 後的總耗時。
 
 若格式與 check digit 仍不穩定，再比較更進一步的影像前處理或第二個 OCR engine。
+
+
+### 測試 2：MRZ 第二行驗證成功
+
+同一張測試護照在「整頁 OCR + MRZ 專用 OCR」流程中：
+
+- 總耗時：約 1.25 秒。
+- 整頁 OCR：約 0.69 秒。
+- MRZ 專用 OCR：約 0.22 秒。
+- 第二行 MRZ 已形成 44 字元。
+- 護照號碼 check digit：通過。
+- 出生日期 check digit：通過。
+- 有效期限 check digit：通過。
+- composite check digit：通過。
+
+判斷：
+
+- 護照號碼、出生日期、有效期限與第二行中的其他核心欄位，已具備可由 MRZ check digit 驗證的高可信度路線。
+- 目前主要剩餘問題集中在第一行姓名區。
+- 第一行若 MRZ 專用 OCR 漏掉，允許從整頁 OCR 的 P<... 候選 fallback，再只針對尾端 filler 做 TD3 規則正規化。
+- 第一行姓名沒有與第二行相同層級的完整 check digit 保護，因此即使結構補成 44 字元，姓名仍需人工覆核。
