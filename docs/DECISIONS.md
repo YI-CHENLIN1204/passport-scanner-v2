@@ -46,6 +46,18 @@ V2 不直接寫入 ERP。
 
 V2 不投入複雜登入／角色權限管理；若未來增加第二位使用者，也不代表要立刻建立完整 RBAC。
 
+### D-011：V2 開發骨架技術棧
+
+V2 第一版開發骨架採：
+
+- Frontend：Vue 3 + TypeScript + Vite。
+- Backend：ASP.NET Core Web API / .NET 10 LTS。
+- Frontend 開發 port：5173。
+- Backend 開發 port：5080。
+- 前後端透過 HTTP / JSON API 溝通。
+
+此決策只鎖定應用程式骨架；OCR runtime 與正式資料庫仍需依 PoC / schema 階段決定。
+
 ## 現行規則，但需要持續評估
 
 ### P-001：證件照片保存
@@ -76,6 +88,8 @@ V2 不投入複雜登入／角色權限管理；若未來增加第二位使用�
 - 如何刪除。
 - 如何避免將不必要的敏感欄位納入訓練。
 
-### O-004：最終技術棧
+### O-004：OCR runtime 與正式資料庫
 
-前端框架、後端框架、資料庫、瀏覽器 OCR runtime 仍可依 PoC 結果決定；核心限制是 OCR 必須維持在瀏覽器端。
+應用程式骨架已確定為 Vue 3 + TypeScript + Vite / ASP.NET Core Web API (.NET 10)。
+
+瀏覽器 OCR runtime 與正式資料庫仍需依 PoC 與資料模型階段決定；核心限制是 OCR 必須維持在瀏覽器端。
