@@ -19,6 +19,8 @@ interface BatchTestResult {
   line2ChecksPassed: boolean
   line1Source: OcrResult['mrzLine1Source']
   correctedCharacters: number
+  mrzAttempts: number
+  selectedCropRatio: number
   error: string | null
 }
 
@@ -222,6 +224,8 @@ async function runBatchTests() {
             result.line2Validation?.requiredValid === true,
           line1Source: result.mrzLine1Source,
           correctedCharacters: result.mrzRepair?.correctedCharacters ?? 0,
+          mrzAttempts: result.mrzAttempts,
+          selectedCropRatio: result.selectedCropRatio,
           error: null,
         })
       } catch (err) {
@@ -234,6 +238,8 @@ async function runBatchTests() {
           line2ChecksPassed: false,
           line1Source: null,
           correctedCharacters: 0,
+          mrzAttempts: 0,
+          selectedCropRatio: 0,
           error: err instanceof Error ? err.message : '辨識失敗',
         })
       }
@@ -579,7 +585,9 @@ onBeforeUnmount(() => {
 
         <p class="timing-note">
           初始化 {{ (ocrResult.initializationMs / 1000).toFixed(2) }} 秒 ·
-          MRZ 前處理 {{ (ocrResult.preprocessingMs / 1000).toFixed(2) }} 秒
+          MRZ 前處理 {{ (ocrResult.preprocessingMs / 1000).toFixed(2) }} 秒 ·
+          MRZ 嘗試 {{ ocrResult.mrzAttempts }} 次 ·
+          最終裁切底部 {{ Math.round(ocrResult.selectedCropRatio * 100) }}%
         </p>
       </div>
     </section>
@@ -700,6 +708,16 @@ onBeforeUnmount(() => {
               <dt>受限自動修正</dt>
               <dd>
                 {{ result.correctedCharacters > 0 ? result.correctedCharacters + ' 字元' : '無' }}
+              </dd>
+            </div>
+            <div>
+              <dt>MRZ 嘗試</dt>
+              <dd>{{ result.mrzAttempts }} 次</dd>
+            </div>
+            <div>
+              <dt>最終裁切</dt>
+              <dd>
+                {{ result.selectedCropRatio > 0 ? Math.round(result.selectedCropRatio * 100) + '%' : '無' }}
               </dd>
             </div>
           </dl>
