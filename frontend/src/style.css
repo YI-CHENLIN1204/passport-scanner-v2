@@ -64,6 +64,7 @@ h2 {
 
 .status-card,
 .scanner-card,
+.ocr-card,
 .next-card {
   border: 1px solid #dfe3ea;
   border-radius: 18px;
@@ -103,11 +104,12 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
-  opacity: 0.55;
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .scanner-card,
+.ocr-card,
 .next-card {
   margin-top: 18px;
 }
@@ -123,14 +125,23 @@ button:disabled {
   font-size: 1.35rem;
 }
 
-.local-only-badge {
+.local-only-badge,
+.poc-badge {
   border-radius: 999px;
-  background: #ecfdf3;
-  color: #087443;
   padding: 7px 11px;
   font-size: 0.82rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.local-only-badge {
+  background: #ecfdf3;
+  color: #087443;
+}
+
+.poc-badge {
+  background: #eef4ff;
+  color: #3538cd;
 }
 
 .form-grid {
@@ -237,6 +248,96 @@ input[type="file"] {
   color: #172033;
 }
 
+.section-copy {
+  margin: 16px 0 20px;
+  color: #596273;
+  line-height: 1.7;
+}
+
+.notice-box {
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 14px 16px;
+  line-height: 1.6;
+}
+
+.ocr-button {
+  min-width: 180px;
+}
+
+.progress-area {
+  margin-top: 20px;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: #596273;
+  font-size: 0.9rem;
+}
+
+progress {
+  width: 100%;
+  height: 14px;
+}
+
+.first-run-note {
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.ocr-result {
+  margin-top: 22px;
+}
+
+.result-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.result-summary > div {
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.result-summary span,
+.result-summary strong {
+  display: block;
+}
+
+.result-summary span {
+  color: #667085;
+  font-size: 0.84rem;
+  margin-bottom: 6px;
+}
+
+.result-block {
+  margin-top: 12px;
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.result-block pre {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
 .next-card h2 {
   margin: 0 0 8px;
   font-size: 1.05rem;
@@ -261,7 +362,8 @@ input[type="file"] {
   }
 
   .form-grid,
-  .preview-layout {
+  .preview-layout,
+  .result-summary {
     grid-template-columns: 1fr;
   }
 
