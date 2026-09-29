@@ -51,6 +51,8 @@ export interface OcrResult {
   fullPageMs: number
   preprocessingMs: number
   mrzPassMs: number
+  mrzAttempts: number
+  selectedCropRatio: number
 }
 
 type OcrWorker = Awaited<ReturnType<typeof Tesseract.createWorker>>
@@ -584,12 +586,13 @@ async function canvasToBlob(canvas: HTMLCanvasElement) {
 
 async function createMrzPreparedImages(
   image: File,
+  cropRatio = 0.24,
+  thresholdBias = 0,
 ): Promise<MrzPreparedImages> {
   const bitmap = await createImageBitmap(image)
 
   // TD3 MRZ is at the bottom of the passport data page. Keep the crop tight
   // so security artwork and portrait/text above the MRZ do not pollute OCR.
-  const cropRatio = 0.24
   const sourceY = Math.floor(bitmap.height * (1 - cropRatio))
   const sourceHeight = bitmap.height - sourceY
 
@@ -637,7 +640,10 @@ async function createMrzPreparedImages(
     grayValues[grayIndex] = gray
   }
 
-  const threshold = otsuThreshold(grayValues)
+  const threshold = Math.max(
+    0,
+    Math.min(255, otsuThreshold(grayValues) + thresholdBias),
+  )
   const binary = new Uint8Array(grayValues.length)
 
   for (let grayIndex = 0, pixelIndex = 0; grayIndex < grayValues.length; grayIndex += 1, pixelIndex += 4) {
@@ -703,6 +709,61 @@ async function createMrzPreparedImages(
   }
 }
 
+
+function validationScore(validation: MrzValidation | null) {
+  if (!validation) return 0
+
+  const checks = [
+    validation.documentNumber,
+    validation.birthDate,
+    validation.expiryDate,
+    validation.composite,
+  ]
+
+  return checks.filter((value) => value === true).length
+}
+
+function chooseBestLine2Candidate(lines: string[]) {
+  const evaluated = lines
+    .filter((line) => !line.startsWith('P'))
+    .map((line) => {
+      const normalized = normalizeMrzCandidate(line)
+      const repaired = repairTd3Line2(normalized)
+      const validation = validateTd3Line2(repaired.line)
+
+      return {
+        raw: line,
+        line: repaired.line,
+        repair: repaired.repair,
+        validation,
+        score:
+          (validation?.requiredValid ? 1000 : 0) +
+          validationScore(validation) * 100 -
+          Math.abs(normalized.length - 44) * 5 +
+          ((normalized.match(/\d/g)?.length ?? 0) >= 10 ? 10 : 0),
+      }
+    })
+    .sort((a, b) => b.score - a.score)
+
+  return evaluated[0] ?? null
+}
+
+function chooseBestLine1Candidate(lines: string[]) {
+  return (
+    lines
+      .filter((line) => line.startsWith('P'))
+      .map((line) => ({
+        line: normalizeTd3Line1(line),
+        raw: line,
+      }))
+      .sort(
+        (a, b) =>
+          Math.abs(a.line.length - 44) -
+          Math.abs(b.line.length - 44),
+      )[0] ?? null
+  )
+}
+
 async function getWorker(onProgress?: (progress: OcrProgress) => void) {
   progressHandler = onProgress ?? null
 
@@ -763,121 +824,134 @@ export async function recognizePassport(
     progress: 0.52,
   })
 
-  const preprocessingStartedAt = performance.now()
-  const prepared = await createMrzPreparedImages(image)
-  const preprocessingMs = performance.now() - preprocessingStartedAt
+  let preprocessingMs = 0
+  let mrzPassMs = 0
+  let mrzAttempts = 0
+  let selectedCropRatio = 0.24
+  let selectedCrop: Blob | null = null
 
-  await activeWorker.setParameters({
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
-    preserve_interword_spaces: '0',
-  })
+  const normalizedLines = new Set<string>()
+  const mrzDebugTexts: string[] = []
 
-  const mrzPassStartedAt = performance.now()
-  const rawLines: string[] = []
-
-  if (prepared.lines.length === 2) {
-    for (let index = 0; index < prepared.lines.length; index += 1) {
-      progressOffset = 0.56 + index * 0.21
-      progressScale = 0.21
-
-      const result = await activeWorker.recognize(prepared.lines[index])
-      rawLines.push(result.data.text)
-    }
-  } else {
-    progressOffset = 0.56
-    progressScale = 0.44
-
-    await activeWorker.setParameters({
-      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
-      preserve_interword_spaces: '0',
-    })
-
-    const fallback = await activeWorker.recognize(prepared.crop)
-    rawLines.push(...fallback.data.text.split(/\r?\n/))
+  const fullPageCandidates = findMrzCandidates(fullPageResult.data.text)
+  for (const candidate of fullPageCandidates) {
+    normalizedLines.add(candidate)
   }
 
-  let normalizedLines = rawLines
-    .map(normalizeMrzCandidate)
-    .filter((line) => line.length >= 20)
+  const variants = [
+    { cropRatio: 0.24, thresholdBias: 0 },
+    { cropRatio: 0.24, thresholdBias: -18 },
+    { cropRatio: 0.24, thresholdBias: 18 },
+    { cropRatio: 0.32, thresholdBias: 0 },
+    { cropRatio: 0.40, thresholdBias: 0 },
+  ]
 
-  const hasLikelyLine1 = normalizedLines.some((line) => line.startsWith('P'))
-  const hasLikelyLine2 = normalizedLines.some(
-    (line) =>
-      !line.startsWith('P') &&
-      Math.abs(line.length - 44) <= 4 &&
-      (line.match(/\d/g)?.length ?? 0) >= 10,
-  )
+  let bestLine2 = chooseBestLine2Candidate([...normalizedLines])
+  let bestLine1 = chooseBestLine1Candidate([...normalizedLines])
+  let bestScore = bestLine2?.score ?? Number.NEGATIVE_INFINITY
 
-  // If single-line segmentation misses one MRZ row, recover by OCRing the
-  // whole prepared crop as a block and merge those candidates.
-  if (!hasLikelyLine1 || !hasLikelyLine2) {
-    await activeWorker.setParameters({
-      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
-      preserve_interword_spaces: '0',
+  for (let attemptIndex = 0; attemptIndex < variants.length; attemptIndex += 1) {
+    const variant = variants[attemptIndex]
+    mrzAttempts += 1
+
+    onProgress?.({
+      status: `MRZ attempt ${mrzAttempts}/${variants.length}`,
+      progress: 0.54 + (attemptIndex / variants.length) * 0.42,
     })
 
-    progressOffset = 0.92
-    progressScale = 0.08
-
-    const fallback = await activeWorker.recognize(prepared.crop)
-
-    normalizedLines = Array.from(
-      new Set([
-        ...normalizedLines,
-        ...fallback.data.text
-          .split(/\r?\n/)
-          .map(normalizeMrzCandidate)
-          .filter((line) => line.length >= 20),
-      ]),
+    const preprocessingStartedAt = performance.now()
+    const prepared = await createMrzPreparedImages(
+      image,
+      variant.cropRatio,
+      variant.thresholdBias,
     )
+    preprocessingMs += performance.now() - preprocessingStartedAt
+
+    await activeWorker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+      preserve_interword_spaces: '0',
+    })
+
+    const attemptStartedAt = performance.now()
+    const attemptTexts: string[] = []
+
+    if (prepared.lines.length === 2) {
+      for (const lineImage of prepared.lines) {
+        const result = await activeWorker.recognize(lineImage)
+        attemptTexts.push(result.data.text)
+      }
+    }
+
+    await activeWorker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+      preserve_interword_spaces: '0',
+    })
+
+    const blockResult = await activeWorker.recognize(prepared.crop)
+    attemptTexts.push(blockResult.data.text)
+
+    mrzPassMs += performance.now() - attemptStartedAt
+    mrzDebugTexts.push(...attemptTexts)
+
+    for (const text of attemptTexts) {
+      for (const line of text.split(/\r?\n/)) {
+        const normalized = normalizeMrzCandidate(line)
+        if (normalized.length >= 20 && normalized.length <= 60) {
+          normalizedLines.add(normalized)
+        }
+      }
+    }
+
+    const candidateLines = [...normalizedLines]
+    const line2Candidate = chooseBestLine2Candidate(candidateLines)
+    const line1Candidate = chooseBestLine1Candidate(candidateLines)
+
+    if ((line2Candidate?.score ?? Number.NEGATIVE_INFINITY) > bestScore) {
+      bestLine2 = line2Candidate
+      bestScore = line2Candidate?.score ?? bestScore
+      selectedCrop = prepared.crop
+      selectedCropRatio = variant.cropRatio
+    }
+
+    if (
+      line1Candidate &&
+      (!bestLine1 ||
+        Math.abs(line1Candidate.line.length - 44) <
+          Math.abs(bestLine1.line.length - 44))
+    ) {
+      bestLine1 = line1Candidate
+    }
+
+    if (
+      bestLine2?.validation?.requiredValid === true &&
+      bestLine1?.line.length === 44
+    ) {
+      break
+    }
   }
 
-  const mrzPassMs = performance.now() - mrzPassStartedAt
+  if (!selectedCrop) {
+    const fallbackStartedAt = performance.now()
+    const fallbackPrepared = await createMrzPreparedImages(image)
+    preprocessingMs += performance.now() - fallbackStartedAt
+    selectedCrop = fallbackPrepared.crop
+  }
 
-  const dedicatedLine1Source =
-    normalizedLines
-      .filter((line) => line.startsWith('P'))
-      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
-    null
+  const mrzLine1 = bestLine1?.line ?? null
+  const mrzLine2 = bestLine2?.line ?? null
+  const mrzRepair = bestLine2?.repair ?? null
+  const line2Validation = bestLine2?.validation ?? null
 
-  const fullPageLine1Source =
-    findMrzCandidates(fullPageResult.data.text)
-      .filter((line) => line.startsWith('P'))
-      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
-    null
+  let mrzLine1Source: 'dedicated' | 'full-page' | null = null
+  if (mrzLine1) {
+    const cameFromFullPage = fullPageCandidates.some(
+      (candidate) => normalizeTd3Line1(candidate) === mrzLine1,
+    )
+    mrzLine1Source = cameFromFullPage ? 'full-page' : 'dedicated'
+  }
 
-  const line1Source = dedicatedLine1Source ?? fullPageLine1Source
-  const mrzLine1Source =
-    dedicatedLine1Source
-      ? 'dedicated'
-      : fullPageLine1Source
-        ? 'full-page'
-        : null
-
-  const line2Source =
-    normalizedLines
-      .filter((line) => !line.startsWith('P'))
-      .sort((a, b) => {
-        const score = (line: string) =>
-          Math.abs(line.length - 44) +
-          ((line.match(/\d/g)?.length ?? 0) < 10 ? 20 : 0)
-
-        return score(a) - score(b)
-      })[0] ??
-    null
-
-  const mrzLine1 = line1Source ? normalizeTd3Line1(line1Source) : null
-  const rawMrzLine2 = line2Source
-    ? normalizeMrzCandidate(line2Source)
-    : null
-  const repairedLine2 = repairTd3Line2(rawMrzLine2)
-  const mrzLine2 = repairedLine2.line
-  const mrzRepair = repairedLine2.repair
-
-  const line2Validation = validateTd3Line2(mrzLine2)
   const parsedMrz = parseTd3Mrz(
     mrzLine1,
     mrzLine2,
@@ -891,20 +965,22 @@ export async function recognizePassport(
 
   return {
     text: fullPageResult.data.text.trim(),
-    mrzText: rawLines.join('\n').trim(),
-    mrzCandidates: normalizedLines,
+    mrzText: mrzDebugTexts.join('\n').trim(),
+    mrzCandidates: [...normalizedLines],
     mrzLine1,
     mrzLine2,
     mrzLine1Source,
     line2Validation,
     mrzRepair,
     parsedMrz,
-    mrzCrop: prepared.crop,
+    mrzCrop: selectedCrop,
     elapsedMs: performance.now() - totalStartedAt,
     initializationMs,
     fullPageMs,
     preprocessingMs,
     mrzPassMs,
+    mrzAttempts,
+    selectedCropRatio,
   }
 }
 
