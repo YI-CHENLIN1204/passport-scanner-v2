@@ -14,6 +14,11 @@ export interface MrzValidation {
   requiredValid: boolean
 }
 
+export interface MrzRepairInfo {
+  correctedCharacters: number
+  correctedFields: string[]
+}
+
 export interface ParsedMrz {
   line1: string
   line2: string
@@ -38,6 +43,7 @@ export interface OcrResult {
   mrzLine2: string | null
   mrzLine1Source: 'dedicated' | 'full-page' | null
   line2Validation: MrzValidation | null
+  mrzRepair: MrzRepairInfo | null
   parsedMrz: ParsedMrz | null
   mrzCrop: Blob
   elapsedMs: number
@@ -101,9 +107,12 @@ function normalizeTd3Line1(rawLine: string) {
     return line.slice(0, 44)
   }
 
-  const hasFillerTail = line.indexOf('<<<', 5) >= 0
+  const hasNameDelimiter = line.indexOf('<<', 5) >= 0
 
-  if (line.length < 44 && hasFillerTail) {
+  // OCR engines sometimes omit a long run of trailing '<' filler characters.
+  // Padding is safe only after the TD3 name delimiter has been observed; this
+  // does not alter the recognized surname/given-name characters.
+  if (line.length < 44 && hasNameDelimiter) {
     return line.padEnd(44, '<')
   }
 
@@ -147,6 +156,235 @@ function calculateCheckDigit(value: string) {
 function validateCheckDigit(value: string, expected: string) {
   if (!/^\d$/.test(expected)) return null
   return calculateCheckDigit(value) === expected
+}
+
+const digitConfusions: Record<string, string> = {
+  O: '0',
+  Q: '0',
+  I: '1',
+  L: '1',
+  Z: '2',
+  S: '5',
+  G: '6',
+  B: '8',
+}
+
+const alnumConfusions: Record<string, string> = {
+  O: '0',
+  '0': 'O',
+  I: '1',
+  '1': 'I',
+  L: '1',
+  Z: '2',
+  '2': 'Z',
+  S: '5',
+  '5': 'S',
+  G: '6',
+  '6': 'G',
+  B: '8',
+  '8': 'B',
+}
+
+function getCharacterOptions(
+  character: string,
+  mode: 'numeric' | 'alnum',
+) {
+  if (mode === 'numeric') {
+    if (/\d/.test(character)) return [character]
+
+    const mapped = digitConfusions[character]
+    return mapped ? [mapped] : []
+  }
+
+  if (character === '<') return ['<']
+
+  const options = [character]
+  const alternate = alnumConfusions[character]
+
+  if (alternate && alternate !== character) {
+    options.push(alternate)
+  }
+
+  return options
+}
+
+function enumerateVariants(
+  value: string,
+  mode: 'numeric' | 'alnum',
+  maxVariants = 4096,
+) {
+  const options = [...value].map((character) =>
+    getCharacterOptions(character, mode),
+  )
+
+  if (options.some((choices) => choices.length === 0)) {
+    return []
+  }
+
+  const combinationCount = options.reduce(
+    (total, choices) => total * choices.length,
+    1,
+  )
+
+  if (combinationCount > maxVariants) {
+    return []
+  }
+
+  let variants = ['']
+
+  for (const choices of options) {
+    const next: string[] = []
+
+    for (const prefix of variants) {
+      for (const choice of choices) {
+        next.push(prefix + choice)
+      }
+    }
+
+    variants = next
+  }
+
+  return variants
+}
+
+function repairFieldByCheckDigit(
+  value: string,
+  expected: string,
+  mode: 'numeric' | 'alnum',
+) {
+  const expectedOptions = getCharacterOptions(expected, 'numeric')
+  const variants = enumerateVariants(value, mode)
+
+  if (!variants.length || !expectedOptions.length) {
+    return null
+  }
+
+  const passing = new Map<string, { value: string; checkDigit: string }>()
+
+  for (const candidate of variants) {
+    for (const checkDigit of expectedOptions) {
+      if (calculateCheckDigit(candidate) === checkDigit) {
+        passing.set(`${candidate}|${checkDigit}`, {
+          value: candidate,
+          checkDigit,
+        })
+      }
+    }
+  }
+
+  if (passing.size !== 1) {
+    return null
+  }
+
+  return [...passing.values()][0]
+}
+
+function countDifferences(before: string, after: string) {
+  const length = Math.max(before.length, after.length)
+  let differences = 0
+
+  for (let index = 0; index < length; index += 1) {
+    if (before[index] !== after[index]) {
+      differences += 1
+    }
+  }
+
+  return differences
+}
+
+function repairTd3Line2(rawLine: string | null) {
+  if (!rawLine || rawLine.length !== 44) {
+    return {
+      line: rawLine,
+      repair: null as MrzRepairInfo | null,
+    }
+  }
+
+  const characters = [...rawLine]
+  const correctedFields: string[] = []
+  let correctedCharacters = 0
+
+  const repairField = (
+    start: number,
+    end: number,
+    checkIndex: number,
+    mode: 'numeric' | 'alnum',
+    fieldName: string,
+  ) => {
+    const originalValue = characters.slice(start, end).join('')
+    const originalCheck = characters[checkIndex]
+    const currentValidation = validateCheckDigit(
+      originalValue,
+      originalCheck,
+    )
+
+    if (currentValidation === true) return
+
+    const repaired = repairFieldByCheckDigit(
+      originalValue,
+      originalCheck,
+      mode,
+    )
+
+    if (!repaired) return
+
+    correctedCharacters +=
+      countDifferences(originalValue, repaired.value) +
+      (originalCheck === repaired.checkDigit ? 0 : 1)
+
+    characters.splice(
+      start,
+      end - start,
+      ...repaired.value,
+    )
+    characters[checkIndex] = repaired.checkDigit
+    correctedFields.push(fieldName)
+  }
+
+  repairField(0, 9, 9, 'alnum', 'documentNumber')
+  repairField(13, 19, 19, 'numeric', 'birthDate')
+  repairField(21, 27, 27, 'numeric', 'expiryDate')
+
+  // Personal number is optional/issuer-specific. Repair it only when its
+  // own check digit is numeric and the search space stays uniquely solvable.
+  if (/\d/.test(characters[42])) {
+    repairField(28, 42, 42, 'alnum', 'personalNumber')
+  }
+
+  // The composite digit itself can be confused with a letter. At this point
+  // protected fields have already been repaired independently.
+  const compositeValue =
+    characters.slice(0, 10).join('') +
+    characters.slice(13, 20).join('') +
+    characters.slice(21, 43).join('')
+
+  const compositeExpectedOptions = getCharacterOptions(
+    characters[43],
+    'numeric',
+  )
+
+  if (
+    validateCheckDigit(compositeValue, characters[43]) !== true &&
+    compositeExpectedOptions.length === 1 &&
+    calculateCheckDigit(compositeValue) === compositeExpectedOptions[0]
+  ) {
+    if (characters[43] !== compositeExpectedOptions[0]) {
+      correctedCharacters += 1
+      characters[43] = compositeExpectedOptions[0]
+      correctedFields.push('compositeCheckDigit')
+    }
+  }
+
+  return {
+    line: characters.join(''),
+    repair:
+      correctedCharacters > 0
+        ? {
+            correctedCharacters,
+            correctedFields,
+          }
+        : null,
+  }
 }
 
 function validateTd3Line2(line2: string | null): MrzValidation | null {
@@ -632,9 +870,12 @@ export async function recognizePassport(
     null
 
   const mrzLine1 = line1Source ? normalizeTd3Line1(line1Source) : null
-  const mrzLine2 = line2Source
+  const rawMrzLine2 = line2Source
     ? normalizeMrzCandidate(line2Source)
     : null
+  const repairedLine2 = repairTd3Line2(rawMrzLine2)
+  const mrzLine2 = repairedLine2.line
+  const mrzRepair = repairedLine2.repair
 
   const line2Validation = validateTd3Line2(mrzLine2)
   const parsedMrz = parseTd3Mrz(
@@ -656,6 +897,7 @@ export async function recognizePassport(
     mrzLine2,
     mrzLine1Source,
     line2Validation,
+    mrzRepair,
     parsedMrz,
     mrzCrop: prepared.crop,
     elapsedMs: performance.now() - totalStartedAt,
