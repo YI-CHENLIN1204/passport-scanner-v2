@@ -44,7 +44,12 @@ const canRunPassportOcr = computed(
 )
 
 const mrzCandidateLengths = computed(() =>
-  ocrResult.value?.mrzCandidates.map((line) => line.length).join(' / ') ?? '',
+  [
+    ocrResult.value?.mrzLine1?.length ?? null,
+    ocrResult.value?.mrzLine2?.length ?? null,
+  ]
+    .map((length) => length ?? '無')
+    .join(' / '),
 )
 
 async function checkApi() {
@@ -333,15 +338,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="ocrResult.parsedMrz" class="validation-panel">
+        <div v-if="ocrResult.line2Validation" class="validation-panel">
           <div class="validation-heading">
             <div>
-              <p class="label">MRZ check digits</p>
+              <p class="label">MRZ line 2 check digits</p>
               <h3>
                 {{
-                  ocrResult.parsedMrz.validation.requiredValid
-                    ? '關鍵檢查碼全部通過'
-                    : '仍有檢查碼失敗'
+                  ocrResult.line2Validation.requiredValid
+                    ? '第二行關鍵檢查碼全部通過'
+                    : '第二行仍有檢查碼失敗'
                 }}
               </h3>
             </div>
@@ -349,14 +354,14 @@ onBeforeUnmount(() => {
             <span
               class="validation-overall"
               :class="
-                ocrResult.parsedMrz.validation.requiredValid
+                ocrResult.line2Validation.requiredValid
                   ? 'validation-pass'
                   : 'validation-fail'
               "
             >
               {{
-                ocrResult.parsedMrz.validation.requiredValid
-                  ? '可信度高'
+                ocrResult.line2Validation.requiredValid
+                  ? '關鍵欄位可信度高'
                   : '需要人工確認'
               }}
             </span>
@@ -366,48 +371,47 @@ onBeforeUnmount(() => {
             <div>
               <span>護照號碼</span>
               <strong
-                :class="validationClass(ocrResult.parsedMrz.validation.documentNumber)"
+                :class="validationClass(ocrResult.line2Validation.documentNumber)"
               >
-                {{ validationText(ocrResult.parsedMrz.validation.documentNumber) }}
+                {{ validationText(ocrResult.line2Validation.documentNumber) }}
               </strong>
             </div>
             <div>
               <span>出生日期</span>
               <strong
-                :class="validationClass(ocrResult.parsedMrz.validation.birthDate)"
+                :class="validationClass(ocrResult.line2Validation.birthDate)"
               >
-                {{ validationText(ocrResult.parsedMrz.validation.birthDate) }}
+                {{ validationText(ocrResult.line2Validation.birthDate) }}
               </strong>
             </div>
             <div>
               <span>有效期限</span>
               <strong
-                :class="validationClass(ocrResult.parsedMrz.validation.expiryDate)"
+                :class="validationClass(ocrResult.line2Validation.expiryDate)"
               >
-                {{ validationText(ocrResult.parsedMrz.validation.expiryDate) }}
+                {{ validationText(ocrResult.line2Validation.expiryDate) }}
               </strong>
             </div>
             <div>
               <span>整體檢查碼</span>
               <strong
-                :class="validationClass(ocrResult.parsedMrz.validation.composite)"
+                :class="validationClass(ocrResult.line2Validation.composite)"
               >
-                {{ validationText(ocrResult.parsedMrz.validation.composite) }}
+                {{ validationText(ocrResult.line2Validation.composite) }}
               </strong>
             </div>
           </div>
 
           <p class="validation-note">
-            這裡刻意不直接顯示姓名、完整護照號碼等個資；如果你截圖給我，
-            只要讓我看到「通過／失敗」即可。
+            第二行可以獨立驗證，所以就算第一行姓名區還沒達到 44 字元，
+            也能先判斷護照號碼、生日與有效期限是否可靠。畫面不直接顯示完整個資。
           </p>
         </div>
 
         <div v-else class="format-warning">
           <strong>MRZ 尚未形成可解析的 2 × 44 字元。</strong>
           <span>
-            目前候選行數：{{ ocrResult.mrzCandidates.length }}；
-            候選長度：{{ mrzCandidateLengths || '無' }}。
+            MRZ 行長度（Line 1 / Line 2）：{{ mrzCandidateLengths }}。
           </span>
         </div>
 
