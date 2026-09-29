@@ -71,25 +71,25 @@ function normalizeTd3Line1(rawLine: string) {
   let line = normalizeMrzCandidate(rawLine)
   const start = line.indexOf('P<')
 
-  if (start >= 0) {
-    line = line.slice(start)
+  if (start < 0) {
+    return line
+  }
+
+  line = line.slice(start)
+
+  // TD3 passport line 1 is always exactly 44 characters. If OCR adds
+  // trailing artifacts, keep the first 44 characters from the confirmed P<
+  // start. This is structural normalization only; the name remains subject
+  // to human review because line 1 has no equivalent full check-digit chain.
+  if (line.length > 44) {
+    return line.slice(0, 44)
   }
 
   const nameFieldStart = 5
-  const fillerStart = line.indexOf('<<<', nameFieldStart)
+  const hasFillerTail = line.indexOf('<<<', nameFieldStart) >= 0
 
-  if (fillerStart >= 0) {
-    line =
-      line.slice(0, fillerStart) +
-      line
-        .slice(fillerStart)
-        .replace(/[A-Z0-9]/g, '<')
-
-    if (line.length > 44) {
-      line = line.slice(0, 44)
-    } else if (line.length < 44) {
-      line = line.padEnd(44, '<')
-    }
+  if (line.length < 44 && hasFillerTail) {
+    return line.padEnd(44, '<')
   }
 
   return line
