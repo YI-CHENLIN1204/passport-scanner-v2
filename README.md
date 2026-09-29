@@ -23,7 +23,7 @@ V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI �
 - [docs/SYSTEM_ARCHITECTURE.md](./docs/SYSTEM_ARCHITECTURE.md) — V2 架構與資料流。
 - [docs/OCR_REQUIREMENTS.md](./docs/OCR_REQUIREMENTS.md) — OCR 文件類型、欄位與驗證原則。
 - [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) — 旅客主檔、證件版本與團別資料模型方向。
-- [docs/DECISIONS.md](./docs/DECISIONS.md) — 已確認決策與尚未定案項目。
+- [docs/DECISIONS.md](./docs/DECISIONS.md) — 已確認決策與尚未定案項目。\n- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 本機環境、啟動方式與前後端 port。
 
 ## 開發原則
 
@@ -32,3 +32,13 @@ V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI �
 3. OCR 必須允許人工覆核，不能把辨識結果直接視為正確資料。
 4. 敏感資料採最小化蒐集與最小化保存。
 5. 尚未寫進「已確認決策」的構想，不可自行當成正式需求實作。
+
+
+## Current Development Stack
+
+```text
+frontend/  Vue 3 + TypeScript + Vite        :5173
+backend/   ASP.NET Core Web API (.NET 10)  :5080
+```
+
+開發啟動方式請看 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)。
