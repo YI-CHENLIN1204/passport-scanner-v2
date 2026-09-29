@@ -371,3 +371,151 @@ progress {
     width: 100%;
   }
 }
+
+
+.four-columns {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.validation-panel,
+.format-warning,
+.debug-details {
+  margin-top: 14px;
+}
+
+.validation-panel {
+  border: 1px solid #dfe3ea;
+  border-radius: 14px;
+  padding: 18px;
+  background: #fbfcfe;
+}
+
+.validation-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.validation-heading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.validation-overall {
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.validation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.validation-grid > div {
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.validation-grid span,
+.validation-grid strong {
+  display: block;
+}
+
+.validation-grid span {
+  color: #667085;
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+}
+
+.validation-pass {
+  color: #087443;
+}
+
+.validation-fail {
+  color: #b42318;
+}
+
+.validation-unknown {
+  color: #667085;
+}
+
+.validation-note,
+.timing-note {
+  margin: 14px 0 0;
+  color: #667085;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.format-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 14px 16px;
+  line-height: 1.5;
+}
+
+.debug-details {
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.debug-details summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.debug-details[open] summary {
+  border-bottom: 1px solid #e2e6ec;
+}
+
+.details-block {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.mrz-preview {
+  padding: 16px;
+  background: #111827;
+}
+
+.mrz-preview img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+}
+
+@media (max-width: 900px) {
+  .four-columns,
+  .validation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .four-columns,
+  .validation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .validation-heading {
+    flex-direction: column;
+  }
+}
