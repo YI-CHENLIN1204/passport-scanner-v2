@@ -403,13 +403,28 @@ onBeforeUnmount(() => {
           </div>
 
           <p class="validation-note">
-            第二行可以獨立驗證，所以就算第一行姓名區還沒達到 44 字元，
-            也能先判斷護照號碼、生日與有效期限是否可靠。畫面不直接顯示完整個資。
+            第二行可以獨立驗證，所以護照號碼、生日與有效期限可以先建立高可信度。
+            第一行姓名若由整頁 OCR fallback 補回，仍必須保留人工覆核。
+          </p>
+
+          <p v-if="ocrResult.mrzLine1" class="timing-note">
+            Line 1 來源：
+            <strong>
+              {{
+                ocrResult.mrzLine1Source === 'dedicated'
+                  ? 'MRZ 專用 OCR'
+                  : ocrResult.mrzLine1Source === 'full-page'
+                    ? '整頁 OCR fallback'
+                    : '未知'
+              }}
+            </strong>
+            · Line 1 / Line 2 長度：
+            <strong>{{ ocrResult.mrzLine1.length }} / {{ ocrResult.mrzLine2?.length ?? '無' }}</strong>
           </p>
         </div>
 
-        <div v-else class="format-warning">
-          <strong>MRZ 尚未形成可解析的 2 × 44 字元。</strong>
+        <div v-if="!ocrResult.parsedMrz" class="format-warning">
+          <strong>MRZ 尚未形成完整可解析的 2 × 44 字元。</strong>
           <span>
             MRZ 行長度（Line 1 / Line 2）：{{ mrzCandidateLengths }}。
           </span>
