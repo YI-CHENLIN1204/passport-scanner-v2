@@ -36,6 +36,7 @@ export interface OcrResult {
   mrzCandidates: string[]
   mrzLine1: string | null
   mrzLine2: string | null
+  mrzLine1Source: 'dedicated' | 'full-page' | null
   line2Validation: MrzValidation | null
   parsedMrz: ParsedMrz | null
   mrzCrop: Blob
@@ -86,6 +87,8 @@ function normalizeTd3Line1(rawLine: string) {
 
     if (line.length > 44) {
       line = line.slice(0, 44)
+    } else if (line.length < 44) {
+      line = line.padEnd(44, '<')
     }
   }
 
@@ -581,11 +584,25 @@ export async function recognizePassport(
 
   const mrzPassMs = performance.now() - mrzPassStartedAt
 
-  const line1Source =
+  const dedicatedLine1Source =
     normalizedLines
       .filter((line) => line.startsWith('P'))
       .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
     null
+
+  const fullPageLine1Source =
+    findMrzCandidates(fullPageResult.data.text)
+      .filter((line) => line.startsWith('P'))
+      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
+    null
+
+  const line1Source = dedicatedLine1Source ?? fullPageLine1Source
+  const mrzLine1Source =
+    dedicatedLine1Source
+      ? 'dedicated'
+      : fullPageLine1Source
+        ? 'full-page'
+        : null
 
   const line2Source =
     normalizedLines
@@ -608,6 +625,7 @@ export async function recognizePassport(
   const parsedMrz = parseTd3Mrz(
     mrzLine1,
     mrzLine2,
+    mrzLine1Source,
     line2Validation,
   )
 
