@@ -18,6 +18,7 @@ interface BatchTestResult {
   line2Length: number | null
   line2ChecksPassed: boolean
   line1Source: OcrResult['mrzLine1Source']
+  correctedCharacters: number
   error: string | null
 }
 
@@ -220,6 +221,7 @@ async function runBatchTests() {
           line2ChecksPassed:
             result.line2Validation?.requiredValid === true,
           line1Source: result.mrzLine1Source,
+          correctedCharacters: result.mrzRepair?.correctedCharacters ?? 0,
           error: null,
         })
       } catch (err) {
@@ -231,6 +233,7 @@ async function runBatchTests() {
           line2Length: null,
           line2ChecksPassed: false,
           line1Source: null,
+          correctedCharacters: 0,
           error: err instanceof Error ? err.message : '辨識失敗',
         })
       }
@@ -520,6 +523,12 @@ onBeforeUnmount(() => {
             第一行姓名若由整頁 OCR fallback 補回，仍必須保留人工覆核。
           </p>
 
+          <p v-if="ocrResult.mrzRepair" class="repair-note">
+            已依 MRZ 欄位格式與 check digit 唯一解，自動修正
+            <strong>{{ ocrResult.mrzRepair.correctedCharacters }}</strong>
+            個疑似 OCR 混淆字元；若無唯一解則不會自動修改。
+          </p>
+
           <p v-if="ocrResult.mrzLine1" class="timing-note">
             Line 1 來源：
             <strong>
@@ -685,6 +694,12 @@ onBeforeUnmount(() => {
                       ? '整頁 OCR fallback'
                       : '無'
                 }}
+              </dd>
+            </div>
+            <div>
+              <dt>受限自動修正</dt>
+              <dd>
+                {{ result.correctedCharacters > 0 ? result.correctedCharacters + ' 字元' : '無' }}
               </dd>
             </div>
           </dl>
