@@ -10,6 +10,17 @@ import {
 
 type DocumentType = 'passport' | 'tw-id' | 'taiwan-compatriot-permit'
 
+interface BatchTestResult {
+  index: number
+  elapsedMs: number
+  structureComplete: boolean
+  line1Length: number | null
+  line2Length: number | null
+  line2ChecksPassed: boolean
+  line1Source: OcrResult['mrzLine1Source']
+  error: string | null
+}
+
 const health = ref<HealthResponse | null>(null)
 const error = ref('')
 const loading = ref(true)
@@ -24,6 +35,12 @@ const ocrError = ref('')
 const ocrProgress = ref<OcrProgress>({ status: '', progress: 0 })
 const ocrResult = ref<OcrResult | null>(null)
 const mrzCropUrl = ref('')
+
+const batchFiles = ref<File[]>([])
+const batchSelectionError = ref('')
+const batchRunning = ref(false)
+const batchCurrent = ref(0)
+const batchResults = ref<BatchTestResult[]>([])
 
 const fileSummary = computed(() => {
   if (!selectedFile.value) return ''
@@ -51,6 +68,33 @@ const mrzCandidateLengths = computed(() =>
     .map((length) => length ?? '無')
     .join(' / '),
 )
+
+const canRunBatch = computed(
+  () =>
+    batchFiles.value.length >= 3 &&
+    batchFiles.value.length <= 5 &&
+    !batchRunning.value,
+)
+
+const batchPassCount = computed(
+  () =>
+    batchResults.value.filter(
+      (result) => result.structureComplete && result.line2ChecksPassed,
+    ).length,
+)
+
+const batchAverageSeconds = computed(() => {
+  if (!batchResults.value.length) return 0
+
+  const completed = batchResults.value.filter((result) => !result.error)
+  if (!completed.length) return 0
+
+  return (
+    completed.reduce((sum, result) => sum + result.elapsedMs, 0) /
+    completed.length /
+    1000
+  )
+})
 
 async function checkApi() {
   loading.value = true
@@ -126,6 +170,75 @@ function validationClass(value: boolean | null) {
   if (value === true) return 'validation-pass'
   if (value === false) return 'validation-fail'
   return 'validation-unknown'
+}
+
+function handleBatchFiles(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+
+  batchSelectionError.value = ''
+  batchResults.value = []
+
+  const validFiles = files.filter(
+    (file) => file.type.startsWith('image/') && file.size <= 15 * 1024 * 1024,
+  )
+
+  if (validFiles.length !== files.length) {
+    batchSelectionError.value =
+      '已忽略非圖片或超過 15 MB 的檔案。'
+  }
+
+  batchFiles.value = validFiles.slice(0, 5)
+
+  if (validFiles.length > 5) {
+    batchSelectionError.value = '泛化測試一次最多 5 張，已取前 5 張。'
+  } else if (batchFiles.value.length > 0 && batchFiles.value.length < 3) {
+    batchSelectionError.value = '請選 3～5 張不同拍攝條件的護照圖片。'
+  }
+}
+
+async function runBatchTests() {
+  if (!canRunBatch.value) return
+
+  batchRunning.value = true
+  batchCurrent.value = 0
+  batchResults.value = []
+
+  try {
+    for (let index = 0; index < batchFiles.value.length; index += 1) {
+      batchCurrent.value = index + 1
+
+      try {
+        const result = await recognizePassport(batchFiles.value[index])
+
+        batchResults.value.push({
+          index: index + 1,
+          elapsedMs: result.elapsedMs,
+          structureComplete: result.parsedMrz !== null,
+          line1Length: result.mrzLine1?.length ?? null,
+          line2Length: result.mrzLine2?.length ?? null,
+          line2ChecksPassed:
+            result.line2Validation?.requiredValid === true,
+          line1Source: result.mrzLine1Source,
+          error: null,
+        })
+      } catch (err) {
+        batchResults.value.push({
+          index: index + 1,
+          elapsedMs: 0,
+          structureComplete: false,
+          line1Length: null,
+          line2Length: null,
+          line2ChecksPassed: false,
+          line1Source: null,
+          error: err instanceof Error ? err.message : '辨識失敗',
+        })
+      }
+    }
+  } finally {
+    batchRunning.value = false
+    batchCurrent.value = 0
+  }
 }
 
 async function runPassportOcr() {
@@ -462,11 +575,132 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <section class="batch-card">
+      <div class="section-heading">
+        <div>
+          <p class="label">Step 4 · Generalization test</p>
+          <h2>3～5 張護照批次泛化測試</h2>
+        </div>
+
+        <span class="local-only-badge">只在瀏覽器處理</span>
+      </div>
+
+      <p class="section-copy">
+        不再針對同一張護照調參數。請改選 3～5 張不同拍攝條件、不同護照持有人的測試圖片。
+        系統只顯示測試編號、速度、MRZ 結構與檢查碼結果，不在摘要中顯示姓名或護照號碼。
+      </p>
+
+      <label class="field">
+        <span>批次測試圖片（3～5 張）</span>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          :disabled="batchRunning"
+          @change="handleBatchFiles"
+        />
+      </label>
+
+      <p v-if="batchSelectionError" class="inline-error">
+        {{ batchSelectionError }}
+      </p>
+
+      <div class="batch-actions">
+        <span>
+          已選 {{ batchFiles.length }} 張
+          <template v-if="batchRunning">
+            · 正在處理第 {{ batchCurrent }} / {{ batchFiles.length }} 張
+          </template>
+        </span>
+
+        <button
+          type="button"
+          :disabled="!canRunBatch"
+          @click="runBatchTests"
+        >
+          {{ batchRunning ? '批次測試中…' : '開始批次測試' }}
+        </button>
+      </div>
+
+      <div v-if="batchResults.length" class="batch-summary">
+        <div>
+          <span>完整通過</span>
+          <strong>{{ batchPassCount }} / {{ batchResults.length }}</strong>
+        </div>
+        <div>
+          <span>平均耗時</span>
+          <strong>{{ batchAverageSeconds.toFixed(2) }} 秒</strong>
+        </div>
+      </div>
+
+      <div v-if="batchResults.length" class="batch-results">
+        <article
+          v-for="result in batchResults"
+          :key="result.index"
+          class="batch-result-card"
+        >
+          <div class="batch-result-heading">
+            <strong>測試 {{ result.index }}</strong>
+            <span
+              :class="
+                result.structureComplete && result.line2ChecksPassed
+                  ? 'validation-pass'
+                  : 'validation-fail'
+              "
+            >
+              {{
+                result.structureComplete && result.line2ChecksPassed
+                  ? '通過'
+                  : '需人工確認'
+              }}
+            </span>
+          </div>
+
+          <dl>
+            <div>
+              <dt>耗時</dt>
+              <dd>
+                {{ result.error ? '失敗' : (result.elapsedMs / 1000).toFixed(2) + ' 秒' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Line 1 / Line 2</dt>
+              <dd>
+                {{ result.line1Length ?? '無' }} / {{ result.line2Length ?? '無' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Line 2 檢查碼</dt>
+              <dd>
+                {{ result.line2ChecksPassed ? '全部通過' : '未全部通過' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Line 1 來源</dt>
+              <dd>
+                {{
+                  result.line1Source === 'dedicated'
+                    ? 'MRZ 專用 OCR'
+                    : result.line1Source === 'full-page'
+                      ? '整頁 OCR fallback'
+                      : '無'
+                }}
+              </dd>
+            </div>
+          </dl>
+
+          <p v-if="result.error" class="inline-error">
+            {{ result.error }}
+          </p>
+        </article>
+      </div>
+    </section>
+
     <section class="next-card">
-      <h2>下一輪只看兩件事</h2>
+      <h2>這一階段的判斷標準</h2>
       <p>
-        第一，看 MRZ 是否能穩定形成 2 × 44；第二，看護照號碼、生日、有效期限與整體
-        check digit 能不能全部通過。只有格式與檢查碼穩定之後，才值得進一步做欄位入庫。
+        不看單張最佳成績，而看不同圖片下 Line 2 檢查碼能否穩定通過、2 × 44 是否穩定成立，
+        以及連續處理速度是否可接受。通過這一關後，才進入正式的護照人工覆核介面。
       </p>
     </section>
   </main>
