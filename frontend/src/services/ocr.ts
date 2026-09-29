@@ -69,24 +69,39 @@ function normalizeMrzCandidate(line: string) {
 
 function normalizeTd3Line1(rawLine: string) {
   let line = normalizeMrzCandidate(rawLine)
-  const start = line.indexOf('P<')
 
-  if (start < 0) {
-    return line
+  const exactStart = line.indexOf('P<')
+  if (exactStart >= 0) {
+    line = line.slice(exactStart)
+  } else {
+    const passportStart = line.indexOf('P')
+
+    if (passportStart < 0) {
+      return line
+    }
+
+    line = line.slice(passportStart)
+
+    // In a TD3 passport, line 1 always begins with P<. OCR often confuses
+    // the filler '<' in position 2 with a letter. Only repair that fixed
+    // structural position when the following issuing-state positions look
+    // like three letters.
+    if (
+      line.length >= 5 &&
+      line[1] !== '<' &&
+      /^[A-Z]{3}$/.test(line.slice(2, 5))
+    ) {
+      line = `P<${line.slice(2)}`
+    }
   }
 
-  line = line.slice(start)
-
-  // TD3 passport line 1 is always exactly 44 characters. If OCR adds
-  // trailing artifacts, keep the first 44 characters from the confirmed P<
-  // start. This is structural normalization only; the name remains subject
-  // to human review because line 1 has no equivalent full check-digit chain.
+  // TD3 passport line 1 is exactly 44 characters. Cropping trailing OCR
+  // artifacts is structural normalization; it does not validate the name.
   if (line.length > 44) {
     return line.slice(0, 44)
   }
 
-  const nameFieldStart = 5
-  const hasFillerTail = line.indexOf('<<<', nameFieldStart) >= 0
+  const hasFillerTail = line.indexOf('<<<', 5) >= 0
 
   if (line.length < 44 && hasFillerTail) {
     return line.padEnd(44, '<')
@@ -625,7 +640,6 @@ export async function recognizePassport(
   const parsedMrz = parseTd3Mrz(
     mrzLine1,
     mrzLine2,
-    mrzLine1Source,
     line2Validation,
   )
 
@@ -640,6 +654,7 @@ export async function recognizePassport(
     mrzCandidates: normalizedLines,
     mrzLine1,
     mrzLine2,
+    mrzLine1Source,
     line2Validation,
     parsedMrz,
     mrzCrop: prepared.crop,
