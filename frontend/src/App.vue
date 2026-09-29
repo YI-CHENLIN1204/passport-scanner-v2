@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
           <div>
             <span>TD3 2 × 44</span>
             <strong :class="ocrResult.parsedMrz ? 'success' : 'error'">
-              {{ ocrResult.parsedMrz ? '格式通過' : '尚未通過' }}
+              {{ ocrResult.parsedMrz ? '結構完成' : '尚未完成' }}
             </strong>
           </div>
         </div>
@@ -420,6 +420,8 @@ onBeforeUnmount(() => {
             </strong>
             · Line 1 / Line 2 長度：
             <strong>{{ ocrResult.mrzLine1.length }} / {{ ocrResult.mrzLine2?.length ?? '無' }}</strong>
+            · 姓名：
+            <strong>仍需人工覆核</strong>
           </p>
         </div>
 
