@@ -34,7 +34,16 @@
 - Raw OCR text。
 - 從 raw text 中抓出的 MRZ candidate lines。
 
-MRZ candidate 目前只是簡單字串篩選，不等於正式 ICAO MRZ parser，也還沒有做 check digit 驗證。
+第一版 baseline 的 MRZ candidate 只是簡單字串篩選。第二版已加入：
+
+- 自動裁切護照底部 MRZ 區域。
+- 灰階與對比前處理。
+- MRZ 專用 OCR pass。
+- 字元白名單：A-Z、0-9、<。
+- TD3 2 × 44 格式檢查。
+- 護照號碼、出生日期、有效期限、個人號碼與 composite check digit 驗證。
+
+只有在 MRZ 形成完整 2 × 44 時才進入正式欄位解析，不會為了湊格式任意補字。
 
 ## 下一個比較方向
 
@@ -62,3 +71,29 @@ MRZ candidate 目前只是簡單字串篩選，不等於正式 ICAO MRZ parser�
 11. 明顯錯字與錯誤類型。
 
 正式方案不是只比較「哪個 OCR 看起來辨識字比較多」，而是比較真正需要的欄位準確率、速度、模型大小與可訓練性。
+
+
+## Baseline A 實測紀錄
+
+### 測試 1：整頁 OCR（同一張護照）
+
+- 第一次辨識：約 3.81 秒。
+- 第二次辨識：約 0.56 秒。
+- 兩次都抓到 2 行 MRZ candidate。
+- 第二次結果與第一次大致一致。
+- 判斷：第一次時間主要受 OCR worker / model 初始化影響；同一頁面重用 worker 後，連續辨識速度明顯提升。
+
+### 下一個實驗
+
+同一張測試護照改跑「整頁 OCR + MRZ 專用 OCR」。
+
+要觀察：
+
+1. MRZ 專用 pass 是否能穩定產生兩行各 44 字元。
+2. 護照號碼 check digit 是否通過。
+3. 出生日期 check digit 是否通過。
+4. 有效期限 check digit 是否通過。
+5. composite check digit 是否通過。
+6. 新增 MRZ pass 後的總耗時。
+
+若格式與 check digit 仍不穩定，再比較更進一步的影像前處理或第二個 OCR engine。
