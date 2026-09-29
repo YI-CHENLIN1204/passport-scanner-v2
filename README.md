@@ -21,7 +21,7 @@ V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI �
 - [AGENTS.md](./AGENTS.md) — 給 Codex / AI Agent 的專案工作規則。
 - [docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) — 專案背景、使用情境與邊界。
 - [docs/SYSTEM_ARCHITECTURE.md](./docs/SYSTEM_ARCHITECTURE.md) — V2 架構與資料流。
-- [docs/OCR_REQUIREMENTS.md](./docs/OCR_REQUIREMENTS.md) — OCR 文件類型、欄位與驗證原則。
+- [docs/OCR_REQUIREMENTS.md](./docs/OCR_REQUIREMENTS.md) — OCR 文件類型、欄位與驗證原則。\n- [docs/OCR_POC.md](./docs/OCR_POC.md) — 瀏覽器 OCR PoC 與引擎比較基準。
 - [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) — 旅客主檔、證件版本與團別資料模型方向。
 - [docs/DECISIONS.md](./docs/DECISIONS.md) — 已確認決策與尚未定案項目。\n- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 本機環境、啟動方式與前後端 port。
 
