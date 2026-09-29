@@ -34,6 +34,9 @@ export interface OcrResult {
   text: string
   mrzText: string
   mrzCandidates: string[]
+  mrzLine1: string | null
+  mrzLine2: string | null
+  line2Validation: MrzValidation | null
   parsedMrz: ParsedMrz | null
   mrzCrop: Blob
   elapsedMs: number
@@ -44,6 +47,11 @@ export interface OcrResult {
 }
 
 type OcrWorker = Awaited<ReturnType<typeof Tesseract.createWorker>>
+
+interface MrzPreparedImages {
+  crop: Blob
+  lines: Blob[]
+}
 
 let worker: OcrWorker | null = null
 let workerPromise: Promise<OcrWorker> | null = null
@@ -58,47 +66,37 @@ function normalizeMrzCandidate(line: string) {
     .replace(/[^A-Z0-9<]/g, '')
 }
 
+function normalizeTd3Line1(rawLine: string) {
+  let line = normalizeMrzCandidate(rawLine)
+  const start = line.indexOf('P<')
+
+  if (start >= 0) {
+    line = line.slice(start)
+  }
+
+  const nameFieldStart = 5
+  const fillerStart = line.indexOf('<<<', nameFieldStart)
+
+  if (fillerStart >= 0) {
+    line =
+      line.slice(0, fillerStart) +
+      line
+        .slice(fillerStart)
+        .replace(/[A-Z0-9]/g, '<')
+
+    if (line.length > 44) {
+      line = line.slice(0, 44)
+    }
+  }
+
+  return line
+}
+
 function findMrzCandidates(text: string) {
   return text
     .split(/\r?\n/)
     .map(normalizeMrzCandidate)
-    .filter((line) => line.length >= 30 && line.length <= 52)
-}
-
-function selectTd3Lines(text: string) {
-  const candidates = findMrzCandidates(text)
-
-  if (candidates.length < 2) {
-    return { candidates, line1: null, line2: null }
-  }
-
-  const firstLineCandidates = candidates
-    .map((line, index) => ({
-      line,
-      index,
-      score:
-        Math.abs(line.length - 44) +
-        (line.startsWith('P<') ? 0 : line.startsWith('P') ? 2 : 10),
-    }))
-    .sort((a, b) => a.score - b.score)
-
-  const first = firstLineCandidates[0]
-
-  const secondLineCandidates = candidates
-    .map((line, index) => ({
-      line,
-      index,
-      score:
-        Math.abs(line.length - 44) +
-        (index === first.index ? 100 : 0),
-    }))
-    .sort((a, b) => a.score - b.score)
-
-  return {
-    candidates,
-    line1: first.line,
-    line2: secondLineCandidates[0].line,
-  }
+    .filter((line) => line.length >= 30 && line.length <= 56)
 }
 
 function mrzCharacterValue(character: string) {
@@ -133,17 +131,10 @@ function validateCheckDigit(value: string, expected: string) {
   return calculateCheckDigit(value) === expected
 }
 
-function cleanMrzName(value: string) {
-  return value.replace(/<+/g, ' ').trim().replace(/\s+/g, ' ')
-}
-
-function parseTd3Mrz(line1: string | null, line2: string | null): ParsedMrz | null {
-  if (!line1 || !line2 || line1.length !== 44 || line2.length !== 44) {
+function validateTd3Line2(line2: string | null): MrzValidation | null {
+  if (!line2 || line2.length !== 44) {
     return null
   }
-
-  const nameField = line1.slice(5)
-  const [surnameRaw = '', ...givenParts] = nameField.split('<<')
 
   const documentNumberCheck = validateCheckDigit(
     line2.slice(0, 9),
@@ -168,11 +159,41 @@ function parseTd3Mrz(line1: string | null, line2: string | null): ParsedMrz | nu
     line2[43],
   )
 
-  const requiredValid =
-    documentNumberCheck === true &&
-    birthDateCheck === true &&
-    expiryDateCheck === true &&
-    compositeCheck === true
+  return {
+    documentNumber: documentNumberCheck,
+    birthDate: birthDateCheck,
+    expiryDate: expiryDateCheck,
+    personalNumber: personalNumberCheck,
+    composite: compositeCheck,
+    requiredValid:
+      documentNumberCheck === true &&
+      birthDateCheck === true &&
+      expiryDateCheck === true &&
+      compositeCheck === true,
+  }
+}
+
+function cleanMrzName(value: string) {
+  return value.replace(/<+/g, ' ').trim().replace(/\s+/g, ' ')
+}
+
+function parseTd3Mrz(
+  line1: string | null,
+  line2: string | null,
+  validation: MrzValidation | null,
+): ParsedMrz | null {
+  if (
+    !line1 ||
+    !line2 ||
+    line1.length !== 44 ||
+    line2.length !== 44 ||
+    !validation
+  ) {
+    return null
+  }
+
+  const nameField = line1.slice(5)
+  const [surnameRaw = '', ...givenParts] = nameField.split('<<')
 
   return {
     line1,
@@ -187,25 +208,132 @@ function parseTd3Mrz(line1: string | null, line2: string | null): ParsedMrz | nu
     sex: line2[20],
     expiryDate: line2.slice(21, 27),
     personalNumber: line2.slice(28, 42).replace(/<+$/g, ''),
-    validation: {
-      documentNumber: documentNumberCheck,
-      birthDate: birthDateCheck,
-      expiryDate: expiryDateCheck,
-      personalNumber: personalNumberCheck,
-      composite: compositeCheck,
-      requiredValid,
-    },
+    validation,
   }
 }
 
-async function createMrzCrop(image: File) {
+function otsuThreshold(grayValues: Uint8Array) {
+  const histogram = new Array<number>(256).fill(0)
+
+  for (const value of grayValues) {
+    histogram[value] += 1
+  }
+
+  const total = grayValues.length
+  let weightedTotal = 0
+
+  for (let value = 0; value < 256; value += 1) {
+    weightedTotal += value * histogram[value]
+  }
+
+  let backgroundWeight = 0
+  let backgroundSum = 0
+  let bestVariance = -1
+  let bestThreshold = 128
+
+  for (let threshold = 0; threshold < 256; threshold += 1) {
+    backgroundWeight += histogram[threshold]
+    if (backgroundWeight === 0) continue
+
+    const foregroundWeight = total - backgroundWeight
+    if (foregroundWeight === 0) break
+
+    backgroundSum += threshold * histogram[threshold]
+
+    const backgroundMean = backgroundSum / backgroundWeight
+    const foregroundMean =
+      (weightedTotal - backgroundSum) / foregroundWeight
+
+    const variance =
+      backgroundWeight *
+      foregroundWeight *
+      (backgroundMean - foregroundMean) ** 2
+
+    if (variance > bestVariance) {
+      bestVariance = variance
+      bestThreshold = threshold
+    }
+  }
+
+  return bestThreshold
+}
+
+function findTextBands(
+  binary: Uint8Array,
+  width: number,
+  height: number,
+) {
+  const rowCounts = new Array<number>(height).fill(0)
+
+  for (let y = 0; y < height; y += 1) {
+    let count = 0
+
+    for (let x = 0; x < width; x += 1) {
+      if (binary[y * width + x] === 0) {
+        count += 1
+      }
+    }
+
+    rowCounts[y] = count
+  }
+
+  const minimumInk = Math.max(8, Math.floor(width * 0.012))
+  const activeRows = rowCounts
+    .map((count, index) => ({ count, index }))
+    .filter(({ count }) => count >= minimumInk)
+    .map(({ index }) => index)
+
+  if (!activeRows.length) return []
+
+  const bands: Array<{ start: number; end: number }> = []
+  const maxGap = Math.max(3, Math.floor(height * 0.02))
+
+  let start = activeRows[0]
+  let previous = activeRows[0]
+
+  for (let index = 1; index < activeRows.length; index += 1) {
+    const current = activeRows[index]
+
+    if (current - previous > maxGap) {
+      bands.push({ start, end: previous })
+      start = current
+    }
+
+    previous = current
+  }
+
+  bands.push({ start, end: previous })
+
+  return bands
+    .filter((band) => band.end - band.start + 1 >= 8)
+    .sort((a, b) => a.start - b.start)
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) {
+        resolve(result)
+      } else {
+        reject(new Error('無法建立 MRZ 圖片。'))
+      }
+    }, 'image/png')
+  })
+}
+
+async function createMrzPreparedImages(
+  image: File,
+): Promise<MrzPreparedImages> {
   const bitmap = await createImageBitmap(image)
-  const cropRatio = 0.34
+
+  // TD3 MRZ is at the bottom of the passport data page. Keep the crop tight
+  // so security artwork and portrait/text above the MRZ do not pollute OCR.
+  const cropRatio = 0.24
   const sourceY = Math.floor(bitmap.height * (1 - cropRatio))
   const sourceHeight = bitmap.height - sourceY
 
   const targetWidth = Math.round(
-    Math.min(2400, Math.max(1800, bitmap.width * 1.5)),
+    Math.min(2600, Math.max(1900, bitmap.width * 1.7)),
   )
   const scale = targetWidth / bitmap.width
   const targetHeight = Math.max(1, Math.round(sourceHeight * scale))
@@ -236,36 +364,79 @@ async function createMrzCrop(image: File) {
 
   const imageData = context.getImageData(0, 0, targetWidth, targetHeight)
   const pixels = imageData.data
+  const grayValues = new Uint8Array(targetWidth * targetHeight)
 
-  for (let index = 0; index < pixels.length; index += 4) {
-    const gray =
-      pixels[index] * 0.299 +
-      pixels[index + 1] * 0.587 +
-      pixels[index + 2] * 0.114
-
-    const contrasted = Math.max(
-      0,
-      Math.min(255, (gray - 128) * 1.65 + 128),
+  for (let pixelIndex = 0, grayIndex = 0; pixelIndex < pixels.length; pixelIndex += 4, grayIndex += 1) {
+    const gray = Math.round(
+      pixels[pixelIndex] * 0.299 +
+      pixels[pixelIndex + 1] * 0.587 +
+      pixels[pixelIndex + 2] * 0.114,
     )
 
-    pixels[index] = contrasted
-    pixels[index + 1] = contrasted
-    pixels[index + 2] = contrasted
+    grayValues[grayIndex] = gray
+  }
+
+  const threshold = otsuThreshold(grayValues)
+  const binary = new Uint8Array(grayValues.length)
+
+  for (let grayIndex = 0, pixelIndex = 0; grayIndex < grayValues.length; grayIndex += 1, pixelIndex += 4) {
+    const value = grayValues[grayIndex] < threshold ? 0 : 255
+    binary[grayIndex] = value
+
+    pixels[pixelIndex] = value
+    pixels[pixelIndex + 1] = value
+    pixels[pixelIndex + 2] = value
+    pixels[pixelIndex + 3] = 255
   }
 
   context.putImageData(imageData, 0, 0)
+  const crop = await canvasToBlob(canvas)
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (result) {
-        resolve(result)
-      } else {
-        reject(new Error('無法建立 MRZ 裁切圖片。'))
-      }
-    }, 'image/png')
-  })
+  const detectedBands = findTextBands(binary, targetWidth, targetHeight)
+  const bands = detectedBands.slice(-2)
 
-  return blob
+  if (bands.length < 2) {
+    return { crop, lines: [] }
+  }
+
+  const lineBlobs: Blob[] = []
+
+  for (const band of bands) {
+    const marginY = Math.max(10, Math.round((band.end - band.start + 1) * 0.35))
+    const startY = Math.max(0, band.start - marginY)
+    const endY = Math.min(targetHeight - 1, band.end + marginY)
+    const lineHeight = endY - startY + 1
+
+    const lineCanvas = document.createElement('canvas')
+    lineCanvas.width = targetWidth
+    lineCanvas.height = lineHeight
+
+    const lineContext = lineCanvas.getContext('2d')
+    if (!lineContext) {
+      throw new Error('無法建立 MRZ 單行 Canvas。')
+    }
+
+    lineContext.fillStyle = '#ffffff'
+    lineContext.fillRect(0, 0, lineCanvas.width, lineCanvas.height)
+    lineContext.drawImage(
+      canvas,
+      0,
+      startY,
+      targetWidth,
+      lineHeight,
+      0,
+      0,
+      targetWidth,
+      lineHeight,
+    )
+
+    lineBlobs.push(await canvasToBlob(lineCanvas))
+  }
+
+  return {
+    crop,
+    lines: lineBlobs,
+  }
 }
 
 async function getWorker(onProgress?: (progress: OcrProgress) => void) {
@@ -304,14 +475,14 @@ export async function recognizePassport(
   const totalStartedAt = performance.now()
 
   progressOffset = 0
-  progressScale = 0.15
+  progressScale = 0.12
 
   const initializationStartedAt = performance.now()
   const activeWorker = await getWorker(onProgress)
   const initializationMs = performance.now() - initializationStartedAt
 
-  progressOffset = 0.15
-  progressScale = 0.45
+  progressOffset = 0.12
+  progressScale = 0.38
 
   await activeWorker.setParameters({
     tessedit_pageseg_mode: Tesseract.PSM.AUTO,
@@ -325,28 +496,71 @@ export async function recognizePassport(
 
   onProgress?.({
     status: 'preprocessing MRZ',
-    progress: 0.62,
+    progress: 0.52,
   })
 
   const preprocessingStartedAt = performance.now()
-  const mrzCrop = await createMrzCrop(image)
+  const prepared = await createMrzPreparedImages(image)
   const preprocessingMs = performance.now() - preprocessingStartedAt
 
-  progressOffset = 0.64
-  progressScale = 0.36
-
   await activeWorker.setParameters({
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
     preserve_interword_spaces: '0',
   })
 
   const mrzPassStartedAt = performance.now()
-  const mrzResult = await activeWorker.recognize(mrzCrop)
-  const mrzPassMs = performance.now() - mrzPassStartedAt
+  const rawLines: string[] = []
 
-  const selected = selectTd3Lines(mrzResult.data.text)
-  const parsedMrz = parseTd3Mrz(selected.line1, selected.line2)
+  if (prepared.lines.length === 2) {
+    for (let index = 0; index < prepared.lines.length; index += 1) {
+      progressOffset = 0.56 + index * 0.21
+      progressScale = 0.21
+
+      const result = await activeWorker.recognize(prepared.lines[index])
+      rawLines.push(result.data.text)
+    }
+  } else {
+    progressOffset = 0.56
+    progressScale = 0.44
+
+    await activeWorker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+      preserve_interword_spaces: '0',
+    })
+
+    const fallback = await activeWorker.recognize(prepared.crop)
+    rawLines.push(...fallback.data.text.split(/\r?\n/))
+  }
+
+  const mrzPassMs = performance.now() - mrzPassStartedAt
+  const normalizedLines = rawLines
+    .map(normalizeMrzCandidate)
+    .filter((line) => line.length >= 20)
+
+  const line1Source =
+    normalizedLines.find((line) => line.startsWith('P')) ??
+    normalizedLines[0] ??
+    null
+
+  const line2Source =
+    normalizedLines
+      .filter((line) => line !== line1Source)
+      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
+    null
+
+  const mrzLine1 = line1Source ? normalizeTd3Line1(line1Source) : null
+  const mrzLine2 = line2Source
+    ? normalizeMrzCandidate(line2Source)
+    : null
+
+  const line2Validation = validateTd3Line2(mrzLine2)
+  const parsedMrz = parseTd3Mrz(
+    mrzLine1,
+    mrzLine2,
+    line2Validation,
+  )
 
   onProgress?.({
     status: 'done',
@@ -355,10 +569,13 @@ export async function recognizePassport(
 
   return {
     text: fullPageResult.data.text.trim(),
-    mrzText: mrzResult.data.text.trim(),
-    mrzCandidates: selected.candidates,
+    mrzText: rawLines.join('\n').trim(),
+    mrzCandidates: normalizedLines,
+    mrzLine1,
+    mrzLine2,
+    line2Validation,
     parsedMrz,
-    mrzCrop,
+    mrzCrop: prepared.crop,
     elapsedMs: performance.now() - totalStartedAt,
     initializationMs,
     fullPageMs,
