@@ -285,7 +285,7 @@ function findTextBands(
 
   if (!activeRows.length) return []
 
-  const bands: Array<{ start: number; end: number }> = []
+  const rawBands: Array<{ start: number; end: number }> = []
   const maxGap = Math.max(3, Math.floor(height * 0.02))
 
   let start = activeRows[0]
@@ -295,18 +295,23 @@ function findTextBands(
     const current = activeRows[index]
 
     if (current - previous > maxGap) {
-      bands.push({ start, end: previous })
+      rawBands.push({ start, end: previous })
       start = current
     }
 
     previous = current
   }
 
-  bands.push({ start, end: previous })
+  rawBands.push({ start, end: previous })
 
-  return bands
+  return rawBands
     .filter((band) => band.end - band.start + 1 >= 8)
-    .sort((a, b) => a.start - b.start)
+    .map((band) => ({
+      ...band,
+      inkScore: rowCounts
+        .slice(band.start, band.end + 1)
+        .reduce((sum, count) => sum + count, 0),
+    }))
 }
 
 async function canvasToBlob(canvas: HTMLCanvasElement) {
@@ -333,7 +338,7 @@ async function createMrzPreparedImages(
   const sourceHeight = bitmap.height - sourceY
 
   const targetWidth = Math.round(
-    Math.min(2600, Math.max(1900, bitmap.width * 1.7)),
+    Math.min(1900, Math.max(1500, bitmap.width * 1.25)),
   )
   const scale = targetWidth / bitmap.width
   const targetHeight = Math.max(1, Math.round(sourceHeight * scale))
@@ -393,7 +398,10 @@ async function createMrzPreparedImages(
   const crop = await canvasToBlob(canvas)
 
   const detectedBands = findTextBands(binary, targetWidth, targetHeight)
-  const bands = detectedBands.slice(-2)
+  const bands = detectedBands
+    .sort((a, b) => b.inkScore - a.inkScore)
+    .slice(0, 2)
+    .sort((a, b) => a.start - b.start)
 
   if (bands.length < 2) {
     return { crop, lines: [] }
@@ -534,20 +542,61 @@ export async function recognizePassport(
     rawLines.push(...fallback.data.text.split(/\r?\n/))
   }
 
-  const mrzPassMs = performance.now() - mrzPassStartedAt
-  const normalizedLines = rawLines
+  let normalizedLines = rawLines
     .map(normalizeMrzCandidate)
     .filter((line) => line.length >= 20)
 
+  const hasLikelyLine1 = normalizedLines.some((line) => line.startsWith('P'))
+  const hasLikelyLine2 = normalizedLines.some(
+    (line) =>
+      !line.startsWith('P') &&
+      Math.abs(line.length - 44) <= 4 &&
+      (line.match(/\d/g)?.length ?? 0) >= 10,
+  )
+
+  // If single-line segmentation misses one MRZ row, recover by OCRing the
+  // whole prepared crop as a block and merge those candidates.
+  if (!hasLikelyLine1 || !hasLikelyLine2) {
+    await activeWorker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+      preserve_interword_spaces: '0',
+    })
+
+    progressOffset = 0.92
+    progressScale = 0.08
+
+    const fallback = await activeWorker.recognize(prepared.crop)
+
+    normalizedLines = Array.from(
+      new Set([
+        ...normalizedLines,
+        ...fallback.data.text
+          .split(/\r?\n/)
+          .map(normalizeMrzCandidate)
+          .filter((line) => line.length >= 20),
+      ]),
+    )
+  }
+
+  const mrzPassMs = performance.now() - mrzPassStartedAt
+
   const line1Source =
-    normalizedLines.find((line) => line.startsWith('P')) ??
-    normalizedLines[0] ??
+    normalizedLines
+      .filter((line) => line.startsWith('P'))
+      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
     null
 
   const line2Source =
     normalizedLines
-      .filter((line) => line !== line1Source)
-      .sort((a, b) => Math.abs(a.length - 44) - Math.abs(b.length - 44))[0] ??
+      .filter((line) => !line.startsWith('P'))
+      .sort((a, b) => {
+        const score = (line: string) =>
+          Math.abs(line.length - 44) +
+          ((line.match(/\d/g)?.length ?? 0) < 10 ? 20 : 0)
+
+        return score(a) - score(b)
+      })[0] ??
     null
 
   const mrzLine1 = line1Source ? normalizeTd3Line1(line1Source) : null
