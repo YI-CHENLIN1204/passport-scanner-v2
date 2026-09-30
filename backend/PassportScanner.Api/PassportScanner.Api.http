@@ -4,3 +4,31 @@ GET {{PassportScanner_Api_HostAddress}}/api/health
 Accept: application/json
 
 ###
+
+POST {{PassportScanner_Api_HostAddress}}/api/passport-reviews/validate
+Content-Type: application/json
+
+{
+  "schemaVersion": 1,
+  "documentType": "passport",
+  "englishName": "TEST, TRAVELER",
+  "passportNumber": "T12345678",
+  "nationality": "TWN",
+  "issuingState": "TWN",
+  "birthDate": "2000-01-15",
+  "sex": "M",
+  "expiryDate": "2030-12-31",
+  "verification": {
+    "passportNumberCheckDigit": true,
+    "birthDateCheckDigit": true,
+    "expiryDateCheckDigit": true,
+    "compositeCheckDigit": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "line2Validated": true,
+    "fallbackUsed": false,
+    "averageScore": 0.91
+  },
+  "reviewedAt": "2026-10-01T00:00:00+00:00"
+}
