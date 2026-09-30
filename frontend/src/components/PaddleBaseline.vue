@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   recognizePassportWithPaddle,
   recognizePassportsWithPaddle,
@@ -14,6 +14,28 @@ const props = defineProps<{
 const running = ref(false)
 const error = ref('')
 const result = ref<PaddleBaselineResult | null>(null)
+
+interface PassportReviewForm {
+  englishName: string
+  passportNumber: string
+  nationality: string
+  issuingState: string
+  birthDateMrz: string
+  sex: string
+  expiryDateMrz: string
+}
+
+const reviewForm = ref<PassportReviewForm>({
+  englishName: '',
+  passportNumber: '',
+  nationality: '',
+  issuingState: '',
+  birthDateMrz: '',
+  sex: '',
+  expiryDateMrz: '',
+})
+const reviewConfirmed = ref(false)
+const reviewImageUrl = ref('')
 
 interface PaddleBatchResult {
   index: number
@@ -76,6 +98,18 @@ const batchPassCount = computed(
     ).length,
 )
 
+const canConfirmReview = computed(() =>
+  Boolean(
+    result.value?.parsedMrz &&
+      reviewForm.value.englishName.trim() &&
+      reviewForm.value.passportNumber.trim() &&
+      reviewForm.value.nationality.trim() &&
+      reviewForm.value.issuingState.trim() &&
+      reviewForm.value.birthDateMrz.trim() &&
+      reviewForm.value.expiryDateMrz.trim(),
+  ),
+)
+
 const batchAveragePredictSeconds = computed(() => {
   const completed = batchResults.value.filter((item) => !item.error)
   if (!completed.length) return 0
@@ -86,6 +120,54 @@ const batchAveragePredictSeconds = computed(() => {
     1000
   )
 })
+
+function revokeReviewImageUrl() {
+  if (reviewImageUrl.value) {
+    URL.revokeObjectURL(reviewImageUrl.value)
+    reviewImageUrl.value = ''
+  }
+}
+
+function resetReviewForm() {
+  reviewForm.value = {
+    englishName: '',
+    passportNumber: '',
+    nationality: '',
+    issuingState: '',
+    birthDateMrz: '',
+    sex: '',
+    expiryDateMrz: '',
+  }
+  reviewConfirmed.value = false
+}
+
+function populateReviewForm(ocrResult: PaddleBaselineResult) {
+  const parsed = ocrResult.parsedMrz
+  if (!parsed) {
+    resetReviewForm()
+    return
+  }
+
+  const englishName = [parsed.surname, parsed.givenNames]
+    .filter(Boolean)
+    .join(', ')
+
+  reviewForm.value = {
+    englishName,
+    passportNumber: parsed.documentNumber,
+    nationality: parsed.nationality,
+    issuingState: parsed.issuingState,
+    birthDateMrz: parsed.birthDate,
+    sex: parsed.sex === '<' ? '' : parsed.sex,
+    expiryDateMrz: parsed.expiryDate,
+  }
+  reviewConfirmed.value = false
+}
+
+function confirmReview() {
+  if (!canConfirmReview.value) return
+  reviewConfirmed.value = true
+}
 
 function validationText(value: boolean | null | undefined) {
   if (value === true) return '通過'
@@ -175,6 +257,33 @@ async function runBatch() {
   }
 }
 
+watch(
+  () => props.file,
+  (file) => {
+    revokeReviewImageUrl()
+    result.value = null
+    error.value = ''
+    resetReviewForm()
+
+    if (file) {
+      reviewImageUrl.value = URL.createObjectURL(file)
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  reviewForm,
+  () => {
+    reviewConfirmed.value = false
+  },
+  { deep: true },
+)
+
+onBeforeUnmount(() => {
+  revokeReviewImageUrl()
+})
+
 async function run() {
   if (!props.file || running.value) return
 
@@ -184,6 +293,7 @@ async function run() {
 
   try {
     result.value = await recognizePassportWithPaddle(props.file)
+    populateReviewForm(result.value)
   } catch (err) {
     error.value =
       err instanceof Error
@@ -222,6 +332,11 @@ async function run() {
     <p v-if="running" class="hint">
       第一次可能明顯較久，因為要初始化 PaddleOCR.js 與下載 PP-OCRv5 模型。
     </p>
+
+    <div v-if="running" class="single-running" aria-live="polite">
+      <div class="single-running-bar"></div>
+      <span>護照 OCR 執行中，畫面可能暫時比較卡，請不要關閉頁面。</span>
+    </div>
 
     <p v-if="error" class="error">
       {{ error }}
@@ -337,6 +452,167 @@ async function run() {
         <pre>{{ result.runtime }}</pre>
       </details>
     </div>
+
+
+    <section v-if="result?.parsedMrz" class="review-card">
+      <div class="review-heading">
+        <div>
+          <p class="label">Step 5 · Human review</p>
+          <h2>護照人工覆核</h2>
+          <p>
+            左側核對原始證件，右側可直接修正欄位。MRZ check digit
+            通過代表機器可讀區結構一致，但英文姓名仍須人工目視確認。
+          </p>
+        </div>
+
+        <span
+          class="review-status"
+          :class="{ confirmed: reviewConfirmed }"
+        >
+          {{ reviewConfirmed ? '已完成覆核' : '待人工覆核' }}
+        </span>
+      </div>
+
+      <div class="review-layout">
+        <div class="review-image">
+          <img
+            v-if="reviewImageUrl"
+            :src="reviewImageUrl"
+            alt="護照原始證件預覽"
+          />
+        </div>
+
+        <div class="review-fields">
+          <label class="review-field full">
+            <span>
+              英文姓名
+              <em class="needs-review">人工確認</em>
+            </span>
+            <input v-model="reviewForm.englishName" type="text" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              護照號碼
+              <em
+                :class="
+                  result.line2Validation?.documentNumber
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.documentNumber
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input v-model="reviewForm.passportNumber" type="text" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              國籍
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.nationality" type="text" maxlength="3" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              簽發國
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.issuingState" type="text" maxlength="3" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              性別
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.sex" type="text" maxlength="1" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              出生日期
+              <em
+                :class="
+                  result.line2Validation?.birthDate
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.birthDate
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input
+              v-model="reviewForm.birthDateMrz"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="YYMMDD"
+            />
+            <small>MRZ 為 YYMMDD；世紀轉換在正式資料模型階段再處理。</small>
+          </label>
+
+          <label class="review-field">
+            <span>
+              有效期限
+              <em
+                :class="
+                  result.line2Validation?.expiryDate
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.expiryDate
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input
+              v-model="reviewForm.expiryDateMrz"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="YYMMDD"
+            />
+            <small>MRZ 為 YYMMDD。</small>
+          </label>
+        </div>
+      </div>
+
+      <div class="review-footer">
+        <div>
+          <strong v-if="reviewConfirmed" class="pass">
+            此筆已在瀏覽器完成人工覆核。
+          </strong>
+          <span v-else>
+            確認前請至少目視核對英文姓名與原始護照。
+          </span>
+          <small>
+            目前「確認資料」只更新前端覆核狀態，尚未寫入後端、旅客主檔或 Google Sheets。
+          </small>
+        </div>
+
+        <button
+          type="button"
+          :disabled="!canConfirmReview"
+          @click="confirmReview"
+        >
+          {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
+        </button>
+      </div>
+    </section>
 
     <div class="batch-divider"></div>
 
@@ -652,6 +928,197 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.single-running {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: #596273;
+  font-size: 0.9rem;
+}
+
+.single-running-bar {
+  position: relative;
+  width: 120px;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edf3;
+}
+
+.single-running-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 42%;
+  border-radius: inherit;
+  background: #172033;
+  animation: single-running 1.05s ease-in-out infinite;
+}
+
+@keyframes single-running {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.review-card {
+  margin-top: 26px;
+  border: 1px solid #cfd7e6;
+  border-radius: 18px;
+  padding: 22px;
+  background: #f9fbff;
+}
+
+.review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.review-heading h2 {
+  margin: 0;
+}
+
+.review-heading p:not(.label) {
+  margin: 8px 0 0;
+  max-width: 680px;
+  color: #596273;
+  line-height: 1.65;
+}
+
+.review-status {
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.review-status.confirmed {
+  background: #ecfdf3;
+  color: #087443;
+}
+
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.review-image {
+  display: grid;
+  place-items: center;
+  min-height: 380px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #111827;
+}
+
+.review-image img {
+  display: block;
+  width: 100%;
+  max-height: 620px;
+  object-fit: contain;
+}
+
+.review-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.review-field.full {
+  grid-column: 1 / -1;
+}
+
+.review-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.review-field input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #cfd5df;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+}
+
+.review-field small {
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.review-field em {
+  border-radius: 999px;
+  padding: 4px 7px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.validated {
+  background: #ecfdf3;
+  color: #087443;
+}
+
+.needs-review {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.mrz-derived {
+  background: #eef4ff;
+  color: #3538cd;
+}
+
+.review-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  border-top: 1px solid #dfe3ea;
+  padding-top: 18px;
+}
+
+.review-footer > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #596273;
+}
+
+.review-footer small {
+  color: #667085;
+  line-height: 1.5;
+}
+
 .batch-divider {
   height: 1px;
   margin: 28px 0;
@@ -841,8 +1308,13 @@ pre {
 
 @media (max-width: 760px) {
   .heading,
-  .validation-title {
+  .validation-title,
+  .review-heading {
     flex-direction: column;
+  }
+
+  .review-layout {
+    grid-template-columns: 1fr;
   }
 
   .summary,
@@ -860,9 +1332,18 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .batch-actions {
+  .batch-actions,
+  .review-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .review-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .review-field.full {
+    grid-column: auto;
   }
 }
 </style>
