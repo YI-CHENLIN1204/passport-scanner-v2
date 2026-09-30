@@ -26,7 +26,8 @@ V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI �
 - TD3 MRZ 解析後以 check digit 驗證護照號碼、出生日期、有效期限與 composite。
 - 辨識完成後直接進入可編輯的人工覆核卡。
 - 人工覆核日期顯示為 YYYY-MM-DD。
-- 按下確認後目前只建立瀏覽器記憶體中的 PassportReviewDraft，尚未送後端或入庫。
+- 按下確認後會建立 PassportReviewDraft，送到 ASP.NET Core 後端再次驗證，並寫入目前的可替換 InMemoryTravelerStore。
+- InMemoryTravelerStore 只用來驗證 traveler_master / document_versions 版本邏輯，後端重啟後資料會清空；正式資料庫尚未綁定。
 - Tesseract Baseline A 與泛化測試工具保留在開發診斷區，不進旅行社員工主要流程。
 
 ## 文件
@@ -58,3 +59,36 @@ backend/   ASP.NET Core Web API (.NET 10)  :5080
 ```
 
 開發啟動方式請看 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)。
+
+
+## 目前資料流里程碑
+
+```text
+護照圖片
+  ↓
+PaddleOCR / PP-OCRv5（瀏覽器）
+  ↓
+MRZ + check digit
+  ↓
+人工覆核
+  ↓
+PassportReviewDraft
+  ↓
+ASP.NET Core 後端驗證
+  ↓
+ITravelerStore
+  ↓
+InMemoryTravelerStore（目前可逆測試實作）
+  ├─ traveler_master 概念資料
+  └─ document_versions 概念資料
+```
+
+目前版本已能驗證：
+
+- 第一次掃描：建立旅客 + 第一個護照版本。
+- 同一本護照再次掃描：更新既有版本，不重複新增。
+- 同一旅客換新護照：建立新 document version，舊版本保留。
+- 舊護照重新掃描：不會自動變回 current。
+- 多位完全相同候選：後端拒絕自動合併。
+
+正式資料庫選定後只替換 `ITravelerStore` 實作，不改 OCR / 覆核 contract。
