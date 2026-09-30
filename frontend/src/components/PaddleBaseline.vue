@@ -13,7 +13,49 @@ const running = ref(false)
 const error = ref('')
 const result = ref<PaddleBaselineResult | null>(null)
 
+interface PaddleBatchResult {
+  index: number
+  totalMs: number
+  predictMs: number
+  structureComplete: boolean
+  line2ChecksPassed: boolean
+  averageScore: number | null
+  correctedCharacters: number
+  error: string | null
+}
+
+const batchFiles = ref<File[]>([])
+const batchError = ref('')
+const batchRunning = ref(false)
+const batchCurrent = ref(0)
+const batchResults = ref<PaddleBatchResult[]>([])
+
 const canRun = computed(() => props.file !== null && !running.value)
+
+const canRunBatch = computed(
+  () =>
+    batchFiles.value.length >= 3 &&
+    batchFiles.value.length <= 5 &&
+    !batchRunning.value,
+)
+
+const batchPassCount = computed(
+  () =>
+    batchResults.value.filter(
+      (item) => item.structureComplete && item.line2ChecksPassed,
+    ).length,
+)
+
+const batchAveragePredictSeconds = computed(() => {
+  const completed = batchResults.value.filter((item) => !item.error)
+  if (!completed.length) return 0
+
+  return (
+    completed.reduce((sum, item) => sum + item.predictMs, 0) /
+    completed.length /
+    1000
+  )
+})
 
 function validationText(value: boolean | null | undefined) {
   if (value === true) return '通過'
@@ -25,6 +67,82 @@ function validationClass(value: boolean | null | undefined) {
   if (value === true) return 'pass'
   if (value === false) return 'fail'
   return 'unknown'
+}
+
+function handleBatchFiles(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+
+  batchError.value = ''
+  batchResults.value = []
+
+  const valid = files.filter(
+    (file) =>
+      file.type.startsWith('image/') &&
+      file.size <= 15 * 1024 * 1024,
+  )
+
+  batchFiles.value = valid.slice(0, 5)
+
+  if (valid.length !== files.length) {
+    batchError.value = '已忽略非圖片或超過 15 MB 的檔案。'
+  }
+
+  if (valid.length > 5) {
+    batchError.value = '一次最多測 5 張，已取前 5 張。'
+  } else if (batchFiles.value.length > 0 && batchFiles.value.length < 3) {
+    batchError.value = '請選 3～5 張護照圖片。'
+  }
+}
+
+async function runBatch() {
+  if (!canRunBatch.value) return
+
+  batchRunning.value = true
+  batchCurrent.value = 0
+  batchResults.value = []
+
+  try {
+    for (let index = 0; index < batchFiles.value.length; index += 1) {
+      batchCurrent.value = index + 1
+
+      try {
+        const item = await recognizePassportWithPaddle(
+          batchFiles.value[index],
+        )
+
+        batchResults.value.push({
+          index: index + 1,
+          totalMs: item.totalMs,
+          predictMs: item.predictMs,
+          structureComplete: item.structureComplete,
+          line2ChecksPassed:
+            item.line2Validation?.requiredValid === true,
+          averageScore: item.averageScore,
+          correctedCharacters:
+            item.mrzRepair?.correctedCharacters ?? 0,
+          error: null,
+        })
+      } catch (err) {
+        batchResults.value.push({
+          index: index + 1,
+          totalMs: 0,
+          predictMs: 0,
+          structureComplete: false,
+          line2ChecksPassed: false,
+          averageScore: null,
+          correctedCharacters: 0,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'PaddleOCR 批次辨識失敗',
+        })
+      }
+    }
+  } finally {
+    batchRunning.value = false
+    batchCurrent.value = 0
+  }
 }
 
 async function run() {
@@ -189,6 +307,127 @@ async function run() {
         <pre>{{ result.runtime }}</pre>
       </details>
     </div>
+
+    <div class="batch-divider"></div>
+
+    <div class="heading batch-heading">
+      <div>
+        <p class="label">Baseline B · Generalization</p>
+        <h3>3～5 張 PaddleOCR 批次泛化測試</h3>
+      </div>
+      <span class="badge">Batch B</span>
+    </div>
+
+    <p class="copy">
+      使用和單張 Baseline B 完全相同的 PP-OCRv5 流程，
+      只比較不同護照與拍攝條件下的結構、check digit、速度與平均信心。
+      摘要不顯示姓名或完整證件值。
+    </p>
+
+    <label class="batch-file">
+      <span>批次測試圖片（3～5 張）</span>
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        :disabled="batchRunning"
+        @change="handleBatchFiles"
+      />
+    </label>
+
+    <p v-if="batchError" class="error">
+      {{ batchError }}
+    </p>
+
+    <div class="batch-actions">
+      <span>
+        已選 {{ batchFiles.length }} 張
+        <template v-if="batchRunning">
+          · 正在處理第 {{ batchCurrent }} / {{ batchFiles.length }} 張
+        </template>
+      </span>
+
+      <button
+        type="button"
+        :disabled="!canRunBatch"
+        @click="runBatch"
+      >
+        {{ batchRunning ? 'PaddleOCR 批次測試中…' : '開始 Baseline B 批次測試' }}
+      </button>
+    </div>
+
+    <div v-if="batchResults.length" class="batch-summary">
+      <div>
+        <span>完整通過</span>
+        <strong>{{ batchPassCount }} / {{ batchResults.length }}</strong>
+      </div>
+      <div>
+        <span>平均推論</span>
+        <strong>{{ batchAveragePredictSeconds.toFixed(2) }} 秒</strong>
+      </div>
+    </div>
+
+    <div v-if="batchResults.length" class="batch-grid">
+      <article
+        v-for="item in batchResults"
+        :key="item.index"
+        class="batch-item"
+      >
+        <div class="batch-item-title">
+          <strong>測試 {{ item.index }}</strong>
+          <strong
+            :class="
+              item.structureComplete && item.line2ChecksPassed
+                ? 'pass'
+                : 'fail'
+            "
+          >
+            {{
+              item.structureComplete && item.line2ChecksPassed
+                ? '通過'
+                : '需人工確認'
+            }}
+          </strong>
+        </div>
+
+        <dl>
+          <div>
+            <dt>本次推論</dt>
+            <dd>
+              {{ item.error ? '失敗' : (item.predictMs / 1000).toFixed(2) + ' 秒' }}
+            </dd>
+          </div>
+          <div>
+            <dt>TD3 2 × 44</dt>
+            <dd>{{ item.structureComplete ? '完成' : '未完成' }}</dd>
+          </div>
+          <div>
+            <dt>Line 2 檢查碼</dt>
+            <dd>{{ item.line2ChecksPassed ? '全部通過' : '未全部通過' }}</dd>
+          </div>
+          <div>
+            <dt>平均文字信心</dt>
+            <dd>
+              {{
+                item.averageScore === null
+                  ? '無'
+                  : (item.averageScore * 100).toFixed(1) + '%'
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>受限自動修正</dt>
+            <dd>
+              {{ item.correctedCharacters > 0 ? item.correctedCharacters + ' 字元' : '無' }}
+            </dd>
+          </div>
+        </dl>
+
+        <p v-if="item.error" class="error">
+          {{ item.error }}
+        </p>
+      </article>
+    </div>
   </section>
 </template>
 
@@ -345,6 +584,109 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.batch-divider {
+  height: 1px;
+  margin: 28px 0;
+  background: #e2e6ec;
+}
+
+.batch-heading {
+  margin-bottom: 0;
+}
+
+.batch-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.batch-file input {
+  min-height: 44px;
+  border: 1px solid #cfd5df;
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: #ffffff;
+  font: inherit;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  color: #596273;
+  font-size: 0.9rem;
+}
+
+.batch-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.batch-summary > div {
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fbfcfe;
+}
+
+.batch-summary span,
+.batch-summary strong {
+  display: block;
+}
+
+.batch-summary span {
+  color: #667085;
+  font-size: 0.84rem;
+  margin-bottom: 6px;
+}
+
+.batch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.batch-item {
+  border: 1px solid #e2e6ec;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.batch-item-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.batch-item dl {
+  margin: 0;
+}
+
+.batch-item dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-top: 1px solid #eef1f5;
+}
+
+.batch-item dt {
+  color: #667085;
+}
+
+.batch-item dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+}
+
 details {
   margin-top: 14px;
   border: 1px solid #e2e6ec;
@@ -374,15 +716,23 @@ pre {
   }
 
   .summary,
-  .checks {
+  .checks,
+  .batch-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 520px) {
   .summary,
-  .checks {
+  .checks,
+  .batch-summary,
+  .batch-grid {
     grid-template-columns: 1fr;
+  }
+
+  .batch-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>
