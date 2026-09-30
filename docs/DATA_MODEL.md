@@ -83,3 +83,34 @@ Tour / Product
 - 「是否為訂購人」可作為訂單關係欄位，而不是證件 OCR 欄位。
 
 這部分屬訂單／金流管理，不應混入 OCR 模型本身。
+
+
+## V2 護照持久化規則（資料庫前可逆實作）
+
+目前已先透過 `ITravelerStore` 建立資料層邊界。正式資料庫尚未選定時，開發環境使用 `InMemoryTravelerStore` 驗證完整版本邏輯；後端重啟後資料會清空，因此不能視為正式保存。
+
+### 旅客辨識／版本判斷
+
+護照人工覆核完成後：
+
+1. 先以「護照號碼 + 簽發國」找 document version。
+   - 找到：更新該版本的覆核／有效資訊，不建立重複版本。
+   - 若該版本原本已不是 current，重新掃描不會把舊護照偷偷切回 current。
+2. 若沒有同一本護照，再以「英文姓名 + 出生日期 + 國籍」找 traveler。
+   - 找到唯一一位：視為同一旅客的新護照，建立新的 document_version；舊護照版本改為非 current。
+   - 找不到：建立 traveler_master + 第一個 document_version。
+   - 找到多位：回傳 conflict，不自動合併，未來由人工選擇旅客。
+
+此比對故意採保守 exact match，不做模糊姓名自動合併。
+
+### 第一版概念約束
+
+未來 SQL schema 應至少能表達：
+
+- `document_type + issuing_country + document_number` 不應重複建立相同證件版本。
+- 同一旅客同一證件類型只能有一個 current version。
+- document_versions 必須保留歷史版本。
+- traveler_master 與 document_versions 的建立／切換 current 應在同一 transaction 中完成。
+- 重複旅客合併不可只靠模糊姓名自動執行。
+
+正式資料庫選定後，以這些業務規則替換 `InMemoryTravelerStore`，不改前端 `PassportReviewDraft` contract。
