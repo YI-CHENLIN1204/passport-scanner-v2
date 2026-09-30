@@ -4,6 +4,7 @@ import {
   recognizePassportWithPaddle,
   recognizePassportsWithPaddle,
   type PaddleBaselineResult,
+  type PaddleBatchProgress,
 } from '../services/paddleOcr'
 
 const props = defineProps<{
@@ -24,6 +25,8 @@ interface PaddleBatchResult {
   correctedCharacters: number
   detectedBoxes: number | null
   recognizedCount: number | null
+  fallbackUsed: boolean
+  fallbackCropRatio: number | null
   error: string | null
 }
 
@@ -32,6 +35,13 @@ const batchError = ref('')
 const batchRunning = ref(false)
 const batchCurrent = ref(0)
 const batchResults = ref<PaddleBatchResult[]>([])
+const batchProgress = ref<PaddleBatchProgress>({
+  completed: 0,
+  total: 0,
+  current: 0,
+  stage: 'initializing',
+  message: '',
+})
 
 const canRun = computed(() => props.file !== null && !running.value)
 
@@ -41,6 +51,23 @@ const canRunBatch = computed(
     batchFiles.value.length <= 5 &&
     !batchRunning.value,
 )
+
+const batchProgressPercent = computed(() => {
+  if (!batchProgress.value.total) return 0
+
+  const base =
+    (batchProgress.value.completed / batchProgress.value.total) * 100
+
+  if (
+    batchRunning.value &&
+    batchProgress.value.current > batchProgress.value.completed
+  ) {
+    const segment = 100 / batchProgress.value.total
+    return Math.min(99, base + segment * 0.35)
+  }
+
+  return Math.min(100, base)
+})
 
 const batchPassCount = computed(
   () =>
@@ -105,9 +132,22 @@ async function runBatch() {
   batchCurrent.value = 0
   batchResults.value = []
   batchError.value = ''
+  batchProgress.value = {
+    completed: 0,
+    total: batchFiles.value.length,
+    current: 0,
+    stage: 'initializing',
+    message: '正在準備 PaddleOCR 模型…',
+  }
 
   try {
-    const results = await recognizePassportsWithPaddle(batchFiles.value)
+    const results = await recognizePassportsWithPaddle(
+      batchFiles.value,
+      (progress) => {
+        batchProgress.value = progress
+        batchCurrent.value = progress.current
+      },
+    )
 
     batchResults.value = results.map((item, index) => ({
       index: index + 1,
@@ -121,6 +161,8 @@ async function runBatch() {
         item.mrzRepair?.correctedCharacters ?? 0,
       detectedBoxes: item.detectedBoxes,
       recognizedCount: item.recognizedCount,
+      fallbackUsed: item.fallbackUsed,
+      fallbackCropRatio: item.fallbackCropRatio,
       error: null,
     }))
   } catch (err) {
@@ -130,7 +172,6 @@ async function runBatch() {
         : 'PaddleOCR 批次辨識失敗。'
   } finally {
     batchRunning.value = false
-    batchCurrent.value = 0
   }
 }
 
@@ -332,7 +373,7 @@ async function run() {
       <span>
         已選 {{ batchFiles.length }} 張
         <template v-if="batchRunning">
-          · 正在以單次批次推論處理 {{ batchFiles.length }} 張
+          · {{ batchProgress.message }}
         </template>
       </span>
 
@@ -343,6 +384,26 @@ async function run() {
       >
         {{ batchRunning ? 'PaddleOCR 批次測試中…' : '開始 Baseline B 批次測試' }}
       </button>
+    </div>
+
+    <div v-if="batchRunning" class="progress-panel" aria-live="polite">
+      <div class="progress-copy">
+        <span>{{ batchProgress.message }}</span>
+        <strong>{{ Math.round(batchProgressPercent) }}%</strong>
+      </div>
+
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          :class="{ active: batchRunning }"
+          :style="{ width: batchProgressPercent + '%' }"
+        ></div>
+      </div>
+
+      <p>
+        模型只初始化一次，圖片會逐張推論；每完成一張就更新進度，
+        避免整批運算時畫面看起來像當機。
+      </p>
     </div>
 
     <div v-if="batchResults.length" class="batch-summary">
@@ -401,6 +462,16 @@ async function run() {
           <div>
             <dt>Recognition 保留文字</dt>
             <dd>{{ item.recognizedCount ?? '無' }}</dd>
+          </div>
+          <div>
+            <dt>Detection fallback</dt>
+            <dd>
+              {{
+                item.fallbackUsed
+                  ? '底部 ' + Math.round((item.fallbackCropRatio ?? 0) * 100) + '%'
+                  : '未使用'
+              }}
+            </dd>
           </div>
           <div>
             <dt>平均文字信心</dt>
@@ -682,6 +753,68 @@ button:disabled {
   margin: 0;
   text-align: right;
   font-weight: 700;
+}
+
+.progress-panel {
+  margin-top: 16px;
+  border: 1px solid #dfe3ea;
+  border-radius: 14px;
+  padding: 16px;
+  background: #fbfcfe;
+}
+
+.progress-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+  color: #344054;
+}
+
+.progress-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edf3;
+}
+
+.progress-fill {
+  position: relative;
+  height: 100%;
+  min-width: 2%;
+  border-radius: inherit;
+  background: #172033;
+  transition: width 220ms ease;
+}
+
+.progress-fill.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.48),
+    transparent
+  );
+  animation: progress-shimmer 1.1s linear infinite;
+}
+
+.progress-panel p {
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+@keyframes progress-shimmer {
+  to {
+    transform: translateX(320%);
+  }
 }
 
 details {
