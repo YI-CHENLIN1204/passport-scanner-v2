@@ -1,5 +1,6 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import {
+  isPlausibleTd3Line1,
   normalizeMrzCandidate,
   normalizeTd3Line1,
   parseTd3Mrz,
@@ -36,6 +37,7 @@ export interface PaddleBaselineResult {
   averageScore: number | null
   mrzLine1: string | null
   mrzLine2: string | null
+  line1Valid: boolean
   line2Validation: MrzValidation | null
   mrzRepair: MrzRepairInfo | null
   parsedMrz: ParsedMrz | null
@@ -183,6 +185,7 @@ function chooseMrz(items: PaddleItemLike[]) {
     candidates
       .filter((line) => line.startsWith('P'))
       .map((line) => normalizeTd3Line1(line))
+      .filter((line) => isPlausibleTd3Line1(line))
       .sort(
         (a, b) =>
           Math.abs(a.length - 44) - Math.abs(b.length - 44),
@@ -359,6 +362,8 @@ function buildBaselineResult(
       ? JSON.stringify(runtimeData)
       : 'browser'
 
+  const line1Valid = isPlausibleTd3Line1(mrz.line1)
+
   const parsedMrz = parseTd3Mrz(
     mrz.line1,
     mrz.line2,
@@ -375,11 +380,12 @@ function buildBaselineResult(
     averageScore,
     mrzLine1: mrz.line1,
     mrzLine2: mrz.line2,
+    line1Valid,
     line2Validation: mrz.validation,
     mrzRepair: mrz.repair,
     parsedMrz,
     structureComplete:
-      mrz.line1?.length === 44 &&
+      line1Valid &&
       mrz.line2?.length === 44,
     fallbackUsed,
     fallbackCropRatio,
@@ -476,14 +482,19 @@ async function predictOne(
   // but also when the full-page result is clearly too weak to form a TD3
   // result. This catches cases such as 4 detected boxes / 2 recognized texts
   // with very low confidence, while avoiding extra work on healthy pages.
+  const needsLine1Recovery = !best.line1Valid
+
   const weakFullPage =
-    !best.structureComplete &&
-    best.line2Validation?.requiredValid !== true &&
     (
-      (best.detectedBoxes ?? 0) < 10 ||
-      (best.recognizedCount ?? 0) < 5 ||
-      (best.averageScore ?? 0) < 0.5
-    )
+      !best.structureComplete &&
+      best.line2Validation?.requiredValid !== true &&
+      (
+        (best.detectedBoxes ?? 0) < 10 ||
+        (best.recognizedCount ?? 0) < 5 ||
+        (best.averageScore ?? 0) < 0.5
+      )
+    ) ||
+    needsLine1Recovery
 
   if (weakFullPage) {
     onFallback?.()
