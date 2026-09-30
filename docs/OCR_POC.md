@@ -290,3 +290,24 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 - 若失敗圖片 `detectedBoxes = 0`，優先處理文字 detection / 圖像定位。
 - 若 `detectedBoxes > 0` 但 `recognizedCount = 0` 或很低，才考慮 recognition threshold / recognition pipeline。
 - batch UI 的每張推論時間目前是整批總推論時間除以張數的估算，已明確標示為「平均每張推論（批次估算）」。
+
+
+### Baseline B 泛化診斷：失敗集中在 Detection
+
+同一批 5 張再次測試後：
+
+- 測試 1：Detection 61、Recognition 61，TD3 完成，Line 2 check digit 全部通過，平均文字信心約 80.9%。
+- 測試 2：Detection 61、Recognition 59，TD3 完成，Line 2 check digit 全部通過，平均文字信心約 82.1%。
+- 測試 3：Detection 0、Recognition 0，TD3 未完成。
+- 測試 4：Detection 0、Recognition 0，TD3 未完成。
+- 測試 5：Detection 38、Recognition 33，TD3 完成，Line 2 check digit 全部通過，平均文字信心約 91.1%。
+
+因此測試 3、4 的主要問題已確定在 text detection，而不是 recognition threshold。
+
+下一步：
+
+- 若全頁 Detection=0，只在瀏覽器內自動裁切底部 45% MRZ 區域，再用同一個 PaddleOCR instance 重試一次。
+- fallback 僅在 Detection=0 時啟動，避免增加已正常圖片的推論時間。
+- UI 顯示是否使用 Detection fallback 與裁切比例。
+- 批次推論改為模型只初始化一次、圖片逐張推論；每張之間主動 yield 給瀏覽器重繪。
+- 新增動態執行進度條、目前處理張數與 fallback 階段提示，避免 GPU / OCR 推論期間畫面看起來像當機。
