@@ -202,6 +202,37 @@ function chooseMrz(items: PaddleItemLike[]) {
   }
 }
 
+function createPaddlePromise() {
+  paddlePromise = PaddleOCR.create({
+    lang: 'en',
+    ocrVersion: 'PP-OCRv5',
+    ortOptions: {
+      backend: 'auto',
+    },
+  })
+    .then((instance) => {
+      paddleInstance = instance
+      return instance
+    })
+    .catch((error) => {
+      // A rejected shared promise would otherwise poison every later OCR
+      // attempt until the page is reloaded. Clear it so the next call can
+      // retry model/resource initialization.
+      paddlePromise = null
+      paddleInstance = null
+      throw error
+    })
+
+  return paddlePromise
+}
+
+function isFetchFailure(error: unknown) {
+  return (
+    error instanceof Error &&
+    /failed to fetch|networkerror|load failed/i.test(error.message)
+  )
+}
+
 async function getPaddle() {
   if (paddleInstance) {
     return {
@@ -211,25 +242,87 @@ async function getPaddle() {
   }
 
   const startedAt = performance.now()
+  let lastError: unknown = null
 
-  if (!paddlePromise) {
-    paddlePromise = PaddleOCR.create({
-      lang: 'en',
-      ocrVersion: 'PP-OCRv5',
-      ortOptions: {
-        backend: 'auto',
-      },
-    }).then((instance) => {
-      paddleInstance = instance
-      return instance
-    })
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const instance = await (paddlePromise ?? createPaddlePromise())
+
+      return {
+        instance,
+        initializationMs: performance.now() - startedAt,
+      }
+    } catch (error) {
+      lastError = error
+
+      if (attempt === 0 && isFetchFailure(error)) {
+        await new Promise((resolve) => setTimeout(resolve, 700))
+        continue
+      }
+
+      break
+    }
   }
 
-  const instance = await paddlePromise
+  if (isFetchFailure(lastError)) {
+    throw new Error(
+      'PaddleOCR 模型／執行資源下載失敗。請確認網路後再按一次；系統已清除失敗的初始化狀態，可直接重試。',
+    )
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('PaddleOCR 初始化失敗。')
+}
+
+function buildBaselineResult(
+  prediction: unknown,
+  initializationMs: number,
+  predictMs: number,
+  totalMs: number,
+): PaddleBaselineResult {
+  const typedPrediction = prediction as
+    | {
+        items?: unknown
+        runtime?: unknown
+      }
+    | undefined
+
+  const items = (typedPrediction?.items ?? []) as PaddleItemLike[]
+  const mrz = chooseMrz(items)
+
+  const numericScores = items
+    .map((item) => item.score)
+    .filter((score): score is number => typeof score === 'number')
+
+  const averageScore = numericScores.length
+    ? numericScores.reduce((sum, score) => sum + score, 0) /
+      numericScores.length
+    : null
+
+  const runtimeData = typedPrediction?.runtime as
+    | Record<string, unknown>
+    | undefined
+
+  const runtime =
+    runtimeData && Object.keys(runtimeData).length
+      ? JSON.stringify(runtimeData)
+      : 'browser'
 
   return {
-    instance,
-    initializationMs: performance.now() - startedAt,
+    initializationMs,
+    predictMs,
+    totalMs,
+    detectedItems: items.length,
+    averageScore,
+    mrzLine1: mrz.line1,
+    mrzLine2: mrz.line2,
+    line2Validation: mrz.validation,
+    mrzRepair: mrz.repair,
+    structureComplete:
+      mrz.line1?.length === 44 &&
+      mrz.line2?.length === 44,
+    runtime,
   }
 }
 
@@ -243,40 +336,35 @@ export async function recognizePassportWithPaddle(
   const [prediction] = await instance.predict(image)
   const predictMs = performance.now() - predictionStartedAt
 
-  const items = (prediction?.items ?? []) as PaddleItemLike[]
-  const mrz = chooseMrz(items)
-
-  const numericScores = items
-    .map((item) => item.score)
-    .filter((score): score is number => typeof score === 'number')
-
-  const averageScore = numericScores.length
-    ? numericScores.reduce((sum, score) => sum + score, 0) /
-      numericScores.length
-    : null
-
-  const runtimeData = prediction?.runtime as
-    | Record<string, unknown>
-    | undefined
-
-  const runtime =
-    runtimeData && Object.keys(runtimeData).length
-      ? JSON.stringify(runtimeData)
-      : 'browser'
-
-  return {
+  return buildBaselineResult(
+    prediction,
     initializationMs,
     predictMs,
-    totalMs: performance.now() - totalStartedAt,
-    detectedItems: items.length,
-    averageScore,
-    mrzLine1: mrz.line1,
-    mrzLine2: mrz.line2,
-    line2Validation: mrz.validation,
-    mrzRepair: mrz.repair,
-    structureComplete:
-      mrz.line1?.length === 44 &&
-      mrz.line2?.length === 44,
-    runtime,
-  }
+    performance.now() - totalStartedAt,
+  )
+}
+
+export async function recognizePassportsWithPaddle(
+  images: File[],
+): Promise<PaddleBaselineResult[]> {
+  if (!images.length) return []
+
+  const totalStartedAt = performance.now()
+  const { instance, initializationMs } = await getPaddle()
+
+  const predictionStartedAt = performance.now()
+  const predictions = await instance.predict(images)
+  const predictMs = performance.now() - predictionStartedAt
+  const perImagePredictMs = predictMs / images.length
+  const totalMs = performance.now() - totalStartedAt
+  const perImageTotalMs = totalMs / images.length
+
+  return images.map((_, index) =>
+    buildBaselineResult(
+      predictions[index],
+      index === 0 ? initializationMs : 0,
+      perImagePredictMs,
+      perImageTotalMs,
+    ),
+  )
 }
