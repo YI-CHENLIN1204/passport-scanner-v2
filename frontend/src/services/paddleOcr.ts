@@ -29,6 +29,8 @@ export interface PaddleBaselineResult {
   predictMs: number
   totalMs: number
   detectedItems: number
+  detectedBoxes: number | null
+  recognizedCount: number | null
   averageScore: number | null
   mrzLine1: string | null
   mrzLine2: string | null
@@ -303,6 +305,7 @@ function buildBaselineResult(
     | {
         items?: unknown
         runtime?: unknown
+        metrics?: unknown
       }
     | undefined
 
@@ -322,6 +325,20 @@ function buildBaselineResult(
     | Record<string, unknown>
     | undefined
 
+  const metricsData = typedPrediction?.metrics as
+    | Record<string, unknown>
+    | undefined
+
+  const detectedBoxes =
+    typeof metricsData?.detectedBoxes === 'number'
+      ? metricsData.detectedBoxes
+      : null
+
+  const recognizedCount =
+    typeof metricsData?.recognizedCount === 'number'
+      ? metricsData.recognizedCount
+      : null
+
   const runtime =
     runtimeData && Object.keys(runtimeData).length
       ? JSON.stringify(runtimeData)
@@ -332,6 +349,8 @@ function buildBaselineResult(
     predictMs,
     totalMs,
     detectedItems: items.length,
+    detectedBoxes,
+    recognizedCount,
     averageScore,
     mrzLine1: mrz.line1,
     mrzLine2: mrz.line2,
