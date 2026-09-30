@@ -65,19 +65,29 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                 var traveler = _travelers.Single(
                     item => item.TravelerId == existingDocument.TravelerId);
 
-                UpdateTraveler(
-                    traveler,
-                    name,
-                    birthDate,
-                    sex,
-                    nationality,
-                    passportNumber,
-                    now);
+                if (existingDocument.IsCurrent)
+                {
+                    UpdateTraveler(
+                        traveler,
+                        name,
+                        birthDate,
+                        sex,
+                        nationality,
+                        passportNumber,
+                        now);
+                }
+                else
+                {
+                    traveler.NameEn = name;
+                    traveler.BirthDate = birthDate;
+                    traveler.Gender = sex;
+                    traveler.Nationality = nationality;
+                    traveler.UpdatedAt = now;
+                }
 
                 existingDocument.Nationality = nationality;
                 existingDocument.ExpiryDate = expiryDate;
                 existingDocument.VerifiedAt = now;
-                existingDocument.IsCurrent = true;
 
                 var versionCount = _documents.Count(
                     item => item.TravelerId == traveler.TravelerId);
