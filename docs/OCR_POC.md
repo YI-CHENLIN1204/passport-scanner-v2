@@ -311,3 +311,20 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 - UI 顯示是否使用 Detection fallback 與裁切比例。
 - 批次推論改為模型只初始化一次、圖片逐張推論；每張之間主動 yield 給瀏覽器重繪。
 - 新增動態執行進度條、目前處理張數與 fallback 階段提示，避免 GPU / OCR 推論期間畫面看起來像當機。
+
+
+### Baseline B fallback 條件擴充：由 Detection=0 擴充到弱偵測
+
+同一批 5 張在加入底部 45% MRZ fallback 後：
+
+- 完整通過由 3 / 5 提升至 4 / 5。
+- 測試 4 原本 Detection 0 / Recognition 0，fallback 後變為 Detection 34 / Recognition 33，平均文字信心約 93.4%，TD3 與 Line 2 check digit 全部通過。
+- 測試 3 仍失敗，但其全頁結果僅 Detection 4 / Recognition 2，平均文字信心約 15.6%。因為舊 fallback 條件只判斷 Detection=0，所以沒有觸發。
+
+因此 fallback 條件擴充為：
+
+- TD3 尚未完成；
+- Line 2 關鍵 check digit 尚未全部通過；
+- 且符合任一弱訊號：Detection < 10、Recognition < 5、平均文字信心 < 50%。
+
+符合時才改試底部 45% MRZ 裁切。健康圖片不增加額外推論成本。
