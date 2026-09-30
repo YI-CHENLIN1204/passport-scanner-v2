@@ -22,6 +22,8 @@ interface PaddleBatchResult {
   line2ChecksPassed: boolean
   averageScore: number | null
   correctedCharacters: number
+  detectedBoxes: number | null
+  recognizedCount: number | null
   error: string | null
 }
 
@@ -117,6 +119,8 @@ async function runBatch() {
       averageScore: item.averageScore,
       correctedCharacters:
         item.mrzRepair?.correctedCharacters ?? 0,
+      detectedBoxes: item.detectedBoxes,
+      recognizedCount: item.recognizedCount,
       error: null,
     }))
   } catch (err) {
@@ -347,7 +351,7 @@ async function run() {
         <strong>{{ batchPassCount }} / {{ batchResults.length }}</strong>
       </div>
       <div>
-        <span>平均推論</span>
+        <span>平均每張推論（批次估算）</span>
         <strong>{{ batchAveragePredictSeconds.toFixed(2) }} 秒</strong>
       </div>
     </div>
@@ -389,6 +393,14 @@ async function run() {
           <div>
             <dt>Line 2 檢查碼</dt>
             <dd>{{ item.line2ChecksPassed ? '全部通過' : '未全部通過' }}</dd>
+          </div>
+          <div>
+            <dt>Detection 文字框</dt>
+            <dd>{{ item.detectedBoxes ?? '無' }}</dd>
+          </div>
+          <div>
+            <dt>Recognition 保留文字</dt>
+            <dd>{{ item.recognizedCount ?? '無' }}</dd>
           </div>
           <div>
             <dt>平均文字信心</dt>
