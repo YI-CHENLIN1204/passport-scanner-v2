@@ -10,6 +10,12 @@ export default defineConfig({
         target: 'http://localhost:5080',
         changeOrigin: true,
       },
+      '/paddle-models': {
+        target: 'https://paddle-model-ecology.bj.bcebos.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/paddle-models/, ''),
+      },
     },
   },
 })
