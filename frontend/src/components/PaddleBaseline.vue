@@ -47,6 +47,7 @@ interface PaddleBatchResult {
   totalMs: number
   predictMs: number
   structureComplete: boolean
+  line1Valid: boolean
   line2ChecksPassed: boolean
   averageScore: number | null
   correctedCharacters: number
@@ -470,6 +471,7 @@ async function runBatch() {
       totalMs: item.totalMs,
       predictMs: item.predictMs,
       structureComplete: item.structureComplete,
+      line1Valid: item.line1Valid,
       line2ChecksPassed:
         item.line2Validation?.requiredValid === true,
       averageScore: item.averageScore,
@@ -588,6 +590,14 @@ async function run() {
     <p v-if="error" class="error">
       {{ error }}
     </p>
+
+    <div
+      v-if="result && !result.line1Valid"
+      class="warning"
+    >
+      MRZ 姓名行未可靠擷取，因此系統沒有自動建立人工覆核姓名。
+      已避免把一般頁面文字誤當成姓名；請重新辨識這張護照或確認影像中的 MRZ 區域完整清楚。
+    </div>
 
     <!-- Primary user workflow: review appears before developer diagnostics. -->
     <section
@@ -873,6 +883,12 @@ async function run() {
           <strong>{{ result.detectedItems }}</strong>
         </div>
         <div>
+          <span>MRZ 姓名行</span>
+          <strong :class="result.line1Valid ? 'pass' : 'fail'">
+            {{ result.line1Valid ? 'TD3 結構通過' : '未可靠擷取' }}
+          </strong>
+        </div>
+        <div>
           <span>TD3 2 × 44</span>
           <strong :class="result.structureComplete ? 'pass' : 'fail'">
             {{ result.structureComplete ? '結構完成' : '尚未完成' }}
@@ -1080,6 +1096,10 @@ async function run() {
             <dd>
               {{ item.error ? '失敗' : (item.predictMs / 1000).toFixed(2) + ' 秒' }}
             </dd>
+          </div>
+          <div>
+            <dt>MRZ 姓名行</dt>
+            <dd>{{ item.line1Valid ? 'TD3 結構通過' : '未通過' }}</dd>
           </div>
           <div>
             <dt>TD3 2 × 44</dt>
