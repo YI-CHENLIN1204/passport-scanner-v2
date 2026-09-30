@@ -76,14 +76,22 @@ V2 第一版開發骨架採：
 
 ### O-002：OCR 引擎與可訓練方式
 
-目前已完成第一輪護照 A/B：
+目前已完成護照 OCR A/B 與第一輪泛化測試：
 
 - Baseline A：Tesseract.js。
 - Baseline B：PaddleOCR.js / PP-OCRv5。
 
-在同一張 Tesseract 仍無法完成 TD3 的困難護照上，PaddleOCR 已達 44 / 44 且護照號碼、生日、有效期限、composite 四個關鍵 check digit 全部通過，因此 **PaddleOCR 目前列為護照 OCR 主力候選**。
+在同一張 Tesseract 仍無法完成 TD3 的困難護照上，PaddleOCR 達成 44 / 44 且護照號碼、生日、有效期限、composite 四個關鍵 check digit 全部通過。
 
-尚未正式鎖定為最終引擎；下一步必須通過多張不同護照／拍攝條件的泛化測試。Tesseract 保留作比較與研究，不再優先堆疊 workaround。
+接著以 5 張不同護照／拍攝條件做泛化測試，加入「弱偵測時只重試底部 45% MRZ 區域」後，PaddleOCR 達成 **5 / 5 TD3 結構完成且 Line 2 關鍵 check digit 全部通過**。
+
+**決策：V2 護照 OCR 主引擎正式採用 PaddleOCR.js / PP-OCRv5。**
+
+- Tesseract.js 保留為開發 benchmark / PoC，不進正式護照主流程。
+- MRZ Line 2 以 check digit 作為核心資料可信度驗證。
+- Line 1 英文姓名仍保留人工覆核。
+- Detection 弱或失敗時可啟用底部 45% MRZ fallback。
+- fallback 的效能成本另行優化，不再以堆疊 Tesseract workaround 作為主要方向。
 
 ### O-003：照片訓練資料政策
 
