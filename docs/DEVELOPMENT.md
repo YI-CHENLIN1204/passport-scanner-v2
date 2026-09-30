@@ -134,3 +134,15 @@ frontend/.env.example
 - 建立受控的 model asset proxy / cache。
 
 OCR 推論本身仍維持在瀏覽器端；model asset proxy 不代表把證件圖片送到伺服器 OCR。
+
+
+### PaddleOCR.js model archive format
+
+PaddleOCR.js browser runtime does not accept the ordinary Paddle inference tar as a drop-in browser model. The browser SDK expects an uncompressed tar that contains `inference.onnx` and `inference.yml`.
+
+For PP-OCRv5 mobile models, use the browser/ONNX assets used by PaddleOCR.js itself:
+
+- `PP-OCRv5_mobile_det_onnx_infer.tar`
+- `PP-OCRv5_mobile_rec_onnx_infer.tar`
+
+Using `*_infer.tar` without `_onnx_` can download successfully through the proxy but then fail during SDK initialization with `Entry "inference.onnx" was not found in the tar archive.`.
