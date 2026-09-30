@@ -20,9 +20,9 @@ interface PassportReviewForm {
   passportNumber: string
   nationality: string
   issuingState: string
-  birthDateMrz: string
+  birthDate: string
   sex: string
-  expiryDateMrz: string
+  expiryDate: string
 }
 
 const reviewForm = ref<PassportReviewForm>({
@@ -30,9 +30,9 @@ const reviewForm = ref<PassportReviewForm>({
   passportNumber: '',
   nationality: '',
   issuingState: '',
-  birthDateMrz: '',
+  birthDate: '',
   sex: '',
-  expiryDateMrz: '',
+  expiryDate: '',
 })
 const reviewConfirmed = ref(false)
 const reviewImageUrl = ref('')
@@ -105,8 +105,8 @@ const canConfirmReview = computed(() =>
       reviewForm.value.passportNumber.trim() &&
       reviewForm.value.nationality.trim() &&
       reviewForm.value.issuingState.trim() &&
-      reviewForm.value.birthDateMrz.trim() &&
-      reviewForm.value.expiryDateMrz.trim(),
+      reviewForm.value.birthDate.trim() &&
+      reviewForm.value.expiryDate.trim(),
   ),
 )
 
@@ -134,11 +134,62 @@ function resetReviewForm() {
     passportNumber: '',
     nationality: '',
     issuingState: '',
-    birthDateMrz: '',
+    birthDate: '',
     sex: '',
-    expiryDateMrz: '',
+    expiryDate: '',
   }
   reviewConfirmed.value = false
+}
+
+function formatIsoDate(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return ''
+  }
+
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
+}
+
+function mrzBirthDateToIso(value: string) {
+  if (!/^\d{6}$/.test(value)) return ''
+
+  const yy = Number(value.slice(0, 2))
+  const month = Number(value.slice(2, 4))
+  const day = Number(value.slice(4, 6))
+  const currentYear = new Date().getFullYear()
+
+  let year = 2000 + yy
+  if (year > currentYear) {
+    year -= 100
+  }
+
+  return formatIsoDate(year, month, day)
+}
+
+function mrzExpiryDateToIso(value: string) {
+  if (!/^\d{6}$/.test(value)) return ''
+
+  const yy = Number(value.slice(0, 2))
+  const month = Number(value.slice(2, 4))
+  const day = Number(value.slice(4, 6))
+  const currentYear = new Date().getFullYear()
+  const targetYear = currentYear + 5
+
+  const candidates = [1900 + yy, 2000 + yy, 2100 + yy]
+  const year = candidates.sort(
+    (a, b) => Math.abs(a - targetYear) - Math.abs(b - targetYear),
+  )[0]
+
+  return formatIsoDate(year, month, day)
 }
 
 function populateReviewForm(ocrResult: PaddleBaselineResult) {
@@ -157,9 +208,9 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
     passportNumber: parsed.documentNumber,
     nationality: parsed.nationality,
     issuingState: parsed.issuingState,
-    birthDateMrz: parsed.birthDate,
+    birthDate: mrzBirthDateToIso(parsed.birthDate),
     sex: parsed.sex === '<' ? '' : parsed.sex,
-    expiryDateMrz: parsed.expiryDate,
+    expiryDate: mrzExpiryDateToIso(parsed.expiryDate),
   }
   reviewConfirmed.value = false
 }
@@ -342,6 +393,162 @@ async function run() {
       {{ error }}
     </p>
 
+    <!-- Primary user workflow: review appears before developer diagnostics. -->
+    <section v-if="result?.parsedMrz" class="review-card">
+      <div class="review-heading">
+        <div>
+          <p class="label">Step 5 · Human review</p>
+          <h2>護照人工覆核</h2>
+          <p>
+            辨識完成後先在這裡核對原始證件並修正欄位。
+            MRZ check digit 通過代表機器可讀區結構一致，但英文姓名與日期仍須人工目視確認。
+          </p>
+        </div>
+
+        <span
+          class="review-status"
+          :class="{ confirmed: reviewConfirmed }"
+        >
+          {{ reviewConfirmed ? '已完成覆核' : '待人工覆核' }}
+        </span>
+      </div>
+
+      <div class="review-layout">
+        <div class="review-image">
+          <img
+            v-if="reviewImageUrl"
+            :src="reviewImageUrl"
+            alt="護照原始證件預覽"
+          />
+        </div>
+
+        <div class="review-fields">
+          <label class="review-field full">
+            <span>
+              英文姓名
+              <em class="needs-review">人工確認</em>
+            </span>
+            <input v-model="reviewForm.englishName" type="text" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              護照號碼
+              <em
+                :class="
+                  result.line2Validation?.documentNumber
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.documentNumber
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input v-model="reviewForm.passportNumber" type="text" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              國籍
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.nationality" type="text" maxlength="3" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              簽發國
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.issuingState" type="text" maxlength="3" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              性別
+              <em class="mrz-derived">MRZ</em>
+            </span>
+            <input v-model="reviewForm.sex" type="text" maxlength="1" />
+          </label>
+
+          <label class="review-field">
+            <span>
+              出生日期
+              <em
+                :class="
+                  result.line2Validation?.birthDate
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.birthDate
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input
+              v-model="reviewForm.birthDate"
+              type="date"
+            />
+            <small>由 MRZ 日期轉為 YYYY-MM-DD；請目視確認年份是否正確。</small>
+          </label>
+
+          <label class="review-field">
+            <span>
+              有效期限
+              <em
+                :class="
+                  result.line2Validation?.expiryDate
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.line2Validation?.expiryDate
+                    ? '檢查碼通過'
+                    : '人工確認'
+                }}
+              </em>
+            </span>
+            <input
+              v-model="reviewForm.expiryDate"
+              type="date"
+            />
+            <small>由 MRZ 日期轉為 YYYY-MM-DD。</small>
+          </label>
+        </div>
+      </div>
+
+      <div class="review-footer">
+        <div>
+          <strong v-if="reviewConfirmed" class="pass">
+            此筆已在瀏覽器完成人工覆核。
+          </strong>
+          <span v-else>
+            確認前請至少目視核對英文姓名與原始護照。
+          </span>
+          <small>
+            目前「確認資料」只更新前端覆核狀態，尚未寫入後端、旅客主檔或 Google Sheets。
+          </small>
+        </div>
+
+        <button
+          type="button"
+          :disabled="!canConfirmReview"
+          @click="confirmReview"
+        >
+          {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
+        </button>
+      </div>
+    </section>
+
+    <div class="technical-divider" v-if="result"></div>
     <div v-if="result" class="results">
       <div class="summary">
         <div>
@@ -453,166 +660,6 @@ async function run() {
       </details>
     </div>
 
-
-    <section v-if="result?.parsedMrz" class="review-card">
-      <div class="review-heading">
-        <div>
-          <p class="label">Step 5 · Human review</p>
-          <h2>護照人工覆核</h2>
-          <p>
-            左側核對原始證件，右側可直接修正欄位。MRZ check digit
-            通過代表機器可讀區結構一致，但英文姓名仍須人工目視確認。
-          </p>
-        </div>
-
-        <span
-          class="review-status"
-          :class="{ confirmed: reviewConfirmed }"
-        >
-          {{ reviewConfirmed ? '已完成覆核' : '待人工覆核' }}
-        </span>
-      </div>
-
-      <div class="review-layout">
-        <div class="review-image">
-          <img
-            v-if="reviewImageUrl"
-            :src="reviewImageUrl"
-            alt="護照原始證件預覽"
-          />
-        </div>
-
-        <div class="review-fields">
-          <label class="review-field full">
-            <span>
-              英文姓名
-              <em class="needs-review">人工確認</em>
-            </span>
-            <input v-model="reviewForm.englishName" type="text" />
-          </label>
-
-          <label class="review-field">
-            <span>
-              護照號碼
-              <em
-                :class="
-                  result.line2Validation?.documentNumber
-                    ? 'validated'
-                    : 'needs-review'
-                "
-              >
-                {{
-                  result.line2Validation?.documentNumber
-                    ? '檢查碼通過'
-                    : '人工確認'
-                }}
-              </em>
-            </span>
-            <input v-model="reviewForm.passportNumber" type="text" />
-          </label>
-
-          <label class="review-field">
-            <span>
-              國籍
-              <em class="mrz-derived">MRZ</em>
-            </span>
-            <input v-model="reviewForm.nationality" type="text" maxlength="3" />
-          </label>
-
-          <label class="review-field">
-            <span>
-              簽發國
-              <em class="mrz-derived">MRZ</em>
-            </span>
-            <input v-model="reviewForm.issuingState" type="text" maxlength="3" />
-          </label>
-
-          <label class="review-field">
-            <span>
-              性別
-              <em class="mrz-derived">MRZ</em>
-            </span>
-            <input v-model="reviewForm.sex" type="text" maxlength="1" />
-          </label>
-
-          <label class="review-field">
-            <span>
-              出生日期
-              <em
-                :class="
-                  result.line2Validation?.birthDate
-                    ? 'validated'
-                    : 'needs-review'
-                "
-              >
-                {{
-                  result.line2Validation?.birthDate
-                    ? '檢查碼通過'
-                    : '人工確認'
-                }}
-              </em>
-            </span>
-            <input
-              v-model="reviewForm.birthDateMrz"
-              type="text"
-              inputmode="numeric"
-              maxlength="6"
-              placeholder="YYMMDD"
-            />
-            <small>MRZ 為 YYMMDD；世紀轉換在正式資料模型階段再處理。</small>
-          </label>
-
-          <label class="review-field">
-            <span>
-              有效期限
-              <em
-                :class="
-                  result.line2Validation?.expiryDate
-                    ? 'validated'
-                    : 'needs-review'
-                "
-              >
-                {{
-                  result.line2Validation?.expiryDate
-                    ? '檢查碼通過'
-                    : '人工確認'
-                }}
-              </em>
-            </span>
-            <input
-              v-model="reviewForm.expiryDateMrz"
-              type="text"
-              inputmode="numeric"
-              maxlength="6"
-              placeholder="YYMMDD"
-            />
-            <small>MRZ 為 YYMMDD。</small>
-          </label>
-        </div>
-      </div>
-
-      <div class="review-footer">
-        <div>
-          <strong v-if="reviewConfirmed" class="pass">
-            此筆已在瀏覽器完成人工覆核。
-          </strong>
-          <span v-else>
-            確認前請至少目視核對英文姓名與原始護照。
-          </span>
-          <small>
-            目前「確認資料」只更新前端覆核狀態，尚未寫入後端、旅客主檔或 Google Sheets。
-          </small>
-        </div>
-
-        <button
-          type="button"
-          :disabled="!canConfirmReview"
-          @click="confirmReview"
-        >
-          {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
-        </button>
-      </div>
-    </section>
 
     <div class="batch-divider"></div>
 
@@ -1117,6 +1164,12 @@ button:disabled {
 .review-footer small {
   color: #667085;
   line-height: 1.5;
+}
+
+.technical-divider {
+  height: 1px;
+  margin: 28px 0 18px;
+  background: #e2e6ec;
 }
 
 .batch-divider {
