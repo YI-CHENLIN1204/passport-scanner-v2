@@ -11,6 +11,7 @@ public sealed record PassportReviewRequest(
     string Sex,
     string ExpiryDate,
     PassportReviewVerification Verification,
+    PassportReviewAssertions ReviewAssertions,
     PassportReviewOcrMetadata Ocr,
     DateTimeOffset ReviewedAt);
 
@@ -19,6 +20,9 @@ public sealed record PassportReviewVerification(
     bool? BirthDateCheckDigit,
     bool? ExpiryDateCheckDigit,
     bool? CompositeCheckDigit);
+
+public sealed record PassportReviewAssertions(
+    bool EnglishNameVisuallyConfirmed);
 
 public sealed record PassportReviewOcrMetadata(
     string Engine,
