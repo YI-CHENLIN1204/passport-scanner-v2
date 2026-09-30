@@ -91,3 +91,24 @@
 不把護照號碼、姓名等個資 echo 回前端。
 
 下一階段才會另外設計真正的 persistence endpoint 與 traveler / document version transaction。
+
+
+## 暫時持久化 API
+
+`POST /api/passport-reviews`
+
+此 endpoint 會先執行和 validate endpoint 相同的後端驗證，再交給 `ITravelerStore`。
+
+目前實作為 `InMemoryTravelerStore`，只用來驗證：
+
+- 新旅客建立。
+- 同一本護照重複掃描不重複建立版本。
+- 同一旅客換新護照建立新 document version。
+- 舊護照重新掃描不會重新變成 current。
+- 多位 exact-match 候選時回傳 409 conflict，不自動合併。
+
+成功回應不 echo 個資，只回傳內部 ID、action、版本數與 warning。
+
+目前 persistence 值為 `volatile-in-memory`，**後端重啟後全部清空**。這不是正式資料保存。
+
+`GET /api/passport-reviews/store-status` 只回傳旅客數與證件版本數，不回傳姓名、護照號碼等敏感資料。
