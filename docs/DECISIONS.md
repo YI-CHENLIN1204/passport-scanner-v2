@@ -76,7 +76,14 @@ V2 第一版開發骨架採：
 
 ### O-002：OCR 引擎與可訓練方式
 
-需要實測瀏覽器端 OCR 引擎對護照、身分證、台胞證的準確率、載入時間、模型大小與是否可進一步訓練／微調。
+目前已完成第一輪護照 A/B：
+
+- Baseline A：Tesseract.js。
+- Baseline B：PaddleOCR.js / PP-OCRv5。
+
+在同一張 Tesseract 仍無法完成 TD3 的困難護照上，PaddleOCR 已達 44 / 44 且護照號碼、生日、有效期限、composite 四個關鍵 check digit 全部通過，因此 **PaddleOCR 目前列為護照 OCR 主力候選**。
+
+尚未正式鎖定為最終引擎；下一步必須通過多張不同護照／拍攝條件的泛化測試。Tesseract 保留作比較與研究，不再優先堆疊 workaround。
 
 ### O-003：照片訓練資料政策
 
