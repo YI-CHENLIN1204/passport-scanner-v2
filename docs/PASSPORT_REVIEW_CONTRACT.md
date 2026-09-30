@@ -2,7 +2,7 @@
 
 此文件定義護照人工覆核完成後，前端準備給未來後端 API 的結構化資料格式。
 
-目前狀態：**只在瀏覽器記憶體建立 draft，不送 API、不入庫、不匯出 Google Sheets。**
+目前狀態：**前端建立 draft 後送到 `POST /api/passport-reviews/validate` 做後端第二層格式驗證；驗證成功後仍不入庫、不匯出 Google Sheets。**
 
 ## Payload
 
@@ -65,3 +65,29 @@
 - 可使用「還原 OCR」回到本次 OCR 初始值。
 - 格式錯誤時不可確認。
 - 護照已過期目前列為 warning，不阻止資料覆核；後續旅行作業是否可使用該證件屬另一層業務規則。
+
+
+## 目前 API 階段
+
+`POST /api/passport-reviews/validate`
+
+用途：
+
+- 接收人工覆核完成後的結構化 draft。
+- 在後端重新執行格式與基本一致性驗證。
+- 不記錄完整 request body 到 log。
+- 不建立 traveler_master。
+- 不建立 document_versions。
+- 不保存證件圖片。
+- 不寫 Google Sheets。
+
+成功回應只包含：
+
+- accepted。
+- persistence = validated-only。
+- receivedAt。
+- warnings。
+
+不把護照號碼、姓名等個資 echo 回前端。
+
+下一階段才會另外設計真正的 persistence endpoint 與 traveler / document version transaction。
