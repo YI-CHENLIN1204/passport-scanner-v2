@@ -97,7 +97,8 @@ export function normalizeTd3Line1(rawLine: string) {
     if (
       line.length >= 5 &&
       line[1] !== '<' &&
-      /^[A-Z]{3}$/.test(line.slice(2, 5))
+      /^[A-Z]{3}$/.test(line.slice(2, 5)) &&
+      line.indexOf('<<', 5) >= 0
     ) {
       line = `P<${line.slice(2)}`
     }
@@ -119,6 +120,34 @@ export function normalizeTd3Line1(rawLine: string) {
   }
 
   return line
+}
+
+export function isPlausibleTd3Line1(rawLine: string | null) {
+  if (!rawLine) return false
+
+  const line = normalizeTd3Line1(rawLine)
+
+  if (line.length !== 44) return false
+  if (!line.startsWith('P<')) return false
+  if (!/^[A-Z]{3}$/.test(line.slice(2, 5))) return false
+
+  const nameField = line.slice(5)
+
+  // TD3 line 1 must contain SURNAME<<GIVEN<NAMES. Requiring this delimiter
+  // prevents ordinary page text such as "PASSPORT..." from being promoted
+  // into a fake MRZ line merely because its length happens to be near 44.
+  const delimiterIndex = nameField.indexOf('<<')
+  if (delimiterIndex <= 0) return false
+
+  const surnameField = nameField.slice(0, delimiterIndex)
+  const givenField = nameField.slice(delimiterIndex + 2)
+
+  if (!/[A-Z]/.test(surnameField)) return false
+  if (!/[A-Z]/.test(givenField)) return false
+  if (/\d/.test(nameField)) return false
+  if (!/^[A-Z<]+$/.test(nameField)) return false
+
+  return true
 }
 
 function findMrzCandidates(text: string) {
@@ -443,7 +472,7 @@ export function parseTd3Mrz(
   if (
     !line1 ||
     !line2 ||
-    line1.length !== 44 ||
+    !isPlausibleTd3Line1(line1) ||
     line2.length !== 44 ||
     !validation
   ) {
@@ -756,6 +785,9 @@ function chooseBestLine1Candidate(lines: string[]) {
         line: normalizeTd3Line1(line),
         raw: line,
       }))
+      .filter((candidate) =>
+        isPlausibleTd3Line1(candidate.line),
+      )
       .sort(
         (a, b) =>
           Math.abs(a.line.length - 44) -
