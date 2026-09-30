@@ -435,7 +435,7 @@ function cleanMrzName(value: string) {
   return value.replace(/<+/g, ' ').trim().replace(/\s+/g, ' ')
 }
 
-function parseTd3Mrz(
+export function parseTd3Mrz(
   line1: string | null,
   line2: string | null,
   validation: MrzValidation | null,
