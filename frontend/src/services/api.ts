@@ -68,3 +68,89 @@ export async function validatePassportReview(
 
   return response.json() as Promise<PassportReviewValidationResponse>
 }
+
+
+export type PassportReviewSaveAction =
+  | 'CreatedTravelerAndDocument'
+  | 'CreatedDocumentVersion'
+  | 'UpdatedExistingDocument'
+
+export interface PassportReviewSaveResponse {
+  accepted: boolean
+  persistence: 'volatile-in-memory'
+  action: PassportReviewSaveAction
+  travelerId: string
+  documentVersionId: string
+  travelerDocumentVersionCount: number
+  savedAt: string
+  warnings: string[]
+}
+
+interface ApiConflict {
+  code?: string
+  message?: string
+}
+
+export async function savePassportReview(
+  draft: PassportReviewDraft,
+): Promise<PassportReviewSaveResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/passport-reviews`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(draft),
+    },
+  )
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      try {
+        const conflict = (await response.json()) as ApiConflict
+        throw new Error(
+          conflict.message ??
+            '找到多位可能相同的旅客，需要人工選擇，系統沒有自動合併。',
+        )
+      } catch (err) {
+        if (err instanceof Error) throw err
+      }
+    }
+
+    let message = `Passport review save failed: ${response.status}`
+
+    try {
+      const problem =
+        (await response.json()) as ValidationProblemDetails
+      message = flattenValidationProblem(problem)
+    } catch {
+      // Keep the status-only message when the response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<PassportReviewSaveResponse>
+}
+
+export interface PassportStoreStatusResponse {
+  persistence: 'volatile-in-memory'
+  travelerCount: number
+  documentVersionCount: number
+  checkedAt: string
+}
+
+export async function getPassportStoreStatus() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/passport-reviews/store-status`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Passport store status failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<PassportStoreStatusResponse>
+}
