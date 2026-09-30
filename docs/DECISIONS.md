@@ -183,3 +183,27 @@ Tesseract Baseline A、TD3 細節、runtime、批次泛化測試等資訊全部�
 ### D-017：原圖縮放與拖曳列為覆核 UX 強化
 
 人工覆核卡維持左側原圖、右側可修改欄位。後續加入圖片縮放與拖曳／平移，方便操作人員局部核對證件內容；此 UX 強化不阻塞目前資料流與資料模型開發。
+
+
+### D-018：資料庫未定案前以 ITravelerStore 驗證版本邏輯
+
+正式資料庫尚未鎖定，因此後端先以 `ITravelerStore` 作為資料層邊界，開發環境使用 `InMemoryTravelerStore`。
+
+目的不是把記憶體儲存當正式資料庫，而是先把以下業務規則跑通：
+
+- 新旅客 + 第一個護照版本。
+- 同一本護照重複掃描不重複建立版本。
+- 同一旅客換新護照建立新 document version。
+- 舊護照重新掃描不會重新變成 current。
+- 多位 exact-match 候選不自動合併。
+
+正式資料庫選定後，只替換 `ITravelerStore` 實作，前端 `PassportReviewDraft` 與 API contract 不重寫。
+
+### D-019：CI 作為前後端最基本品質門檻
+
+GitHub Actions 在 push / pull request 時執行：
+
+- ASP.NET Core `dotnet build`。
+- Vue / TypeScript `npm run build`（包含 vue-tsc）。
+
+目前 TypeScript 固定於 5.9.x，以維持現有 vue-tsc 相容性。
