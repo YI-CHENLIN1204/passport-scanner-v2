@@ -25,6 +25,9 @@ Content-Type: application/json
     "expiryDateCheckDigit": true,
     "compositeCheckDigit": true
   },
+  "reviewAssertions": {
+    "englishNameVisuallyConfirmed": true
+  },
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
@@ -56,6 +59,9 @@ Content-Type: application/json
     "expiryDateCheckDigit": true,
     "compositeCheckDigit": true
   },
+  "reviewAssertions": {
+    "englishNameVisuallyConfirmed": true
+  },
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
@@ -86,6 +92,9 @@ Content-Type: application/json
     "birthDateCheckDigit": true,
     "expiryDateCheckDigit": true,
     "compositeCheckDigit": true
+  },
+  "reviewAssertions": {
+    "englishNameVisuallyConfirmed": true
   },
   "ocr": {
     "engine": "paddleocr-ppocrv5",
