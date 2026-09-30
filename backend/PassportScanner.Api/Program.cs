@@ -1,3 +1,6 @@
+using PassportScanner.Api.Contracts;
+using PassportScanner.Api.Validation;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendPolicy = "Frontend";
@@ -30,5 +33,29 @@ app.MapGet("/api/health", () =>
         service = "passport-scanner-api",
         timestamp = DateTimeOffset.UtcNow
     }));
+
+app.MapPost(
+    "/api/passport-reviews/validate",
+    (PassportReviewRequest request) =>
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var errors = PassportReviewValidator.Validate(request, today);
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(
+                errors,
+                title: "Passport review validation failed.");
+        }
+
+        var warnings = PassportReviewValidator.GetWarnings(request, today);
+
+        return Results.Ok(
+            new PassportReviewValidationResponse(
+                Accepted: true,
+                Persistence: "validated-only",
+                ReceivedAt: DateTimeOffset.UtcNow,
+                Warnings: warnings));
+    });
 
 app.Run();
