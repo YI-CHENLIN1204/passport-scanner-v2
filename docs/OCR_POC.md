@@ -269,3 +269,24 @@ Baseline B（PaddleOCR.js / PP-OCRv5）：
 - 對 `Failed to fetch` 類暫時性網路錯誤，自動等待後重試初始化一次。
 - Baseline B 批次改成一次呼叫 `predict([file1, file2, ...])`，共享同一個模型 instance 與同一次 batch inference。
 - 若整個 batch 初始化失敗，只在批次區顯示一個整體錯誤，不再產生 5 張假的「OCR 失敗」結果。
+
+
+### Baseline B 泛化測試：3 / 5 完整通過
+
+同一批 5 張護照的 PaddleOCR.js / PP-OCRv5 batch 結果：
+
+- 完整通過：3 / 5。
+- 測試 1：TD3 完成、Line 2 check digit 全部通過、平均文字信心約 80.9%。
+- 測試 2：TD3 完成、Line 2 check digit 全部通過、平均文字信心約 82.1%。
+- 測試 3：未完成，沒有可用平均文字信心。
+- 測試 4：未完成，沒有可用平均文字信心。
+- 測試 5：TD3 完成、Line 2 check digit 全部通過、平均文字信心約 91.1%。
+
+ONNX Runtime Console 中出現的 unused initializer / execution provider assignment 訊息屬 runtime warning，不視為 OCR failure。
+
+下一個診斷：
+
+- 新增 PaddleOCR 原生 metrics：`detectedBoxes` 與 `recognizedCount`。
+- 若失敗圖片 `detectedBoxes = 0`，優先處理文字 detection / 圖像定位。
+- 若 `detectedBoxes > 0` 但 `recognizedCount = 0` 或很低，才考慮 recognition threshold / recognition pipeline。
+- batch UI 的每張推論時間目前是整批總推論時間除以張數的估算，已明確標示為「平均每張推論（批次估算）」。
