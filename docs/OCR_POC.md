@@ -252,3 +252,20 @@ Baseline B（PaddleOCR.js / PP-OCRv5）：
 - Tesseract.js 保留作 baseline 與 fallback 研究，不再作為主要優化方向。
 - 尚未正式凍結 OCR engine；必須先完成 3～5 張甚至更多不同拍攝條件的 PaddleOCR 泛化測試。
 - 若 PaddleOCR 泛化測試仍維持高結構完成率與 check digit 通過率，再把護照人工覆核畫面接到 PaddleOCR pipeline。
+
+
+### Baseline B 批次測試：Failed to fetch 修正
+
+首次 Baseline B 批次測試出現 5 / 5 全部 `Failed to fetch`，且每張推論時間皆為 0 秒。這代表失敗發生在 PaddleOCR 模型／runtime 資源初始化階段，而不是 OCR 推論本身。
+
+找到兩個應用程式層問題：
+
+1. 共用的 `paddlePromise` 一旦初始化失敗，原本會一直維持 rejected 狀態，使後續每張圖片都立即重複失敗，直到重新整理頁面。
+2. PaddleOCR.js 官方 `predict()` 原生支援圖片陣列，但原本批次 UI 卻逐張呼叫單張推論，沒有使用 SDK 的原生 multi-image batch。
+
+修正：
+
+- 初始化失敗時立即清除 rejected promise / instance，使下一次按鈕操作可以重新下載與初始化。
+- 對 `Failed to fetch` 類暫時性網路錯誤，自動等待後重試初始化一次。
+- Baseline B 批次改成一次呼叫 `predict([file1, file2, ...])`，共享同一個模型 instance 與同一次 batch inference。
+- 若整個 batch 初始化失敗，只在批次區顯示一個整體錯誤，不再產生 5 張假的「OCR 失敗」結果。
