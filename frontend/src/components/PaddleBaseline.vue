@@ -38,6 +38,7 @@ const reviewOriginal = ref<PassportReviewForm | null>(null)
 const reviewedAt = ref<string | null>(null)
 const reviewRef = ref<HTMLElement | null>(null)
 const confirmedDraft = ref<PassportReviewDraft | null>(null)
+const nameVisuallyConfirmed = ref(false)
 const reviewSubmitting = ref(false)
 const reviewSubmitError = ref('')
 const reviewApiReceipt = ref<PassportReviewSaveResponse | null>(null)
@@ -186,7 +187,8 @@ const changedReviewFields = computed(() => {
 const canConfirmReview = computed(
   () =>
     Boolean(result.value?.parsedMrz) &&
-    reviewErrors.value.length === 0,
+    reviewErrors.value.length === 0 &&
+    nameVisuallyConfirmed.value,
 )
 
 const batchAveragePredictSeconds = computed(() => {
@@ -218,6 +220,7 @@ function resetReviewForm() {
     expiryDate: '',
   }
   reviewConfirmed.value = false
+  nameVisuallyConfirmed.value = false
   reviewOriginal.value = null
   reviewedAt.value = null
   confirmedDraft.value = null
@@ -289,6 +292,7 @@ function normalizeReviewText(
 function resetReviewToOcr() {
   if (!reviewOriginal.value) return
   reviewForm.value = { ...reviewOriginal.value }
+  nameVisuallyConfirmed.value = false
   reviewConfirmed.value = false
   reviewedAt.value = null
   confirmedDraft.value = null
@@ -335,6 +339,7 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
     expiryDate: mrzExpiryDateToIso(parsed.expiryDate),
   }
   reviewOriginal.value = { ...reviewForm.value }
+  nameVisuallyConfirmed.value = false
   reviewConfirmed.value = false
   reviewedAt.value = null
   confirmedDraft.value = null
@@ -369,6 +374,9 @@ async function confirmReview() {
         result.value.line2Validation?.expiryDate ?? null,
       compositeCheckDigit:
         result.value.line2Validation?.composite ?? null,
+    },
+    reviewAssertions: {
+      englishNameVisuallyConfirmed: nameVisuallyConfirmed.value,
     },
     ocr: {
       engine: 'paddleocr-ppocrv5',
@@ -506,6 +514,13 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => reviewForm.value.englishName,
+  () => {
+    nameVisuallyConfirmed.value = false
+  },
 )
 
 watch(
@@ -650,6 +665,13 @@ async function run() {
               maxlength="80"
               @blur="normalizeReviewText('englishName')"
             />
+            <label class="name-confirmation">
+              <input
+                v-model="nameVisuallyConfirmed"
+                type="checkbox"
+              />
+              <span>我已對照左側原始護照，確認英文姓名正確</span>
+            </label>
           </label>
 
           <label class="review-field">
@@ -1445,6 +1467,22 @@ button:disabled {
   background: #ffffff;
   color: #172033;
   font: inherit;
+}
+
+.name-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #475467;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.name-confirmation input {
+  width: auto;
+  min-height: auto;
+  margin-top: 2px;
 }
 
 .review-field small {
