@@ -148,7 +148,7 @@ function handleFileChange(event: Event) {
   if (!file) return
 
   if (!file.type.startsWith('image/')) {
-    uploadError.value = '目前 PoC 只接受圖片檔。'
+    uploadError.value = '目前只接受圖片檔。'
     input.value = ''
     return
   }
@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
       <p class="eyebrow">Internal Tool · V2</p>
       <h1>Passport Scanner</h1>
       <p class="subtitle">
-        瀏覽器端 OCR、人工覆核、旅客主檔與證件版本管理。
+        瀏覽器端證件辨識、人工覆核與後續旅客資料流程。
       </p>
     </section>
 
@@ -321,8 +321,8 @@ onBeforeUnmount(() => {
     <section class="scanner-card">
       <div class="section-heading">
         <div>
-          <p class="label">Step 2 · Browser input</p>
-          <h2>選擇證件並在瀏覽器預覽</h2>
+          <p class="label">Step 2 · Document input</p>
+          <h2>選擇證件圖片</h2>
         </div>
 
         <span class="local-only-badge">本機處理</span>
@@ -349,8 +349,7 @@ onBeforeUnmount(() => {
       </div>
 
       <p class="privacy-note">
-        圖片本身仍只留在瀏覽器。OCR 會在瀏覽器內的 Web Worker / WebAssembly
-        執行，不會把這張證件圖片送到後端 API。
+        證件圖片只在瀏覽器內預覽與執行 OCR，不會為了辨識而把原始圖片送到後端 API。
       </p>
 
       <p v-if="uploadError" class="inline-error">
@@ -392,11 +391,33 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="ocr-card">
+    <PaddleBaseline
+      v-if="documentType === 'passport'"
+      :file="selectedFile"
+    />
+
+    <section
+      v-else
+      class="notice-box unsupported-document-card"
+    >
+      <strong>這個證件類型還沒進入正式 OCR 流程。</strong>
+      <span>
+        目前先把護照的辨識、人工覆核與資料契約做完整；
+        台灣身分證與台胞證會沿用同一套「辨識 → 驗證 → 人工覆核」流程。
+      </span>
+    </section>
+
+    <details class="dev-lab">
+      <summary>
+        開發測試工具：Tesseract Baseline A 與舊泛化測試
+      </summary>
+
+      <div class="dev-lab-body">
+<section class="ocr-card">
       <div class="section-heading">
         <div>
-          <p class="label">Step 3 · OCR PoC</p>
-          <h2>護照 OCR + MRZ 專用辨識</h2>
+          <p class="label">Developer benchmark · Tesseract</p>
+          <h2>Tesseract 護照基準測試</h2>
         </div>
 
         <span class="poc-badge">Baseline A</span>
@@ -592,10 +613,7 @@ onBeforeUnmount(() => {
         </p>
       </div>
     </section>
-
-    <PaddleBaseline :file="selectedFile" />
-
-    <section class="batch-card">
+<section class="batch-card">
       <div class="section-heading">
         <div>
           <p class="label">Step 4 · Generalization test</p>
@@ -731,13 +749,7 @@ onBeforeUnmount(() => {
         </article>
       </div>
     </section>
-
-    <section class="next-card">
-      <h2>這一階段的判斷標準</h2>
-      <p>
-        不看單張最佳成績，而看不同圖片下 Line 2 檢查碼能否穩定通過、2 × 44 是否穩定成立，
-        以及連續處理速度是否可接受。通過這一關後，才進入正式的護照人工覆核介面。
-      </p>
-    </section>
+      </div>
+    </details>
   </main>
 </template>
