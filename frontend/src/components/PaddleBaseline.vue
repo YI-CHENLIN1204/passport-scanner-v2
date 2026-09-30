@@ -328,7 +328,7 @@ async function run() {
       <span>
         已選 {{ batchFiles.length }} 張
         <template v-if="batchRunning">
-          · 正在處理第 {{ batchCurrent }} / {{ batchFiles.length }} 張
+          · 正在以單次批次推論處理 {{ batchFiles.length }} 張
         </template>
       </span>
 
