@@ -629,3 +629,40 @@ progress {
   font-size: 0.88rem;
   line-height: 1.6;
 }
+
+
+.unsupported-document-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.dev-lab {
+  margin-top: 24px;
+  border: 1px solid #dfe3ea;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.dev-lab > summary {
+  cursor: pointer;
+  padding: 15px 18px;
+  background: #f8fafc;
+  color: #475467;
+  font-weight: 700;
+}
+
+.dev-lab-body {
+  padding: 18px;
+}
+
+.dev-lab-body .ocr-card,
+.dev-lab-body .batch-card {
+  margin-top: 0;
+}
+
+.dev-lab-body .batch-card {
+  margin-top: 18px;
+}
