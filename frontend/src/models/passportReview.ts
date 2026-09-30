@@ -17,6 +17,10 @@ export interface PassportReviewVerification {
   compositeCheckDigit: boolean | null
 }
 
+export interface PassportReviewAssertions {
+  englishNameVisuallyConfirmed: boolean
+}
+
 export interface PassportReviewOcrMetadata {
   engine: 'paddleocr-ppocrv5'
   line2Validated: boolean
@@ -35,6 +39,7 @@ export interface PassportReviewDraft {
   sex: PassportSex
   expiryDate: string
   verification: PassportReviewVerification
+  reviewAssertions: PassportReviewAssertions
   ocr: PassportReviewOcrMetadata
   reviewedAt: string
 }
