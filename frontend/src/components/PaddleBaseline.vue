@@ -11,8 +11,8 @@ import type {
   PassportReviewForm,
 } from '../models/passportReview'
 import {
-  validatePassportReview,
-  type PassportReviewValidationResponse,
+  savePassportReview,
+  type PassportReviewSaveResponse,
 } from '../services/api'
 
 const props = defineProps<{
@@ -40,7 +40,7 @@ const reviewRef = ref<HTMLElement | null>(null)
 const confirmedDraft = ref<PassportReviewDraft | null>(null)
 const reviewSubmitting = ref(false)
 const reviewSubmitError = ref('')
-const reviewApiReceipt = ref<PassportReviewValidationResponse | null>(null)
+const reviewApiReceipt = ref<PassportReviewSaveResponse | null>(null)
 
 interface PaddleBatchResult {
   index: number
@@ -384,7 +384,7 @@ async function confirmReview() {
   reviewApiReceipt.value = null
 
   try {
-    const receipt = await validatePassportReview(draft)
+    const receipt = await savePassportReview(draft)
 
     confirmedDraft.value = draft
     reviewedAt.value = timestamp
@@ -807,14 +807,20 @@ async function run() {
       <div class="review-footer">
         <div>
           <strong v-if="reviewConfirmed" class="pass">
-            人工覆核完成，後端格式驗證已通過 · {{ formatReviewedAt(reviewedAt) }}
+            人工覆核完成，後端已接受這筆資料 · {{ formatReviewedAt(reviewedAt) }}
           </strong>
           <span v-else>
             確認前請至少目視核對英文姓名與原始護照。
           </span>
           <small v-if="reviewApiReceipt">
-            API 已接受並完成第二層格式驗證；目前仍是驗證階段，
-            尚未寫入資料庫或 Google Sheets。
+            {{
+              reviewApiReceipt.action === 'CreatedTravelerAndDocument'
+                ? '已建立旅客主檔與第一個護照版本。'
+                : reviewApiReceipt.action === 'CreatedDocumentVersion'
+                  ? '已找到既有旅客並建立新的護照版本。'
+                  : '已找到同一本護照，更新本次覆核資訊，沒有重複建立版本。'
+            }}
+            目前使用測試用記憶體儲存，後端重啟後資料會清空。
           </small>
           <small v-else>
             按下確認後會送到後端做第二層格式驗證；目前尚未進資料庫。
@@ -838,7 +844,7 @@ async function run() {
           >
             {{
               reviewSubmitting
-                ? '後端驗證中…'
+                ? '儲存中…'
                 : reviewConfirmed
                   ? '已確認資料'
                   : '確認資料'
