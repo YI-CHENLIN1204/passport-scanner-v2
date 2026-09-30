@@ -6,6 +6,10 @@ import {
   type PaddleBaselineResult,
   type PaddleBatchProgress,
 } from '../services/paddleOcr'
+import type {
+  PassportReviewDraft,
+  PassportReviewForm,
+} from '../models/passportReview'
 
 const props = defineProps<{
   file: File | null
@@ -14,16 +18,6 @@ const props = defineProps<{
 const running = ref(false)
 const error = ref('')
 const result = ref<PaddleBaselineResult | null>(null)
-
-interface PassportReviewForm {
-  englishName: string
-  passportNumber: string
-  nationality: string
-  issuingState: string
-  birthDate: string
-  sex: string
-  expiryDate: string
-}
 
 const reviewForm = ref<PassportReviewForm>({
   englishName: '',
@@ -39,6 +33,7 @@ const reviewImageUrl = ref('')
 const reviewOriginal = ref<PassportReviewForm | null>(null)
 const reviewedAt = ref<string | null>(null)
 const reviewRef = ref<HTMLElement | null>(null)
+const confirmedDraft = ref<PassportReviewDraft | null>(null)
 
 interface PaddleBatchResult {
   index: number
@@ -217,6 +212,7 @@ function resetReviewForm() {
   reviewConfirmed.value = false
   reviewOriginal.value = null
   reviewedAt.value = null
+  confirmedDraft.value = null
 }
 
 function formatIsoDate(year: number, month: number, day: number) {
@@ -284,6 +280,7 @@ function resetReviewToOcr() {
   reviewForm.value = { ...reviewOriginal.value }
   reviewConfirmed.value = false
   reviewedAt.value = null
+  confirmedDraft.value = null
 }
 
 function formatReviewedAt(value: string | null) {
@@ -322,12 +319,45 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
   reviewOriginal.value = { ...reviewForm.value }
   reviewConfirmed.value = false
   reviewedAt.value = null
+  confirmedDraft.value = null
 }
 
 function confirmReview() {
-  if (!canConfirmReview.value) return
+  if (!canConfirmReview.value || !result.value) return
+
+  const timestamp = new Date().toISOString()
+  reviewedAt.value = timestamp
   reviewConfirmed.value = true
-  reviewedAt.value = new Date().toISOString()
+
+  confirmedDraft.value = {
+    schemaVersion: 1,
+    documentType: 'passport',
+    englishName: reviewForm.value.englishName.trim(),
+    passportNumber: reviewForm.value.passportNumber.trim(),
+    nationality: reviewForm.value.nationality.trim(),
+    issuingState: reviewForm.value.issuingState.trim(),
+    birthDate: reviewForm.value.birthDate,
+    sex: reviewForm.value.sex,
+    expiryDate: reviewForm.value.expiryDate,
+    verification: {
+      passportNumberCheckDigit:
+        result.value.line2Validation?.documentNumber ?? null,
+      birthDateCheckDigit:
+        result.value.line2Validation?.birthDate ?? null,
+      expiryDateCheckDigit:
+        result.value.line2Validation?.expiryDate ?? null,
+      compositeCheckDigit:
+        result.value.line2Validation?.composite ?? null,
+    },
+    ocr: {
+      engine: 'paddleocr-ppocrv5',
+      line2Validated:
+        result.value.line2Validation?.requiredValid === true,
+      fallbackUsed: result.value.fallbackUsed,
+      averageScore: result.value.averageScore,
+    },
+    reviewedAt: timestamp,
+  }
 }
 
 function validationText(value: boolean | null | undefined) {
@@ -436,9 +466,10 @@ watch(
 watch(
   reviewForm,
   () => {
-    if (reviewConfirmed.value) {
+    if (reviewConfirmed.value || confirmedDraft.value) {
       reviewConfirmed.value = false
       reviewedAt.value = null
+      confirmedDraft.value = null
     }
   },
   { deep: true },
@@ -716,8 +747,11 @@ async function run() {
           <span v-else>
             確認前請至少目視核對英文姓名與原始護照。
           </span>
-          <small>
-            目前「確認資料」只更新前端覆核狀態，尚未寫入後端、旅客主檔或 Google Sheets。
+          <small v-if="confirmedDraft">
+            已建立前端覆核草稿；目前尚未送到後端、旅客主檔或 Google Sheets。
+          </small>
+          <small v-else>
+            目前「確認資料」只在瀏覽器準備覆核草稿，尚未寫入後端或外部系統。
           </small>
         </div>
 
