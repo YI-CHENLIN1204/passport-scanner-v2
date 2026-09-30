@@ -348,3 +348,23 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 - Tesseract.js 保留為 PoC / benchmark，不進正式護照 OCR 主流程。
 - 下一階段不再以同一批圖片持續調準確率，避免過度最佳化；轉入正式欄位解析與人工覆核 UI。
 - fallback 仍有明顯效能成本：本輪測試 3 約 19.82 秒、測試 4 約 10.70 秒；一般成功圖片約 1.7～2.4 秒。後續需獨立做效能優化，但不阻擋人工覆核流程開發。
+
+
+### Regression：Line 2 全過但 Line 1 誤選一般頁面文字
+
+實測發現一張護照的 Line 2 可完整通過 check digit，但舊 Line 1 候選規則誤把頁面上的 PASSPORT / 國家文字組合當成 MRZ 姓名行，造成英文姓名出現明顯錯誤。
+
+根因：
+
+- 舊規則只要求候選以 P 開頭並接近 44 字元。
+- `normalizeTd3Line1` 對第二字元的 filler 修正過寬，可能把普通 `PASSPORT...` 文字修成假的 `P<...`。
+- Line 2 check digit 與 Line 1 姓名沒有直接驗證關係，因此 Line 2 全綠不能證明姓名正確。
+
+修正：
+
+- `P<` 結構修正只有在候選本身已有 TD3 姓名分隔符 `<<` 時才允許。
+- Line 1 必須符合：44 字元、`P<`、3 碼簽發國、姓名欄包含 `SURNAME<<GIVEN<NAMES`、姓名欄不得有數字。
+- `parseTd3Mrz` 再次防禦性驗證 Line 1；無效 Line 1 不產生 parsed MRZ / 自動姓名。
+- PaddleOCR 若 Line 1 不可信，即使 Line 2 已全部通過，也會觸發底部 MRZ crop fallback。
+- UI 獨立顯示「MRZ 姓名行」可信狀態。
+- 英文姓名增加強制人工目視確認勾選。
