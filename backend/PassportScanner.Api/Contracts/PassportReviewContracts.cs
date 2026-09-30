@@ -31,3 +31,20 @@ public sealed record PassportReviewValidationResponse(
     string Persistence,
     DateTimeOffset ReceivedAt,
     IReadOnlyList<string> Warnings);
+
+
+public sealed record PassportReviewSaveResponse(
+    bool Accepted,
+    string Persistence,
+    string Action,
+    Guid TravelerId,
+    Guid DocumentVersionId,
+    int TravelerDocumentVersionCount,
+    DateTimeOffset SavedAt,
+    IReadOnlyList<string> Warnings);
+
+public sealed record PassportStoreStatusResponse(
+    string Persistence,
+    int TravelerCount,
+    int DocumentVersionCount,
+    DateTimeOffset CheckedAt);
