@@ -10,6 +10,10 @@ import type {
   PassportReviewDraft,
   PassportReviewForm,
 } from '../models/passportReview'
+import {
+  validatePassportReview,
+  type PassportReviewValidationResponse,
+} from '../services/api'
 
 const props = defineProps<{
   file: File | null
@@ -34,6 +38,9 @@ const reviewOriginal = ref<PassportReviewForm | null>(null)
 const reviewedAt = ref<string | null>(null)
 const reviewRef = ref<HTMLElement | null>(null)
 const confirmedDraft = ref<PassportReviewDraft | null>(null)
+const reviewSubmitting = ref(false)
+const reviewSubmitError = ref('')
+const reviewApiReceipt = ref<PassportReviewValidationResponse | null>(null)
 
 interface PaddleBatchResult {
   index: number
@@ -213,6 +220,9 @@ function resetReviewForm() {
   reviewOriginal.value = null
   reviewedAt.value = null
   confirmedDraft.value = null
+  reviewSubmitting.value = false
+  reviewSubmitError.value = ''
+  reviewApiReceipt.value = null
 }
 
 function formatIsoDate(year: number, month: number, day: number) {
@@ -281,6 +291,8 @@ function resetReviewToOcr() {
   reviewConfirmed.value = false
   reviewedAt.value = null
   confirmedDraft.value = null
+  reviewSubmitError.value = ''
+  reviewApiReceipt.value = null
 }
 
 function formatReviewedAt(value: string | null) {
@@ -327,14 +339,17 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
   confirmedDraft.value = null
 }
 
-function confirmReview() {
-  if (!canConfirmReview.value || !result.value) return
+async function confirmReview() {
+  if (
+    !canConfirmReview.value ||
+    !result.value ||
+    reviewSubmitting.value
+  ) {
+    return
+  }
 
   const timestamp = new Date().toISOString()
-  reviewedAt.value = timestamp
-  reviewConfirmed.value = true
-
-  confirmedDraft.value = {
+  const draft: PassportReviewDraft = {
     schemaVersion: 1,
     documentType: 'passport',
     englishName: reviewForm.value.englishName.trim(),
@@ -362,6 +377,29 @@ function confirmReview() {
       averageScore: result.value.averageScore,
     },
     reviewedAt: timestamp,
+  }
+
+  reviewSubmitting.value = true
+  reviewSubmitError.value = ''
+  reviewApiReceipt.value = null
+
+  try {
+    const receipt = await validatePassportReview(draft)
+
+    confirmedDraft.value = draft
+    reviewedAt.value = timestamp
+    reviewConfirmed.value = true
+    reviewApiReceipt.value = receipt
+  } catch (err) {
+    reviewConfirmed.value = false
+    confirmedDraft.value = null
+    reviewedAt.value = null
+    reviewSubmitError.value =
+      err instanceof Error
+        ? err.message
+        : '後端驗證失敗，請稍後再試。'
+  } finally {
+    reviewSubmitting.value = false
   }
 }
 
@@ -475,6 +513,8 @@ watch(
       reviewConfirmed.value = false
       reviewedAt.value = null
       confirmedDraft.value = null
+      reviewApiReceipt.value = null
+      reviewSubmitError.value = ''
     }
   },
   { deep: true },
@@ -744,19 +784,40 @@ async function run() {
         </div>
       </div>
 
+      <div v-if="reviewSubmitError" class="review-error-box review-submit-error">
+        <strong>後端驗證沒有通過</strong>
+        <div>{{ reviewSubmitError }}</div>
+      </div>
+
+      <div
+        v-if="reviewApiReceipt?.warnings.length"
+        class="review-warning-box review-submit-warning"
+      >
+        <strong>後端提醒</strong>
+        <ul>
+          <li
+            v-for="message in reviewApiReceipt.warnings"
+            :key="message"
+          >
+            {{ message }}
+          </li>
+        </ul>
+      </div>
+
       <div class="review-footer">
         <div>
           <strong v-if="reviewConfirmed" class="pass">
-            此筆已在瀏覽器完成人工覆核 · {{ formatReviewedAt(reviewedAt) }}
+            人工覆核完成，後端格式驗證已通過 · {{ formatReviewedAt(reviewedAt) }}
           </strong>
           <span v-else>
             確認前請至少目視核對英文姓名與原始護照。
           </span>
-          <small v-if="confirmedDraft">
-            已建立前端覆核草稿；目前尚未送到後端、旅客主檔或 Google Sheets。
+          <small v-if="reviewApiReceipt">
+            API 已接受這筆結構化覆核資料；目前狀態為
+            {{ reviewApiReceipt.persistence }}，尚未寫入資料庫或 Google Sheets。
           </small>
           <small v-else>
-            目前「確認資料」只在瀏覽器準備覆核草稿，尚未寫入後端或外部系統。
+            按下確認後會送到後端做第二層格式驗證；目前尚未進資料庫。
           </small>
         </div>
 
@@ -772,10 +833,16 @@ async function run() {
 
           <button
             type="button"
-            :disabled="!canConfirmReview"
+            :disabled="!canConfirmReview || reviewSubmitting"
             @click="confirmReview"
           >
-            {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
+            {{
+              reviewSubmitting
+                ? '後端驗證中…'
+                : reviewConfirmed
+                  ? '已確認資料'
+                  : '確認資料'
+            }}
           </button>
         </div>
       </div>
@@ -1380,6 +1447,11 @@ button:disabled {
 .mrz-derived {
   background: #eef4ff;
   color: #3538cd;
+}
+
+.review-submit-error,
+.review-submit-warning {
+  margin-top: 12px;
 }
 
 .review-footer {
