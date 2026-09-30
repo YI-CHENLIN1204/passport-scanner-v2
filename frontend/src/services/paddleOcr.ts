@@ -37,7 +37,17 @@ export interface PaddleBaselineResult {
   line2Validation: MrzValidation | null
   mrzRepair: MrzRepairInfo | null
   structureComplete: boolean
+  fallbackUsed: boolean
+  fallbackCropRatio: number | null
   runtime: string
+}
+
+export interface PaddleBatchProgress {
+  completed: number
+  total: number
+  current: number
+  stage: 'initializing' | 'predicting' | 'fallback' | 'completed'
+  message: string
 }
 
 let paddleInstance: PaddleInstance | null = null
@@ -300,6 +310,8 @@ function buildBaselineResult(
   initializationMs: number,
   predictMs: number,
   totalMs: number,
+  fallbackUsed = false,
+  fallbackCropRatio: number | null = null,
 ): PaddleBaselineResult {
   const typedPrediction = prediction as
     | {
@@ -359,49 +371,197 @@ function buildBaselineResult(
     structureComplete:
       mrz.line1?.length === 44 &&
       mrz.line2?.length === 44,
+    fallbackUsed,
+    fallbackCropRatio,
     runtime,
   }
+}
+
+async function createBottomCrop(
+  image: File,
+  cropRatio = 0.45,
+) {
+  const bitmap = await createImageBitmap(image)
+  const sourceY = Math.floor(bitmap.height * (1 - cropRatio))
+  const sourceHeight = bitmap.height - sourceY
+
+  const targetWidth = Math.min(1800, bitmap.width)
+  const scale = targetWidth / bitmap.width
+  const targetHeight = Math.max(1, Math.round(sourceHeight * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    bitmap.close()
+    throw new Error('無法建立 PaddleOCR MRZ fallback Canvas。')
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, targetWidth, targetHeight)
+  context.drawImage(
+    bitmap,
+    0,
+    sourceY,
+    bitmap.width,
+    sourceHeight,
+    0,
+    0,
+    targetWidth,
+    targetHeight,
+  )
+
+  bitmap.close()
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('無法建立 PaddleOCR MRZ fallback 圖片。'))
+      }
+    }, 'image/png')
+  })
+}
+
+function resultQuality(result: PaddleBaselineResult) {
+  return (
+    (result.line2Validation?.requiredValid ? 10000 : 0) +
+    (result.structureComplete ? 5000 : 0) +
+    (result.line2Validation
+      ? [
+          result.line2Validation.documentNumber,
+          result.line2Validation.birthDate,
+          result.line2Validation.expiryDate,
+          result.line2Validation.composite,
+        ].filter((value) => value === true).length * 500
+      : 0) +
+    (result.detectedBoxes ?? 0) * 2 +
+    (result.recognizedCount ?? 0)
+  )
+}
+
+async function predictOne(
+  instance: PaddleInstance,
+  image: File,
+  initializationMs = 0,
+  onFallback?: () => void,
+): Promise<PaddleBaselineResult> {
+  const totalStartedAt = performance.now()
+
+  const fullStartedAt = performance.now()
+  const [prediction] = await instance.predict(image)
+  const fullPredictMs = performance.now() - fullStartedAt
+
+  let best = buildBaselineResult(
+    prediction,
+    initializationMs,
+    fullPredictMs,
+    performance.now() - totalStartedAt,
+  )
+
+  // Detection=0 means recognition never got a chance. Retry only those
+  // failures on a tighter bottom crop where passport MRZ normally sits.
+  if ((best.detectedBoxes ?? 0) === 0) {
+    onFallback?.()
+
+    const cropRatio = 0.45
+    const crop = await createBottomCrop(image, cropRatio)
+
+    const fallbackStartedAt = performance.now()
+    const [fallbackPrediction] = await instance.predict(crop)
+    const fallbackPredictMs = performance.now() - fallbackStartedAt
+
+    const fallback = buildBaselineResult(
+      fallbackPrediction,
+      initializationMs,
+      fullPredictMs + fallbackPredictMs,
+      performance.now() - totalStartedAt,
+      true,
+      cropRatio,
+    )
+
+    if (resultQuality(fallback) > resultQuality(best)) {
+      best = fallback
+    }
+  }
+
+  return best
 }
 
 export async function recognizePassportWithPaddle(
   image: File,
 ): Promise<PaddleBaselineResult> {
-  const totalStartedAt = performance.now()
   const { instance, initializationMs } = await getPaddle()
-
-  const predictionStartedAt = performance.now()
-  const [prediction] = await instance.predict(image)
-  const predictMs = performance.now() - predictionStartedAt
-
-  return buildBaselineResult(
-    prediction,
-    initializationMs,
-    predictMs,
-    performance.now() - totalStartedAt,
-  )
+  return predictOne(instance, image, initializationMs)
 }
 
 export async function recognizePassportsWithPaddle(
   images: File[],
+  onProgress?: (progress: PaddleBatchProgress) => void,
 ): Promise<PaddleBaselineResult[]> {
   if (!images.length) return []
 
-  const totalStartedAt = performance.now()
+  onProgress?.({
+    completed: 0,
+    total: images.length,
+    current: 0,
+    stage: 'initializing',
+    message: '正在準備 PaddleOCR 模型…',
+  })
+
   const { instance, initializationMs } = await getPaddle()
+  const results: PaddleBaselineResult[] = []
 
-  const predictionStartedAt = performance.now()
-  const predictions = await instance.predict(images)
-  const predictMs = performance.now() - predictionStartedAt
-  const perImagePredictMs = predictMs / images.length
-  const totalMs = performance.now() - totalStartedAt
-  const perImageTotalMs = totalMs / images.length
+  for (let index = 0; index < images.length; index += 1) {
+    const current = index + 1
 
-  return images.map((_, index) =>
-    buildBaselineResult(
-      predictions[index],
+    onProgress?.({
+      completed: index,
+      total: images.length,
+      current,
+      stage: 'predicting',
+      message: `正在辨識第 ${current} / ${images.length} 張護照…`,
+    })
+
+    // Yield before the heavy inference so Vue/CSS gets a chance to paint
+    // the latest progress state instead of looking frozen.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    const result = await predictOne(
+      instance,
+      images[index],
       index === 0 ? initializationMs : 0,
-      perImagePredictMs,
-      perImageTotalMs,
-    ),
-  )
+      () => {
+        onProgress?.({
+          completed: index,
+          total: images.length,
+          current,
+          stage: 'fallback',
+          message: `第 ${current} 張全頁未偵測到文字，改試底部 MRZ 裁切…`,
+        })
+      },
+    )
+
+    results.push(result)
+
+    onProgress?.({
+      completed: current,
+      total: images.length,
+      current,
+      stage: 'completed',
+      message: `已完成第 ${current} / ${images.length} 張。`,
+    })
+
+    // Let the browser render the completed state before starting the next one.
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, 50),
+    )
+  }
+
+  return results
 }
