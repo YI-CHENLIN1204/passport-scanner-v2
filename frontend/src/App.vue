@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getHealth, type HealthResponse } from './services/api'
+import PaddleBaseline from './components/PaddleBaseline.vue'
 import {
   recognizePassport,
   terminateOcrWorker,
@@ -591,6 +592,8 @@ onBeforeUnmount(() => {
         </p>
       </div>
     </section>
+
+    <PaddleBaseline :file="selectedFile" />
 
     <section class="batch-card">
       <div class="section-heading">
