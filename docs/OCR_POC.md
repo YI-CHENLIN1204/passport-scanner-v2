@@ -216,3 +216,39 @@ Baseline B 採官方 `@paddleocr/paddleocr-js`，使用 PP-OCRv5 英文 OCR，�
 - Baseline B 的摘要只顯示耗時、辨識區塊數、MRZ 44 / 44、check digit 與 OCR 信心，不顯示完整證件值。
 - Tesseract 的 check-digit validation / 保守字元修正函式共用給 PaddleOCR 結果，確保比較的是 OCR engine 差異，而不是不同驗證規則。
 - 先做單張 A/B；若 Baseline B 明顯改善第二張困難護照，再擴充 Baseline B 批次泛化測試。
+
+
+### Baseline A vs Baseline B：同一張困難護照
+
+同一張先前在 Tesseract adaptive MRZ 流程仍失敗的護照，A/B 結果如下：
+
+Baseline A（Tesseract.js）：
+- 總耗時：約 6.82 秒（其中初始化約 3.63 秒）。
+- 整頁 OCR：約 0.59 秒。
+- MRZ 專用 OCR：約 1.97 秒。
+- MRZ 嘗試：5 次。
+- Line 1 / Line 2：32 / 44。
+- 護照號碼：通過。
+- 出生日期：失敗。
+- 有效期限：通過。
+- composite check digit：失敗。
+- TD3 2 × 44：未完成。
+
+Baseline B（PaddleOCR.js / PP-OCRv5）：
+- 首次初始化：約 2.58 秒。
+- 本次推論：約 3.39 秒。
+- 辨識文字區塊：36。
+- Line 1 / Line 2：44 / 44。
+- 護照號碼：通過。
+- 出生日期：通過。
+- 有效期限：通過。
+- composite check digit：通過。
+- 平均文字信心：約 91.7%。
+- runtime：WebGPU available 且 detection / recognition provider 均為 webgpu。
+
+暫時判斷：
+
+- PaddleOCR.js / PP-OCRv5 目前是護照 OCR 的主力候選。
+- Tesseract.js 保留作 baseline 與 fallback 研究，不再作為主要優化方向。
+- 尚未正式凍結 OCR engine；必須先完成 3～5 張甚至更多不同拍攝條件的 PaddleOCR 泛化測試。
+- 若 PaddleOCR 泛化測試仍維持高結構完成率與 check digit 通過率，再把護照人工覆核畫面接到 PaddleOCR pipeline。
