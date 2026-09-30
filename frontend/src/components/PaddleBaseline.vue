@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import {
   recognizePassportWithPaddle,
+  recognizePassportsWithPaddle,
   type PaddleBaselineResult,
 } from '../services/paddleOcr'
 
@@ -101,44 +102,28 @@ async function runBatch() {
   batchRunning.value = true
   batchCurrent.value = 0
   batchResults.value = []
+  batchError.value = ''
 
   try {
-    for (let index = 0; index < batchFiles.value.length; index += 1) {
-      batchCurrent.value = index + 1
+    const results = await recognizePassportsWithPaddle(batchFiles.value)
 
-      try {
-        const item = await recognizePassportWithPaddle(
-          batchFiles.value[index],
-        )
-
-        batchResults.value.push({
-          index: index + 1,
-          totalMs: item.totalMs,
-          predictMs: item.predictMs,
-          structureComplete: item.structureComplete,
-          line2ChecksPassed:
-            item.line2Validation?.requiredValid === true,
-          averageScore: item.averageScore,
-          correctedCharacters:
-            item.mrzRepair?.correctedCharacters ?? 0,
-          error: null,
-        })
-      } catch (err) {
-        batchResults.value.push({
-          index: index + 1,
-          totalMs: 0,
-          predictMs: 0,
-          structureComplete: false,
-          line2ChecksPassed: false,
-          averageScore: null,
-          correctedCharacters: 0,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'PaddleOCR 批次辨識失敗',
-        })
-      }
-    }
+    batchResults.value = results.map((item, index) => ({
+      index: index + 1,
+      totalMs: item.totalMs,
+      predictMs: item.predictMs,
+      structureComplete: item.structureComplete,
+      line2ChecksPassed:
+        item.line2Validation?.requiredValid === true,
+      averageScore: item.averageScore,
+      correctedCharacters:
+        item.mrzRepair?.correctedCharacters ?? 0,
+      error: null,
+    }))
+  } catch (err) {
+    batchError.value =
+      err instanceof Error
+        ? err.message
+        : 'PaddleOCR 批次辨識失敗。'
   } finally {
     batchRunning.value = false
     batchCurrent.value = 0
