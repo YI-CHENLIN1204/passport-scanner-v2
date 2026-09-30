@@ -160,3 +160,26 @@ Tesseract Baseline A、TD3 細節、runtime、批次泛化測試等資訊全部�
 - 確認後再次修改任一欄位，確認狀態與 draft 立即失效。
 
 確認時建立 typed PassportReviewDraft，但目前只存在瀏覽器記憶體，不送 API、不入庫。Payload 格式見 `docs/PASSPORT_REVIEW_CONTRACT.md`。
+
+
+### D-016：人工覆核後先做後端第二層驗證
+
+護照人工覆核按下確認後，前端先建立 `PassportReviewDraft`，再送到：
+
+`POST /api/passport-reviews/validate`
+
+後端重新驗證姓名／護照號碼／國家代碼／日期／性別／OCR metadata 等格式。
+
+此 endpoint **只驗證、不持久化**：
+
+- 不建立 traveler_master。
+- 不建立 document_versions。
+- 不保存圖片。
+- 不寫 Google Sheets。
+- 回應不 echo 姓名、護照號碼等敏感值。
+
+等 API contract 穩定後，再新增真正的資料庫 transaction。
+
+### D-017：原圖縮放與拖曳列為覆核 UX 強化
+
+人工覆核卡維持左側原圖、右側可修改欄位。後續加入圖片縮放與拖曳／平移，方便操作人員局部核對證件內容；此 UX 強化不阻塞目前資料流與資料模型開發。
