@@ -815,12 +815,14 @@ async function run() {
           <small v-if="reviewApiReceipt">
             {{
               reviewApiReceipt.action === 'CreatedTravelerAndDocument'
-                ? '已建立旅客主檔與第一個護照版本。'
+                ? '已建立新旅客與第一個護照版本。'
                 : reviewApiReceipt.action === 'CreatedDocumentVersion'
                   ? '已找到既有旅客並建立新的護照版本。'
                   : '已找到同一本護照，更新本次覆核資訊，沒有重複建立版本。'
             }}
-            目前使用測試用記憶體儲存，後端重啟後資料會清空。
+            此旅客目前有
+            {{ reviewApiReceipt.travelerDocumentVersionCount }}
+            個證件版本。現在使用測試用記憶體儲存，後端重啟後資料會清空。
           </small>
           <small v-else>
             按下確認後會送到後端做第二層格式驗證；目前尚未進資料庫。
