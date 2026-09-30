@@ -2,10 +2,12 @@ import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import {
   normalizeMrzCandidate,
   normalizeTd3Line1,
+  parseTd3Mrz,
   repairTd3Line2,
   validateTd3Line2,
   type MrzRepairInfo,
   type MrzValidation,
+  type ParsedMrz,
 } from './ocr'
 
 type PaddleInstance = Awaited<ReturnType<typeof PaddleOCR.create>>
@@ -36,6 +38,7 @@ export interface PaddleBaselineResult {
   mrzLine2: string | null
   line2Validation: MrzValidation | null
   mrzRepair: MrzRepairInfo | null
+  parsedMrz: ParsedMrz | null
   structureComplete: boolean
   fallbackUsed: boolean
   fallbackCropRatio: number | null
@@ -356,6 +359,12 @@ function buildBaselineResult(
       ? JSON.stringify(runtimeData)
       : 'browser'
 
+  const parsedMrz = parseTd3Mrz(
+    mrz.line1,
+    mrz.line2,
+    mrz.validation,
+  )
+
   return {
     initializationMs,
     predictMs,
@@ -368,6 +377,7 @@ function buildBaselineResult(
     mrzLine2: mrz.line2,
     line2Validation: mrz.validation,
     mrzRepair: mrz.repair,
+    parsedMrz,
     structureComplete:
       mrz.line1?.length === 44 &&
       mrz.line2?.length === 44,
