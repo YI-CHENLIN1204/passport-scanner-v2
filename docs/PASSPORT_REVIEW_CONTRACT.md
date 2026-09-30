@@ -23,6 +23,9 @@
     "expiryDateCheckDigit": true,
     "compositeCheckDigit": true
   },
+  "reviewAssertions": {
+    "englishNameVisuallyConfirmed": true
+  },
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
@@ -112,3 +115,17 @@
 目前 persistence 值為 `volatile-in-memory`，**後端重啟後全部清空**。這不是正式資料保存。
 
 `GET /api/passport-reviews/store-status` 只回傳旅客數與證件版本數，不回傳姓名、護照號碼等敏感資料。
+
+
+## 英文姓名的額外人工確認
+
+TD3 Line 1 沒有像 Line 2 的護照號碼／生日／效期那樣具有可獨立驗證的 check digit，因此「Line 2 全部通過」不能推導英文姓名正確。
+
+正式流程要求：
+
+- Line 1 必須先通過 TD3 結構檢查（`P<`、3 碼簽發國、`SURNAME<<GIVEN<NAMES`）。
+- 一般頁面文字即使以 P 開頭且長度接近 44，也不可當成 MRZ Line 1。
+- 若 Line 1 不可信，PaddleOCR 自動改用底部 MRZ crop 重試。
+- 人工覆核卡的英文姓名必須由使用者勾選「已對照原圖確認英文姓名正確」。
+- 後端要求 `reviewAssertions.englishNameVisuallyConfirmed = true` 才接受保存。
+- 英文姓名一旦再修改，人工確認勾選會自動失效，必須重新核對。
