@@ -73,6 +73,13 @@ public static partial class PassportReviewValidator
         if (request.Sex is not ("" or "M" or "F" or "X"))
             Add(nameof(request.Sex), "性別必須為空白、M、F 或 X。");
 
+        if (!request.ReviewAssertions.EnglishNameVisuallyConfirmed)
+        {
+            Add(
+                "reviewAssertions.englishNameVisuallyConfirmed",
+                "英文姓名必須先由人工對照原始護照確認。");
+        }
+
         if (!string.Equals(
                 request.Ocr.Engine,
                 "paddleocr-ppocrv5",
