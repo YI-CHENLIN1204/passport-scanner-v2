@@ -1,0 +1,67 @@
+# Passport Review Draft Contract
+
+此文件定義護照人工覆核完成後，前端準備給未來後端 API 的結構化資料格式。
+
+目前狀態：**只在瀏覽器記憶體建立 draft，不送 API、不入庫、不匯出 Google Sheets。**
+
+## Payload
+
+```json
+{
+  "schemaVersion": 1,
+  "documentType": "passport",
+  "englishName": "SURNAME, GIVEN NAMES",
+  "passportNumber": "XXXXXXXXX",
+  "nationality": "TWN",
+  "issuingState": "TWN",
+  "birthDate": "YYYY-MM-DD",
+  "sex": "M",
+  "expiryDate": "YYYY-MM-DD",
+  "verification": {
+    "passportNumberCheckDigit": true,
+    "birthDateCheckDigit": true,
+    "expiryDateCheckDigit": true,
+    "compositeCheckDigit": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "line2Validated": true,
+    "fallbackUsed": false,
+    "averageScore": 0.91
+  },
+  "reviewedAt": "2026-10-01T00:00:00.000Z"
+}
+```
+
+## 欄位原則
+
+- `englishName`：人工覆核後的英文姓名，不宣稱有 check digit 保護。
+- `passportNumber`：人工覆核後的護照號碼。
+- `nationality`：3 碼國籍代碼，不固定為 TWN。
+- `issuingState`：3 碼簽發國代碼，不固定為 TWN。
+- `birthDate` / `expiryDate`：UI 與未來 API 使用 `YYYY-MM-DD`。
+- OCR / MRZ 驗證層仍保留原始 `YYMMDD`，不以 UI 日期取代原始驗證來源。
+- `verification`：保留 OCR 當下的 MRZ check digit 驗證結果，讓未來 audit / review 判斷可追溯。
+- `ocr`：只保存必要的 OCR metadata；不包含完整 raw OCR text 或證件影像。
+- `reviewedAt`：人工按下確認時的時間。
+
+## 不在這個 payload 的資料
+
+第一版不包含：
+
+- 原始證件影像 binary。
+- 完整 raw OCR text。
+- MRZ 完整原文。
+- 發照機關、發照地、換證次數等未確認業務價值欄位。
+- traveler_master / document_versions 的資料庫 ID。
+- 團別、訂單、Google Sheets 工作表 ID。
+
+這些關聯等資料模型正式確認後再由後端 API contract 擴充，不先把 UI PoC 的暫時欄位綁死成資料庫 schema。
+
+## 確認與修改規則
+
+- 使用者按下「確認資料」才建立 draft。
+- 確認後若任何欄位再被修改，原 draft 立即失效並回到待覆核。
+- 可使用「還原 OCR」回到本次 OCR 初始值。
+- 格式錯誤時不可確認。
+- 護照已過期目前列為 warning，不阻止資料覆核；後續旅行作業是否可使用該證件屬另一層業務規則。
