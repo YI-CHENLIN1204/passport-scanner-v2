@@ -195,3 +195,24 @@ Line 1 若只缺少尾端 filler，且已辨識出 TD3 的姓名分隔符 <<，�
 6. 一旦 Line 2 四個關鍵檢查碼全部通過且 Line 1 為 44 字元，就立即停止後續嘗試。
 7. UI 顯示實際 MRZ 嘗試次數與最終裁切比例，方便泛化測試。
 8. 受限字元修正仍只是輔助；優先改善 OCR 輸入與候選選擇，不靠猜值湊過檢查碼。
+
+
+## Baseline B：PaddleOCR.js / PP-OCRv5
+
+啟動原因：
+
+- Baseline A（Tesseract.js）曾在單一測試護照達成 TD3 44 / 44 且 Line 2 四個關鍵 check digit 全部通過。
+- 但不同護照／拍攝條件下，即使嘗試多個 MRZ 裁切與二值化版本，仍出現 Line 1 不完整、Line 2 check digit 失敗的情況。
+- Adaptive Tesseract 測試在某張不同護照上執行 5 次 MRZ 嘗試後仍未完成 TD3 結構，且 MRZ OCR 耗時上升，因此不再無限堆疊 Tesseract workaround。
+
+Baseline B 採官方 `@paddleocr/paddleocr-js`，使用 PP-OCRv5 英文 OCR，在瀏覽器端完成文字偵測與辨識。
+
+原則：
+
+- Baseline A 保留，不刪除，作為 A/B comparison。
+- Baseline B 與 A 使用同一張 Step 2 護照圖片。
+- 證件圖片不送到 ASP.NET Core API。
+- 第一次使用需要下載 PaddleOCR / ONNX Runtime / 模型資源；模型下載不等於證件圖片上傳。
+- Baseline B 的摘要只顯示耗時、辨識區塊數、MRZ 44 / 44、check digit 與 OCR 信心，不顯示完整證件值。
+- Tesseract 的 check-digit validation / 保守字元修正函式共用給 PaddleOCR 結果，確保比較的是 OCR engine 差異，而不是不同驗證規則。
+- 先做單張 A/B；若 Baseline B 明顯改善第二張困難護照，再擴充 Baseline B 批次泛化測試。
