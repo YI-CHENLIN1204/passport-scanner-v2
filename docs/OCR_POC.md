@@ -328,3 +328,23 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 - 且符合任一弱訊號：Detection < 10、Recognition < 5、平均文字信心 < 50%。
 
 符合時才改試底部 45% MRZ 裁切。健康圖片不增加額外推論成本。
+
+
+### Baseline B 泛化測試達成 5 / 5
+
+在弱偵測 fallback 條件加入後，同一批 5 張不同護照／拍攝條件結果：
+
+- 測試 1：通過。TD3 2 × 44 完成、Line 2 check digit 全部通過、Detection 61 / Recognition 61、平均文字信心約 80.9%、未使用 fallback。
+- 測試 2：通過。TD3 2 × 44 完成、Line 2 check digit 全部通過、Detection 61 / Recognition 59、平均文字信心約 82.1%、未使用 fallback。
+- 測試 3：通過。原全頁為弱偵測，啟用底部 45% fallback 後 Detection 36 / Recognition 36、平均文字信心約 88.6%、TD3 與 Line 2 check digit 全部通過。
+- 測試 4：通過。啟用底部 45% fallback 後 Detection 34 / Recognition 33、平均文字信心約 93.4%、TD3 與 Line 2 check digit 全部通過。
+- 測試 5：通過。TD3 2 × 44 完成、Line 2 check digit 全部通過、Detection 38 / Recognition 33、平均文字信心約 91.1%、未使用 fallback。
+- 5 張皆沒有使用受限字元自動修正。
+
+結論：
+
+- PaddleOCR.js / PP-OCRv5 + MRZ check digit + weak-detection bottom-45% fallback，已通過目前 5 張護照的第一輪泛化測試。
+- V2 護照 OCR 主引擎正式採用 PaddleOCR.js / PP-OCRv5。
+- Tesseract.js 保留為 PoC / benchmark，不進正式護照 OCR 主流程。
+- 下一階段不再以同一批圖片持續調準確率，避免過度最佳化；轉入正式欄位解析與人工覆核 UI。
+- fallback 仍有明顯效能成本：本輪測試 3 約 19.82 秒、測試 4 約 10.70 秒；一般成功圖片約 1.7～2.4 秒。後續需獨立做效能優化，但不阻擋人工覆核流程開發。
