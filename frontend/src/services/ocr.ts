@@ -68,14 +68,14 @@ let progressHandler: ((progress: OcrProgress) => void) | null = null
 let progressOffset = 0
 let progressScale = 1
 
-function normalizeMrzCandidate(line: string) {
+export function normalizeMrzCandidate(line: string) {
   return line
     .toUpperCase()
     .replace(/\s+/g, '')
     .replace(/[^A-Z0-9<]/g, '')
 }
 
-function normalizeTd3Line1(rawLine: string) {
+export function normalizeTd3Line1(rawLine: string) {
   let line = normalizeMrzCandidate(rawLine)
 
   const exactStart = line.indexOf('P<')
@@ -294,7 +294,7 @@ function countDifferences(before: string, after: string) {
   return differences
 }
 
-function repairTd3Line2(rawLine: string | null) {
+export function repairTd3Line2(rawLine: string | null) {
   if (!rawLine || rawLine.length !== 44) {
     return {
       line: rawLine,
@@ -389,7 +389,7 @@ function repairTd3Line2(rawLine: string | null) {
   }
 }
 
-function validateTd3Line2(line2: string | null): MrzValidation | null {
+export function validateTd3Line2(line2: string | null): MrzValidation | null {
   if (!line2 || line2.length !== 44) {
     return null
   }
