@@ -813,8 +813,8 @@ async function run() {
             確認前請至少目視核對英文姓名與原始護照。
           </span>
           <small v-if="reviewApiReceipt">
-            API 已接受這筆結構化覆核資料；目前狀態為
-            {{ reviewApiReceipt.persistence }}，尚未寫入資料庫或 Google Sheets。
+            API 已接受並完成第二層格式驗證；目前仍是驗證階段，
+            尚未寫入資料庫或 Google Sheets。
           </small>
           <small v-else>
             按下確認後會送到後端做第二層格式驗證；目前尚未進資料庫。
