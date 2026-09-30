@@ -462,9 +462,20 @@ async function predictOne(
     performance.now() - totalStartedAt,
   )
 
-  // Detection=0 means recognition never got a chance. Retry only those
-  // failures on a tighter bottom crop where passport MRZ normally sits.
-  if ((best.detectedBoxes ?? 0) === 0) {
+  // Retry on a tighter MRZ crop not only when detection is exactly zero,
+  // but also when the full-page result is clearly too weak to form a TD3
+  // result. This catches cases such as 4 detected boxes / 2 recognized texts
+  // with very low confidence, while avoiding extra work on healthy pages.
+  const weakFullPage =
+    !best.structureComplete &&
+    best.line2Validation?.requiredValid !== true &&
+    (
+      (best.detectedBoxes ?? 0) < 10 ||
+      (best.recognizedCount ?? 0) < 5 ||
+      (best.averageScore ?? 0) < 0.5
+    )
+
+  if (weakFullPage) {
     onFallback?.()
 
     const cropRatio = 0.45
