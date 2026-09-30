@@ -202,10 +202,28 @@ function chooseMrz(items: PaddleItemLike[]) {
   }
 }
 
+const paddleModelBaseUrl =
+  import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
+  '/paddle-models'
+
+const detectionModelUrl =
+  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_infer.tar`
+
+const recognitionModelUrl =
+  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/en_PP-OCRv5_mobile_rec_infer.tar`
+
 function createPaddlePromise() {
   paddlePromise = PaddleOCR.create({
     lang: 'en',
     ocrVersion: 'PP-OCRv5',
+    textDetectionModelName: 'PP-OCRv5_mobile_det',
+    textDetectionModelAsset: {
+      url: detectionModelUrl,
+    },
+    textRecognitionModelName: 'en_PP-OCRv5_mobile_rec',
+    textRecognitionModelAsset: {
+      url: recognitionModelUrl,
+    },
     ortOptions: {
       backend: 'auto',
     },
