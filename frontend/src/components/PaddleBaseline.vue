@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   recognizePassportWithPaddle,
   recognizePassportsWithPaddle,
@@ -36,6 +36,9 @@ const reviewForm = ref<PassportReviewForm>({
 })
 const reviewConfirmed = ref(false)
 const reviewImageUrl = ref('')
+const reviewOriginal = ref<PassportReviewForm | null>(null)
+const reviewedAt = ref<string | null>(null)
+const reviewRef = ref<HTMLElement | null>(null)
 
 interface PaddleBatchResult {
   index: number
@@ -98,16 +101,89 @@ const batchPassCount = computed(
     ).length,
 )
 
-const canConfirmReview = computed(() =>
-  Boolean(
-    result.value?.parsedMrz &&
-      reviewForm.value.englishName.trim() &&
-      reviewForm.value.passportNumber.trim() &&
-      reviewForm.value.nationality.trim() &&
-      reviewForm.value.issuingState.trim() &&
-      reviewForm.value.birthDate.trim() &&
-      reviewForm.value.expiryDate.trim(),
-  ),
+const reviewErrors = computed(() => {
+  const errors: string[] = []
+  const form = reviewForm.value
+
+  if (!form.englishName.trim()) {
+    errors.push('英文姓名不可空白。')
+  } else if (!/^[A-Z][A-Z .,'-]*$/.test(form.englishName.trim())) {
+    errors.push('英文姓名請使用英文字母與常見姓名符號。')
+  }
+
+  if (!/^[A-Z0-9]{5,20}$/.test(form.passportNumber.trim())) {
+    errors.push('護照號碼格式不完整，請確認英數字內容。')
+  }
+
+  if (!/^[A-Z]{3}$/.test(form.nationality.trim())) {
+    errors.push('國籍請使用 3 碼國家代碼。')
+  }
+
+  if (!/^[A-Z]{3}$/.test(form.issuingState.trim())) {
+    errors.push('簽發國請使用 3 碼國家代碼。')
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(form.birthDate)) {
+    errors.push('出生日期請使用 YYYY-MM-DD。')
+  } else {
+    const birth = new Date(`${form.birthDate}T00:00:00`)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (Number.isNaN(birth.getTime()) || birth > today) {
+      errors.push('出生日期不合理，請重新確認。')
+    }
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(form.expiryDate)) {
+    errors.push('有效期限請使用 YYYY-MM-DD。')
+  }
+
+  if (!['M', 'F', 'X', ''].includes(form.sex)) {
+    errors.push('性別欄位格式不正確。')
+  }
+
+  return errors
+})
+
+const reviewWarnings = computed(() => {
+  const warnings: string[] = []
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(reviewForm.value.expiryDate)) {
+    const expiry = new Date(`${reviewForm.value.expiryDate}T23:59:59`)
+    if (!Number.isNaN(expiry.getTime()) && expiry < new Date()) {
+      warnings.push('這本護照目前已過有效期限。')
+    }
+  }
+
+  return warnings
+})
+
+const changedReviewFields = computed(() => {
+  if (!reviewOriginal.value) return []
+
+  const labels: Record<keyof PassportReviewForm, string> = {
+    englishName: '英文姓名',
+    passportNumber: '護照號碼',
+    nationality: '國籍',
+    issuingState: '簽發國',
+    birthDate: '出生日期',
+    sex: '性別',
+    expiryDate: '有效期限',
+  }
+
+  return (Object.keys(labels) as Array<keyof PassportReviewForm>)
+    .filter(
+      (key) =>
+        reviewForm.value[key] !== reviewOriginal.value?.[key],
+    )
+    .map((key) => labels[key])
+})
+
+const canConfirmReview = computed(
+  () =>
+    Boolean(result.value?.parsedMrz) &&
+    reviewErrors.value.length === 0,
 )
 
 const batchAveragePredictSeconds = computed(() => {
@@ -139,6 +215,8 @@ function resetReviewForm() {
     expiryDate: '',
   }
   reviewConfirmed.value = false
+  reviewOriginal.value = null
+  reviewedAt.value = null
 }
 
 function formatIsoDate(year: number, month: number, day: number) {
@@ -192,6 +270,35 @@ function mrzExpiryDateToIso(value: string) {
   return formatIsoDate(year, month, day)
 }
 
+function normalizeReviewText(
+  field: 'englishName' | 'passportNumber' | 'nationality' | 'issuingState',
+) {
+  reviewForm.value[field] = reviewForm.value[field]
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+}
+
+function resetReviewToOcr() {
+  if (!reviewOriginal.value) return
+  reviewForm.value = { ...reviewOriginal.value }
+  reviewConfirmed.value = false
+  reviewedAt.value = null
+}
+
+function formatReviewedAt(value: string | null) {
+  if (!value) return ''
+
+  const date = new Date(value)
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function populateReviewForm(ocrResult: PaddleBaselineResult) {
   const parsed = ocrResult.parsedMrz
   if (!parsed) {
@@ -212,12 +319,15 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
     sex: parsed.sex === '<' ? '' : parsed.sex,
     expiryDate: mrzExpiryDateToIso(parsed.expiryDate),
   }
+  reviewOriginal.value = { ...reviewForm.value }
   reviewConfirmed.value = false
+  reviewedAt.value = null
 }
 
 function confirmReview() {
   if (!canConfirmReview.value) return
   reviewConfirmed.value = true
+  reviewedAt.value = new Date().toISOString()
 }
 
 function validationText(value: boolean | null | undefined) {
@@ -326,7 +436,10 @@ watch(
 watch(
   reviewForm,
   () => {
-    reviewConfirmed.value = false
+    if (reviewConfirmed.value) {
+      reviewConfirmed.value = false
+      reviewedAt.value = null
+    }
   },
   { deep: true },
 )
@@ -345,6 +458,14 @@ async function run() {
   try {
     result.value = await recognizePassportWithPaddle(props.file)
     populateReviewForm(result.value)
+
+    if (result.value.parsedMrz) {
+      await nextTick()
+      reviewRef.value?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
   } catch (err) {
     error.value =
       err instanceof Error
@@ -360,20 +481,19 @@ async function run() {
   <section class="baseline-card">
     <div class="heading">
       <div>
-        <p class="label">Baseline B · PaddleOCR.js</p>
-        <h2>PP-OCRv5 瀏覽器端護照辨識</h2>
+        <p class="label">Step 3 · Passport OCR</p>
+        <h2>護照辨識與人工覆核</h2>
       </div>
-      <span class="badge">Baseline B</span>
+      <span class="badge">PaddleOCR</span>
     </div>
 
     <p class="copy">
-      這組不使用 Tesseract。改用 PaddleOCR 官方瀏覽器 SDK，
-      直接做文字偵測 + PP-OCRv5 英文辨識。證件圖片仍在瀏覽器內處理；
-      第一次執行會下載模型與 WebAssembly / ONNX Runtime 資源。
+      使用 PaddleOCR / PP-OCRv5 在瀏覽器內辨識護照；完成後直接進入人工覆核。
+      證件圖片不送到後端 OCR。第一次執行可能需要載入模型與瀏覽器推論資源。
     </p>
 
     <button type="button" :disabled="!canRun" @click="run">
-      {{ running ? 'PaddleOCR 載入／辨識中…' : '開始 Baseline B' }}
+      {{ running ? '護照辨識中…' : '開始護照辨識' }}
     </button>
 
     <p v-if="!file" class="hint">
@@ -394,7 +514,11 @@ async function run() {
     </p>
 
     <!-- Primary user workflow: review appears before developer diagnostics. -->
-    <section v-if="result?.parsedMrz" class="review-card">
+    <section
+      v-if="result?.parsedMrz"
+      ref="reviewRef"
+      class="review-card"
+    >
       <div class="review-heading">
         <div>
           <p class="label">Step 5 · Human review</p>
@@ -409,7 +533,13 @@ async function run() {
           class="review-status"
           :class="{ confirmed: reviewConfirmed }"
         >
-          {{ reviewConfirmed ? '已完成覆核' : '待人工覆核' }}
+          {{
+            reviewConfirmed
+              ? '已完成覆核'
+              : changedReviewFields.length
+                ? `待覆核 · 已修改 ${changedReviewFields.length} 欄`
+                : '待人工覆核'
+          }}
         </span>
       </div>
 
@@ -428,7 +558,12 @@ async function run() {
               英文姓名
               <em class="needs-review">人工確認</em>
             </span>
-            <input v-model="reviewForm.englishName" type="text" />
+            <input
+              v-model="reviewForm.englishName"
+              type="text"
+              maxlength="80"
+              @blur="normalizeReviewText('englishName')"
+            />
           </label>
 
           <label class="review-field">
@@ -448,7 +583,12 @@ async function run() {
                 }}
               </em>
             </span>
-            <input v-model="reviewForm.passportNumber" type="text" />
+            <input
+              v-model="reviewForm.passportNumber"
+              type="text"
+              maxlength="20"
+              @blur="normalizeReviewText('passportNumber')"
+            />
           </label>
 
           <label class="review-field">
@@ -456,7 +596,12 @@ async function run() {
               國籍
               <em class="mrz-derived">MRZ</em>
             </span>
-            <input v-model="reviewForm.nationality" type="text" maxlength="3" />
+            <input
+              v-model="reviewForm.nationality"
+              type="text"
+              maxlength="3"
+              @blur="normalizeReviewText('nationality')"
+            />
           </label>
 
           <label class="review-field">
@@ -464,7 +609,12 @@ async function run() {
               簽發國
               <em class="mrz-derived">MRZ</em>
             </span>
-            <input v-model="reviewForm.issuingState" type="text" maxlength="3" />
+            <input
+              v-model="reviewForm.issuingState"
+              type="text"
+              maxlength="3"
+              @blur="normalizeReviewText('issuingState')"
+            />
           </label>
 
           <label class="review-field">
@@ -472,7 +622,12 @@ async function run() {
               性別
               <em class="mrz-derived">MRZ</em>
             </span>
-            <input v-model="reviewForm.sex" type="text" maxlength="1" />
+            <select v-model="reviewForm.sex">
+              <option value="">未指定</option>
+              <option value="M">M</option>
+              <option value="F">F</option>
+              <option value="X">X</option>
+            </select>
           </label>
 
           <label class="review-field">
@@ -525,10 +680,38 @@ async function run() {
         </div>
       </div>
 
+      <div
+        v-if="reviewErrors.length || reviewWarnings.length || changedReviewFields.length"
+        class="review-notices"
+      >
+        <div v-if="reviewErrors.length" class="review-error-box">
+          <strong>還有欄位需要修正</strong>
+          <ul>
+            <li v-for="message in reviewErrors" :key="message">
+              {{ message }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="reviewWarnings.length" class="review-warning-box">
+          <strong>請注意</strong>
+          <ul>
+            <li v-for="message in reviewWarnings" :key="message">
+              {{ message }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="changedReviewFields.length" class="review-change-box">
+          已人工修改：
+          <strong>{{ changedReviewFields.join('、') }}</strong>
+        </div>
+      </div>
+
       <div class="review-footer">
         <div>
           <strong v-if="reviewConfirmed" class="pass">
-            此筆已在瀏覽器完成人工覆核。
+            此筆已在瀏覽器完成人工覆核 · {{ formatReviewedAt(reviewedAt) }}
           </strong>
           <span v-else>
             確認前請至少目視核對英文姓名與原始護照。
@@ -538,18 +721,30 @@ async function run() {
           </small>
         </div>
 
-        <button
-          type="button"
-          :disabled="!canConfirmReview"
-          @click="confirmReview"
-        >
-          {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
-        </button>
+        <div class="review-actions">
+          <button
+            v-if="changedReviewFields.length"
+            type="button"
+            class="secondary-review-button"
+            @click="resetReviewToOcr"
+          >
+            還原 OCR
+          </button>
+
+          <button
+            type="button"
+            :disabled="!canConfirmReview"
+            @click="confirmReview"
+          >
+            {{ reviewConfirmed ? '已確認資料' : '確認資料' }}
+          </button>
+        </div>
       </div>
     </section>
 
-    <div class="technical-divider" v-if="result"></div>
-    <div v-if="result" class="results">
+    <details v-if="result" class="developer-details">
+      <summary>開發診斷：OCR、TD3、check digit、runtime</summary>
+      <div class="results">
       <div class="summary">
         <div>
           <span>首次初始化</span>
@@ -658,10 +853,12 @@ async function run() {
         <summary>查看 runtime 診斷（不含證件文字）</summary>
         <pre>{{ result.runtime }}</pre>
       </details>
-    </div>
+      </div>
+    </details>
 
-
-    <div class="batch-divider"></div>
+    <details class="developer-details lab-details">
+      <summary>開發測試：3～5 張 PaddleOCR 泛化測試</summary>
+      <div class="batch-divider"></div>
 
     <div class="heading batch-heading">
       <div>
@@ -819,6 +1016,7 @@ async function run() {
         </p>
       </article>
     </div>
+    </details>
   </section>
 </template>
 
@@ -1103,7 +1301,8 @@ button:disabled {
   font-weight: 700;
 }
 
-.review-field input {
+.review-field input,
+.review-field select {
   width: 100%;
   min-height: 44px;
   border: 1px solid #cfd5df;
@@ -1164,6 +1363,88 @@ button:disabled {
 .review-footer small {
   color: #667085;
   line-height: 1.5;
+}
+
+.review-notices {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.review-error-box,
+.review-warning-box,
+.review-change-box {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.review-error-box {
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.review-warning-box {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.review-change-box {
+  background: #eef4ff;
+  color: #344054;
+}
+
+.review-error-box ul,
+.review-warning-box ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.secondary-review-button {
+  background: #eef1f5;
+  color: #344054;
+}
+
+.developer-details {
+  margin-top: 24px;
+  border: 1px solid #e2e6ec;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.developer-details > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  color: #475467;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.developer-details > .results,
+.developer-details > .batch-divider,
+.developer-details > .batch-heading,
+.developer-details > .copy,
+.developer-details > .batch-file,
+.developer-details > .error,
+.developer-details > .batch-actions,
+.developer-details > .progress-panel,
+.developer-details > .batch-summary,
+.developer-details > .batch-grid {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.lab-details {
+  margin-top: 16px;
+  padding-bottom: 16px;
 }
 
 .technical-divider {
@@ -1386,7 +1667,8 @@ pre {
   }
 
   .batch-actions,
-  .review-footer {
+  .review-footer,
+  .review-actions {
     align-items: stretch;
     flex-direction: column;
   }
