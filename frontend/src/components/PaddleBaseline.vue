@@ -307,13 +307,18 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
     .filter(Boolean)
     .join(', ')
 
+  const sex: PassportReviewForm['sex'] =
+    parsed.sex === 'M' || parsed.sex === 'F' || parsed.sex === 'X'
+      ? parsed.sex
+      : ''
+
   reviewForm.value = {
     englishName,
     passportNumber: parsed.documentNumber,
     nationality: parsed.nationality,
     issuingState: parsed.issuingState,
     birthDate: mrzBirthDateToIso(parsed.birthDate),
-    sex: parsed.sex === '<' ? '' : parsed.sex,
+    sex,
     expiryDate: mrzExpiryDateToIso(parsed.expiryDate),
   }
   reviewOriginal.value = { ...reviewForm.value }
