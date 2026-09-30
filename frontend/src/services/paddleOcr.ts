@@ -207,10 +207,10 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 const detectionModelUrl =
-  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_infer.tar`
+  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar`
 
 const recognitionModelUrl =
-  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/en_PP-OCRv5_mobile_rec_infer.tar`
+  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar`
 
 function createPaddlePromise() {
   paddlePromise = PaddleOCR.create({
@@ -220,7 +220,7 @@ function createPaddlePromise() {
     textDetectionModelAsset: {
       url: detectionModelUrl,
     },
-    textRecognitionModelName: 'en_PP-OCRv5_mobile_rec',
+    textRecognitionModelName: 'PP-OCRv5_mobile_rec',
     textRecognitionModelAsset: {
       url: recognitionModelUrl,
     },
