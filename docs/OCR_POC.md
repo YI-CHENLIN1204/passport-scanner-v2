@@ -368,3 +368,29 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 - PaddleOCR 若 Line 1 不可信，即使 Line 2 已全部通過，也會觸發底部 MRZ crop fallback。
 - UI 獨立顯示「MRZ 姓名行」可信狀態。
 - 英文姓名增加強制人工目視確認勾選。
+
+
+### Regression：中文姓名高 confidence 仍可能抓錯欄位
+
+第一輪台灣護照 VIZ 中文姓名測試中，4 張僅 1 張自動姓名正確；其餘曾出現：
+
+- 把護照固定中文字樣誤當姓名。
+- OCR confidence 高達 95%～99% 但實際姓名仍錯。
+
+結論：
+
+- OCR confidence 只代表「模型對這串文字的辨識自信」，不能證明「這串文字屬於姓名欄」。
+- 中文姓名不能再以整頁候選排名直接 autofill。
+- 正式策略改為欄位定位優先、confidence 次要。
+
+修正：
+
+1. 台灣護照不再從整頁 OCR 直接填入中文姓名。
+2. 整頁 OCR 只用來找「姓名」標籤座標與 MRZ 英文姓名。
+3. 若找到「姓名」標籤，動態裁出姓名欄小區域並放大後重做 OCR。
+4. 中文候選必須靠近「姓名」標籤，或位於 MRZ 已確認英文姓名的相鄰 Name group。
+5. 動態欄位裁切失敗才退回較寬的 VIZ crop。
+6. 沒有欄位錨點時不猜；低於保守信心門檻時不 autofill。
+7. 無可靠結果時中文姓名留空，交由人工輸入與確認。
+
+此策略優先降低 CRM 誤寫風險，即使因此提高少量人工輸入比例也可接受。
