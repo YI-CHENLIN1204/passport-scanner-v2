@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getHealth, type HealthResponse } from './services/api'
 import PaddleBaseline from './components/PaddleBaseline.vue'
+import TaiwanCompatriotPermitBaseline from './components/TaiwanCompatriotPermitBaseline.vue'
 import {
   recognizePassport,
   terminateOcrWorker,
@@ -333,8 +334,8 @@ onBeforeUnmount(() => {
           <span>證件類型</span>
           <select v-model="documentType" @change="resetOcrResult">
             <option value="passport">護照</option>
-            <option value="tw-id">台灣身分證</option>
             <option value="taiwan-compatriot-permit">台胞證</option>
+            <option value="tw-id">台灣身分證（暫緩）</option>
           </select>
         </label>
 
@@ -396,14 +397,19 @@ onBeforeUnmount(() => {
       :file="selectedFile"
     />
 
+    <TaiwanCompatriotPermitBaseline
+      v-else-if="documentType === 'taiwan-compatriot-permit'"
+      :file="selectedFile"
+    />
+
     <section
       v-else
       class="notice-box unsupported-document-card"
     >
-      <strong>這個證件類型還沒進入正式 OCR 流程。</strong>
+      <strong>台灣身分證 OCR 目前暫緩。</strong>
       <span>
-        目前先把護照的辨識、人工覆核與資料契約做完整；
-        台灣身分證與台胞證會沿用同一套「辨識 → 驗證 → 人工覆核」流程。
+        先把護照、台胞證、後端證件版本管理與正式操作介面做完整。
+        身分證需要更高比例的中文欄位 OCR 與身分證字號檢查碼測試，之後再獨立處理。
       </span>
     </section>
 
