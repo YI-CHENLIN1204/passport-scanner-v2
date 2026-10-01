@@ -241,3 +241,17 @@ MRZ 不含中文姓名，但 CRM 需要台灣旅客中文姓名，因此護照�
 - 沒有可靠候選時留空，不以高 confidence 強行填值。
 
 中文姓名仍必須人工對照原始護照確認。
+
+
+### D-023：MRZ 英文姓名只作中文姓名交叉驗證，不反向猜中文字
+
+台灣護照中文姓名 OCR 加入 MRZ romanization 輔助：
+
+- 先由姓名欄位置取得中文候選。
+- 再將中文字轉為拼音，與 MRZ surname / given names 的羅馬拼音逐音節比較。
+- 支援常見台灣舊式羅馬拼音別名，以降低 HSUAN/XUAN、HSIA/XIA、KUEI/GUI 等制度差異造成的誤判。
+- 字數／音節數明顯不符，或大部分音節相符但單一字讀音明顯衝突時，候選不得 autofill。
+- 羅馬拼音只能作 veto / supporting signal，不可用來反向推定正確中文字，因為同音字可能很多。
+- 無法判斷時留空人工輸入，不以 OCR confidence 強行採用。
+
+例：MRZ 為 LIN / HAI / SHENG，而 OCR 候選為「林海注」（LIN / HAI / ZHU），第三音節衝突，因此拒絕 autofill，但系統不會自動把「注」改成「生」。
