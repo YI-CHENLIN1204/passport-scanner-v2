@@ -1,4 +1,5 @@
 import type { PassportReviewDraft } from '../models/passportReview'
+import type { TaiwanCompatriotPermitReviewDraft } from '../models/taiwanCompatriotPermitReview'
 
 export interface HealthResponse {
   status: string
@@ -153,4 +154,60 @@ export async function getPassportStoreStatus() {
   }
 
   return response.json() as Promise<PassportStoreStatusResponse>
+}
+
+
+export interface TaiwanCompatriotPermitReviewSaveResponse {
+  accepted: boolean
+  persistence: 'volatile-in-memory'
+  action: PassportReviewSaveAction
+  travelerId: string
+  documentVersionId: string
+  travelerDocumentVersionCount: number
+  savedAt: string
+  warnings: string[]
+}
+
+export async function saveTaiwanCompatriotPermitReview(
+  draft: TaiwanCompatriotPermitReviewDraft,
+): Promise<TaiwanCompatriotPermitReviewSaveResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/taiwan-compatriot-permit-reviews`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(draft),
+    },
+  )
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      try {
+        const conflict = (await response.json()) as ApiConflict
+        throw new Error(
+          conflict.message ??
+            '找到多位可能相同的旅客，需要人工選擇，系統沒有自動合併。',
+        )
+      } catch (err) {
+        if (err instanceof Error) throw err
+      }
+    }
+
+    let message =
+      `Taiwan compatriot permit review save failed: ${response.status}`
+
+    try {
+      const problem =
+        (await response.json()) as ValidationProblemDetails
+      message = flattenValidationProblem(problem)
+    } catch {
+      // Keep the status-only message when the response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<TaiwanCompatriotPermitReviewSaveResponse>
 }
