@@ -139,3 +139,26 @@ MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
 - `document_versions.name_en_on_document`：該證件版本實際覆核後的英文姓名。
 
 換發護照時即使英文羅馬拼音改變，也能保留舊版本當時的姓名。
+
+
+## 多證件共用後端
+
+後端已將原本護照專用的 `SavePassportReview` 改為共用 `ITravelerStore.SaveDocumentReview`。
+
+目前正式接入：
+
+- `PASSPORT`
+- `TAIWAN_COMPATRIOT_PERMIT`
+
+兩種證件共用 traveler matching / document versioning：
+
+1. 先以同類證件的 document number 尋找既有版本。
+2. 同一本證件再次覆核時更新既有版本，不重複新增。
+3. 找不到同一本證件時，以姓名 + 出生日期做保守 exact-match 找 traveler。
+4. 找到唯一旅客：建立該證件類型的新 document version。
+5. 找不到：建立新 traveler + 第一個 document version。
+6. 多位候選：回傳 conflict，不自動合併。
+
+護照仍額外使用 issuing country 參與同一本護照判斷；台胞證使用其 8 位證件號碼判斷同一證件。
+
+旅客主檔 nationality 已允許 NULL，避免從台胞證本身推導並沒有必要保存的國籍值。
