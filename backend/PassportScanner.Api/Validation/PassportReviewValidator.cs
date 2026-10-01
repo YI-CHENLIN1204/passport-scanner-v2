@@ -137,6 +137,14 @@ public static partial class PassportReviewValidator
                 "中文姓名 OCR 來源格式不正確。");
         }
 
+        if (request.Ocr.ChineseNameRomanizationStatus
+            is not ("compatible" or "conflict" or "unknown"))
+        {
+            Add(
+                "ocr.chineseNameRomanizationStatus",
+                "中文姓名與 MRZ 拼音比對狀態格式不正確。");
+        }
+
         if (request.ReviewedAt > DateTimeOffset.UtcNow.AddMinutes(5))
             Add(nameof(request.ReviewedAt), "覆核時間不可晚於目前時間。");
 
