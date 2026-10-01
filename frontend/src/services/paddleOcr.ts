@@ -249,50 +249,92 @@ function chooseTaiwanChineseName(items: PaddleItemLike[]) {
       {
         text: hanOnly,
         score: item.score ?? 0,
-        rank: (item.score ?? 0) + 0.35,
+        rank: (item.score ?? 0) + 1,
       },
     ]
   })
+
+  // Safety rule: without an actual 姓名 anchor we do not guess.
+  // A high OCR confidence only means the text itself was recognized
+  // confidently; it does not prove that text belongs to the name field.
+  if (!nameLabels.length) {
+    return directLabelValues
+      .sort((a, b) => b.rank - a.rank)[0] ?? null
+  }
 
   const spatialCandidates = geometries
     .filter((item) =>
       isPlausibleTaiwanChineseName(item.normalized),
     )
-    .map((item) => {
-      const score = item.score ?? 0
+    .flatMap((item) => {
       const text = item.normalized
-      const lengthBonus =
-        text.length >= 2 && text.length <= 5 ? 0.08 : 0
+      const score = item.score ?? 0
 
-      let labelBonus = 0
+      const anchored = nameLabels
+        .map((label) => {
+          const scale = Math.max(
+            1,
+            item.height,
+            label.height,
+          )
 
-      if (nameLabels.length && item.height > 0) {
-        const nearest = nameLabels
-          .map((label) => {
-            const scale = Math.max(
-              1,
-              item.height,
-              label.height,
+          const vertical =
+            Math.abs(item.centerY - label.centerY) / scale
+          const below =
+            (item.centerY - label.centerY) / scale
+          const rightGap =
+            (item.minX - label.maxX) / scale
+          const horizontalOverlap =
+            Math.min(item.maxX, label.maxX) -
+            Math.max(item.minX, label.minX)
+
+          // Passport generations / OCR grouping can put the Chinese name
+          // either on the same visual row as the label or immediately
+          // below it. Anything farther away is not auto-filled.
+          const sameRow =
+            vertical <= 1.6 &&
+            rightGap >= -1 &&
+            rightGap <= 18
+
+          const nextRow =
+            below > 0 &&
+            below <= 3.5 &&
+            (
+              horizontalOverlap >= -scale * 5 ||
+              Math.abs(item.centerX - label.centerX) <= scale * 16
             )
-            const vertical =
-              Math.abs(item.centerY - label.centerY) / scale
-            const horizontal =
-              Math.abs(item.centerX - label.centerX) / scale
 
-            return vertical + horizontal * 0.2
-          })
-          .sort((a, b) => a - b)[0]
+          if (!sameRow && !nextRow) return null
 
-        if (nearest <= 3) {
-          labelBonus = Math.max(0, 0.3 - nearest * 0.06)
-        }
-      }
+          const distancePenalty =
+            Math.min(vertical, Math.max(0, below)) * 0.08 +
+            Math.max(0, rightGap) * 0.008
 
-      return {
-        text,
-        score,
-        rank: score + lengthBonus + labelBonus,
-      }
+          const shortNameBonus =
+            text.length >= 2 && text.length <= 5 ? 0.12 : 0
+
+          return {
+            text,
+            score,
+            rank:
+              score +
+              shortNameBonus +
+              0.6 -
+              distancePenalty,
+          }
+        })
+        .filter(
+          (
+            candidate,
+          ): candidate is {
+            text: string
+            score: number
+            rank: number
+          } => candidate !== null,
+        )
+        .sort((a, b) => b.rank - a.rank)[0]
+
+      return anchored ? [anchored] : []
     })
 
   return [...directLabelValues, ...spatialCandidates]
@@ -474,7 +516,6 @@ function buildBaselineResult(
 
   const items = (typedPrediction?.items ?? []) as PaddleItemLike[]
   const mrz = chooseMrz(items)
-  const chineseNameCandidate = chooseTaiwanChineseName(items)
 
   const numericScores = items
     .map((item) => item.score)
@@ -530,9 +571,9 @@ function buildBaselineResult(
     line2Validation: mrz.validation,
     mrzRepair: mrz.repair,
     parsedMrz,
-    chineseName: chineseNameCandidate?.text ?? null,
-    chineseNameScore: chineseNameCandidate?.score ?? null,
-    chineseNameSource: chineseNameCandidate ? 'full-page' : null,
+    chineseName: null,
+    chineseNameScore: null,
+    chineseNameSource: null,
     structureComplete:
       line1Valid &&
       mrz.line2?.length === 44,
@@ -613,9 +654,9 @@ async function createRelativeCrop(
 }
 
 async function createTaiwanVizCrop(image: File) {
-  // Exclude most of the portrait and the bottom MRZ. This intentionally
-  // remains broad enough for small layout differences between passport
-  // generations; candidate filtering decides which Han text is a name.
+  // Broadly isolate the VIZ side of the biodata page. The OCR result is
+  // still not trusted by text/confidence alone: chooseTaiwanChineseName
+  // requires an actual 姓名 label and a nearby value.
   return createRelativeCrop(image, 0.24, 0.12, 0.74, 0.58)
 }
 
@@ -750,7 +791,7 @@ async function predictOne(
     best.parsedMrz?.nationality === 'TWN' ||
     best.parsedMrz?.issuingState === 'TWN'
 
-  if (isTaiwanPassport && !best.chineseName) {
+  if (isTaiwanPassport) {
     const vizCrop = await createTaiwanVizCrop(image)
     const vizStartedAt = performance.now()
     const [vizPrediction] = await instance.predict(vizCrop)
