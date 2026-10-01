@@ -1195,3 +1195,516 @@ export async function recognizePassportsWithPaddle(
 
   return results
 }
+
+
+export type PermitSex = '' | 'M' | 'F' | 'X'
+
+export interface TaiwanCompatriotPermitOcrResult {
+  initializationMs: number
+  predictMs: number
+  totalMs: number
+  detectedItems: number
+  averageScore: number | null
+  chineseName: string
+  permitNumber: string
+  birthDate: string
+  sex: PermitSex
+  expiryDate: string
+  extractedFieldCount: number
+  fieldScores: {
+    chineseName: number | null
+    permitNumber: number | null
+    birthDate: number | null
+    sex: number | null
+    expiryDate: number | null
+  }
+  rawRows: string[]
+}
+
+interface PermitCandidate<T> {
+  value: T
+  score: number | null
+  rank: number
+}
+
+const permitFixedChineseLabels = [
+  '台湾居民来往大陆通行证',
+  '臺灣居民來往大陸通行證',
+  '中华人民共和国',
+  '中華人民共和國',
+  '姓名',
+  '性别',
+  '性別',
+  '出生日期',
+  '有效期限',
+  '有效期',
+  '证件号码',
+  '證件號碼',
+  '签发次数',
+  '簽發次數',
+  '签发机关',
+  '簽發機關',
+]
+
+function normalizePermitChineseName(value: string) {
+  return value
+    .replace(/\s+/g, '')
+    .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
+    .trim()
+}
+
+function isPlausiblePermitChineseName(value: string) {
+  const normalized = normalizePermitChineseName(value)
+
+  if (normalized.length < 2 || normalized.length > 20) return false
+  if (!/^[\p{Script=Han}·‧]+$/u.test(normalized)) return false
+
+  return !permitFixedChineseLabels.some(
+    (label) =>
+      normalized === label ||
+      normalized.includes(label) ||
+      label.includes(normalized),
+  )
+}
+
+function permitLabelMatches(
+  text: string,
+  labels: string[],
+) {
+  const compact = text
+    .replace(/\s+/g, '')
+    .toLowerCase()
+
+  return labels.some((label) =>
+    compact.includes(
+      label.replace(/\s+/g, '').toLowerCase(),
+    ),
+  )
+}
+
+function geometryDistanceRank(
+  label: PaddleItemGeometry,
+  candidate: PaddleItemGeometry,
+) {
+  const scale = Math.max(1, label.height, candidate.height)
+  const vertical =
+    Math.abs(candidate.centerY - label.centerY) / scale
+  const below =
+    (candidate.centerY - label.centerY) / scale
+  const rightGap =
+    (candidate.minX - label.maxX) / scale
+
+  const sameRow =
+    vertical <= 1.8 &&
+    rightGap >= -1.5 &&
+    rightGap <= 24
+
+  const nextRows =
+    below > 0 &&
+    below <= 4.8 &&
+    Math.abs(candidate.centerX - label.centerX) <=
+      scale * 22
+
+  if (!sameRow && !nextRows) return null
+
+  return (
+    1 -
+    vertical * 0.08 -
+    Math.max(0, rightGap) * 0.006 -
+    Math.max(0, below - 1) * 0.04
+  )
+}
+
+function findLabelAnchoredCandidate<T>(
+  geometries: PaddleItemGeometry[],
+  labels: string[],
+  parse: (text: string) => T | null,
+): PermitCandidate<T> | null {
+  const labelItems = geometries.filter((item) =>
+    permitLabelMatches(item.text, labels),
+  )
+
+  const candidates: PermitCandidate<T>[] = []
+
+  for (const label of labelItems) {
+    const direct = parse(label.text)
+    if (direct !== null) {
+      candidates.push({
+        value: direct,
+        score: label.score,
+        rank: (label.score ?? 0) + 2,
+      })
+    }
+
+    for (const item of geometries) {
+      if (item === label) continue
+
+      const value = parse(item.text)
+      if (value === null) continue
+
+      const positionRank = geometryDistanceRank(label, item)
+      if (positionRank === null) continue
+
+      candidates.push({
+        value,
+        score: item.score,
+        rank: (item.score ?? 0) + positionRank,
+      })
+    }
+  }
+
+  return candidates.sort((a, b) => b.rank - a.rank)[0] ?? null
+}
+
+function extractHanNameFromPermitText(text: string) {
+  let cleaned = text
+
+  for (const label of [
+    '姓名',
+    'Name',
+    'NAME',
+  ]) {
+    cleaned = cleaned.replaceAll(label, '')
+  }
+
+  const matches = cleaned.match(/[\p{Script=Han}·‧]{2,20}/gu)
+  if (!matches) return null
+
+  return (
+    matches
+      .map(normalizePermitChineseName)
+      .find(isPlausiblePermitChineseName) ?? null
+  )
+}
+
+function extractPermitNumberFromText(text: string) {
+  const digits = text.replace(/[^0-9]/g, '')
+
+  // The visual zone may place the 2-digit issuance count immediately after
+  // the lifelong 8-digit permit number. It is not part of the permit number.
+  if (digits.length === 10) return digits.slice(0, 8)
+  if (digits.length === 8) return digits
+
+  const match = digits.match(/\d{8}/)
+  return match?.[0] ?? null
+}
+
+function normalizePermitDateParts(
+  year: number,
+  month: number,
+  day: number,
+) {
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null
+  }
+
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
+}
+
+function extractPermitDatesFromText(text: string) {
+  const dates: string[] = []
+
+  const separated =
+    /(19|20)(\d{2})\s*[年./\-]\s*(\d{1,2})\s*[月./\-]\s*(\d{1,2})\s*日?/g
+
+  for (const match of text.matchAll(separated)) {
+    const normalized = normalizePermitDateParts(
+      Number(`${match[1]}${match[2]}`),
+      Number(match[3]),
+      Number(match[4]),
+    )
+
+    if (normalized) dates.push(normalized)
+  }
+
+  const compact = text.replace(/[^0-9]/g, '')
+
+  for (const match of compact.matchAll(/(?:19|20)\d{6}/g)) {
+    const value = match[0]
+    const normalized = normalizePermitDateParts(
+      Number(value.slice(0, 4)),
+      Number(value.slice(4, 6)),
+      Number(value.slice(6, 8)),
+    )
+
+    if (normalized && !dates.includes(normalized)) {
+      dates.push(normalized)
+    }
+  }
+
+  return dates
+}
+
+function extractSinglePermitDate(text: string) {
+  return extractPermitDatesFromText(text)[0] ?? null
+}
+
+function extractPermitSex(text: string): PermitSex | null {
+  const compact = text.replace(/\s+/g, '').toUpperCase()
+
+  if (
+    compact.includes('男') ||
+    /(?:SEX|性别|性別)[:：]?M\b/.test(compact) ||
+    compact === 'M'
+  ) {
+    return 'M'
+  }
+
+  if (
+    compact.includes('女') ||
+    /(?:SEX|性别|性別)[:：]?F\b/.test(compact) ||
+    compact === 'F'
+  ) {
+    return 'F'
+  }
+
+  return null
+}
+
+function buildTaiwanCompatriotPermitResult(
+  prediction: unknown,
+  initializationMs: number,
+  predictMs: number,
+  totalMs: number,
+): TaiwanCompatriotPermitOcrResult {
+  const typed = prediction as
+    | { items?: unknown }
+    | undefined
+
+  const items =
+    (typed?.items ?? []) as PaddleItemLike[]
+
+  const geometries = items
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null,
+    )
+
+  const rawRows = buildTextRows(items)
+
+  const name = findLabelAnchoredCandidate(
+    geometries,
+    ['姓名', 'Name'],
+    extractHanNameFromPermitText,
+  )
+
+  const permitNumber = findLabelAnchoredCandidate(
+    geometries,
+    [
+      '证件号码',
+      '證件號碼',
+      'Permit No',
+      'Permit Number',
+      '证件号',
+      '證件號',
+    ],
+    extractPermitNumberFromText,
+  )
+
+  const birthDate = findLabelAnchoredCandidate(
+    geometries,
+    [
+      '出生日期',
+      'Date of Birth',
+      'Birth Date',
+      'DOB',
+    ],
+    extractSinglePermitDate,
+  )
+
+  const sex = findLabelAnchoredCandidate(
+    geometries,
+    ['性别', '性別', 'Sex'],
+    extractPermitSex,
+  )
+
+  const expiryLabel = geometries.filter((item) =>
+    permitLabelMatches(
+      item.text,
+      [
+        '有效期限',
+        '有效期',
+        'Period of Validity',
+        'Valid Until',
+        'Expiry',
+      ],
+    ),
+  )
+
+  const expiryCandidates: PermitCandidate<string>[] = []
+
+  for (const label of expiryLabel) {
+    const directDates = extractPermitDatesFromText(label.text)
+
+    if (directDates.length) {
+      expiryCandidates.push({
+        value: [...directDates].sort().at(-1)!,
+        score: label.score,
+        rank: (label.score ?? 0) + 2,
+      })
+    }
+
+    for (const item of geometries) {
+      if (item === label) continue
+
+      const dates = extractPermitDatesFromText(item.text)
+      if (!dates.length) continue
+
+      const positionRank = geometryDistanceRank(label, item)
+      if (positionRank === null) continue
+
+      expiryCandidates.push({
+        value: [...dates].sort().at(-1)!,
+        score: item.score,
+        rank: (item.score ?? 0) + positionRank,
+      })
+    }
+  }
+
+  let expiryDate =
+    expiryCandidates.sort((a, b) => b.rank - a.rank)[0] ??
+    null
+
+  // Conservative fallbacks. They only produce suggestions; every permit
+  // field still requires a full visual confirmation before saving.
+  if (!permitNumber) {
+    const globalNumber = geometries
+      .map((item) => {
+        const value = extractPermitNumberFromText(item.text)
+        if (!value) return null
+        if (/^(19|20)\d{6}$/.test(value)) return null
+
+        return {
+          value,
+          score: item.score,
+          rank: item.score ?? 0,
+        }
+      })
+      .filter(
+        (item): item is PermitCandidate<string> =>
+          item !== null,
+      )
+      .filter((item) => (item.score ?? 0) >= 0.7)
+      .sort((a, b) => b.rank - a.rank)[0]
+
+    if (globalNumber) {
+      permitNumber = globalNumber
+    }
+  }
+
+  const allDates = geometries.flatMap((item) =>
+    extractPermitDatesFromText(item.text).map((value) => ({
+      value,
+      score: item.score,
+    })),
+  )
+
+  let inferredBirth = birthDate
+
+  if (!inferredBirth && allDates.length) {
+    const today = new Date()
+    const todayIso = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-')
+
+    const plausibleBirths = allDates
+      .filter((item) => item.value <= todayIso)
+      .sort((a, b) => a.value.localeCompare(b.value))
+
+    const first = plausibleBirths[0]
+    if (first) {
+      inferredBirth = {
+        value: first.value,
+        score: first.score,
+        rank: first.score ?? 0,
+      }
+    }
+  }
+
+  if (!expiryDate && allDates.length) {
+    const latest = [...allDates]
+      .sort((a, b) => b.value.localeCompare(a.value))[0]
+
+    if (latest) {
+      expiryDate = {
+        value: latest.value,
+        score: latest.score,
+        rank: latest.score ?? 0,
+      }
+    }
+  }
+
+  const scores = items
+    .map((item) =>
+      typeof item.score === 'number'
+        ? item.score
+        : null,
+    )
+    .filter((score): score is number => score !== null)
+
+  const averageScore = scores.length
+    ? scores.reduce((sum, score) => sum + score, 0) /
+      scores.length
+    : null
+
+  const extractedFieldCount = [
+    name?.value,
+    permitNumber?.value,
+    inferredBirth?.value,
+    sex?.value,
+    expiryDate?.value,
+  ].filter(Boolean).length
+
+  return {
+    initializationMs,
+    predictMs,
+    totalMs,
+    detectedItems: items.length,
+    averageScore,
+    chineseName: name?.value ?? '',
+    permitNumber: permitNumber?.value ?? '',
+    birthDate: inferredBirth?.value ?? '',
+    sex: sex?.value ?? '',
+    expiryDate: expiryDate?.value ?? '',
+    extractedFieldCount,
+    fieldScores: {
+      chineseName: name?.score ?? null,
+      permitNumber: permitNumber?.score ?? null,
+      birthDate: inferredBirth?.score ?? null,
+      sex: sex?.score ?? null,
+      expiryDate: expiryDate?.score ?? null,
+    },
+    rawRows,
+  }
+}
+
+export async function recognizeTaiwanCompatriotPermitWithPaddle(
+  image: File,
+): Promise<TaiwanCompatriotPermitOcrResult> {
+  const totalStartedAt = performance.now()
+  const { instance, initializationMs } = await getPaddle()
+
+  const predictStartedAt = performance.now()
+  const [prediction] = await instance.predict(image)
+  const predictMs = performance.now() - predictStartedAt
+
+  return buildTaiwanCompatriotPermitResult(
+    prediction,
+    initializationMs,
+    predictMs,
+    performance.now() - totalStartedAt,
+  )
+}
