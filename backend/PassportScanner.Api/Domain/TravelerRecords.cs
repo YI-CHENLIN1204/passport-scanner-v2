@@ -7,7 +7,7 @@ public sealed class TravelerRecord
     public required string NameEn { get; set; }
     public required DateOnly BirthDate { get; set; }
     public required string Gender { get; set; }
-    public required string Nationality { get; set; }
+    public string? Nationality { get; set; }
     public required string PersonalIdType { get; set; }
     public required string PersonalIdNumber { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
@@ -22,8 +22,8 @@ public sealed class DocumentVersionRecord
     public required string NameZhOnDocument { get; set; }
     public required string NameEnOnDocument { get; set; }
     public required string DocumentNumber { get; set; }
-    public required string IssuingCountry { get; set; }
-    public required string Nationality { get; set; }
+    public string? IssuingCountry { get; set; }
+    public string? Nationality { get; set; }
     public required DateOnly ExpiryDate { get; set; }
     public required bool IsCurrent { get; set; }
     public required DateTimeOffset VerifiedAt { get; set; }
