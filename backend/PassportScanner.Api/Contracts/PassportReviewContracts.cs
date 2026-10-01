@@ -3,6 +3,7 @@ namespace PassportScanner.Api.Contracts;
 public sealed record PassportReviewRequest(
     int SchemaVersion,
     string DocumentType,
+    string ChineseName,
     string EnglishName,
     string PassportNumber,
     string Nationality,
@@ -22,11 +23,14 @@ public sealed record PassportReviewVerification(
     bool? CompositeCheckDigit);
 
 public sealed record PassportReviewAssertions(
+    bool ChineseNameVisuallyConfirmed,
     bool EnglishNameVisuallyConfirmed);
 
 public sealed record PassportReviewOcrMetadata(
     string Engine,
     bool Line2Validated,
+    string? ChineseNameSource,
+    double? ChineseNameScore,
     bool FallbackUsed,
     double? AverageScore);
 
