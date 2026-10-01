@@ -210,7 +210,7 @@ public static partial class PassportReviewValidator
             ? value
             : char.ToLowerInvariant(value[0]) + value[1..];
 
-    [GeneratedRegex("^[\p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[\p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$", RegexOptions.CultureInvariant)]
     private static partial Regex ChineseNameRegex();
 
     [GeneratedRegex("^[A-Z][A-Z .,'-]*$", RegexOptions.CultureInvariant)]
