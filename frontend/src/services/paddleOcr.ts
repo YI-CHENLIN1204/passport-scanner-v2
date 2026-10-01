@@ -57,6 +57,21 @@ export interface PaddleBaselineResult {
   fallbackUsed: boolean
   fallbackCropRatio: number | null
   runtime: string
+  rotationDegrees?: number
+  orientationAttempts?: number
+  detectedSkewDegrees?: number
+  orientedImage?: File
+}
+
+export interface PassportOcrProgress {
+  stage:
+    | 'initializing'
+    | 'orientation'
+    | 'fallback'
+    | 'deskew'
+    | 'completed'
+  progress: number
+  message: string
 }
 
 export interface PaddleBatchProgress {
@@ -717,6 +732,8 @@ function buildBaselineResult(
     fallbackUsed,
     fallbackCropRatio,
     runtime,
+    detectedSkewDegrees:
+      estimateTextSkewDegrees(prediction),
   }
 }
 
@@ -1121,11 +1138,202 @@ async function predictOne(
   return best
 }
 
+function passportOrientationQuality(
+  result: PaddleBaselineResult,
+) {
+  return (
+    resultQuality(result) +
+    (result.chineseName ? 100 : 0)
+  )
+}
+
+async function recognizePassportOrientedWithInstance(
+  instance: PaddleInstance,
+  image: File,
+  initializationMs: number,
+  onProgress?: (
+    progress: PassportOcrProgress,
+  ) => void,
+): Promise<PaddleBaselineResult> {
+  const attempts: Array<{
+    rotation: number
+    image: File
+    result: PaddleBaselineResult
+  }> = []
+
+  const runRotation = async (
+    rotation: number,
+    progress: number,
+  ) => {
+    onProgress?.({
+      stage: 'orientation',
+      progress,
+      message:
+        rotation === 0
+          ? '正在辨識原始方向…'
+          : `正在測試旋轉 ${rotation}° 的護照…`,
+    })
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    const rotated =
+      await rotateImageFile(image, rotation)
+
+    const result = await predictOne(
+      instance,
+      rotated,
+      attempts.length === 0
+        ? initializationMs
+        : 0,
+      () => {
+        onProgress?.({
+          stage: 'fallback',
+          progress: Math.min(0.82, progress + 0.06),
+          message: '正在加強辨識護照底部 MRZ…',
+        })
+      },
+    )
+
+    result.rotationDegrees = rotation
+    result.orientationAttempts = attempts.length + 1
+    result.orientedImage = rotated
+
+    attempts.push({
+      rotation,
+      image: rotated,
+      result,
+    })
+
+    return result
+  }
+
+  onProgress?.({
+    stage: 'initializing',
+    progress: 0.04,
+    message: '正在準備 PaddleOCR…',
+  })
+
+  const original = await runRotation(0, 0.14)
+
+  const originalStrong =
+    original.structureComplete &&
+    original.line1Valid &&
+    original.line2Validation?.requiredValid === true
+
+  if (!originalStrong) {
+    await runRotation(90, 0.32)
+    await runRotation(-90, 0.5)
+
+    let currentBest = [...attempts].sort(
+      (a, b) =>
+        passportOrientationQuality(b.result) -
+        passportOrientationQuality(a.result),
+    )[0]
+
+    const currentStrong =
+      currentBest.result.structureComplete &&
+      currentBest.result.line1Valid &&
+      currentBest.result.line2Validation?.requiredValid === true
+
+    if (!currentStrong) {
+      await runRotation(180, 0.66)
+    }
+  }
+
+  let best = [...attempts].sort(
+    (a, b) =>
+      passportOrientationQuality(b.result) -
+      passportOrientationQuality(a.result),
+  )[0]
+
+  const skew = best.result.detectedSkewDegrees ?? 0
+  const needsDeskew =
+    Math.abs(skew) >= 2.5 &&
+    Math.abs(skew) <= 20 &&
+    (
+      best.result.line2Validation?.requiredValid !== true ||
+      !best.result.line1Valid ||
+      (
+        (
+          best.result.parsedMrz?.nationality === 'TWN' ||
+          best.result.parsedMrz?.issuingState === 'TWN'
+        ) &&
+        !best.result.chineseName
+      )
+    )
+
+  if (needsDeskew) {
+    onProgress?.({
+      stage: 'deskew',
+      progress: 0.84,
+      message:
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正護照…`,
+    })
+
+    const deskewed = await rotateImageFile(
+      best.image,
+      -skew,
+    )
+
+    const deskewedResult = await predictOne(
+      instance,
+      deskewed,
+      0,
+    )
+
+    deskewedResult.rotationDegrees =
+      normalizeRotation(best.rotation - skew)
+    deskewedResult.orientationAttempts =
+      attempts.length + 1
+    deskewedResult.orientedImage = deskewed
+
+    if (
+      passportOrientationQuality(deskewedResult) >=
+      passportOrientationQuality(best.result)
+    ) {
+      best = {
+        rotation: deskewedResult.rotationDegrees,
+        image: deskewed,
+        result: deskewedResult,
+      }
+    }
+  }
+
+  best.result.orientationAttempts =
+    Math.max(
+      best.result.orientationAttempts ?? 1,
+      attempts.length,
+    )
+  best.result.orientedImage = best.image
+
+  onProgress?.({
+    stage: 'completed',
+    progress: 1,
+    message:
+      Math.abs(best.result.rotationDegrees ?? 0) < 1
+        ? '護照辨識完成。'
+        : `護照辨識完成，已自動校正方向 ${(best.result.rotationDegrees ?? 0).toFixed(1)}°。`,
+  })
+
+  return best.result
+}
+
 export async function recognizePassportWithPaddle(
   image: File,
+  onProgress?: (
+    progress: PassportOcrProgress,
+  ) => void,
 ): Promise<PaddleBaselineResult> {
   const { instance, initializationMs } = await getPaddle()
-  return predictOne(instance, image, initializationMs)
+
+  return recognizePassportOrientedWithInstance(
+    instance,
+    image,
+    initializationMs,
+    onProgress,
+  )
 }
 
 export async function recognizePassportsWithPaddle(
@@ -1162,20 +1370,27 @@ export async function recognizePassportsWithPaddle(
       requestAnimationFrame(() => resolve()),
     )
 
-    const result = await predictOne(
-      instance,
-      images[index],
-      index === 0 ? initializationMs : 0,
-      () => {
-        onProgress?.({
-          completed: index,
-          total: images.length,
-          current,
-          stage: 'fallback',
-          message: `第 ${current} 張全頁未偵測到文字，改試底部 MRZ 裁切…`,
-        })
-      },
-    )
+    const result =
+      await recognizePassportOrientedWithInstance(
+        instance,
+        images[index],
+        index === 0 ? initializationMs : 0,
+        (progress) => {
+          onProgress?.({
+            completed: index,
+            total: images.length,
+            current,
+            stage:
+              progress.stage === 'completed'
+                ? 'completed'
+                : progress.stage === 'fallback'
+                  ? 'fallback'
+                  : 'predicting',
+            message:
+              `第 ${current} / ${images.length} 張：${progress.message}`,
+          })
+        },
+      )
 
     results.push(result)
 
