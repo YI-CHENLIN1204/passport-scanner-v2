@@ -7,6 +7,7 @@ import {
 } from 'vue'
 import {
   recognizeTaiwanCompatriotPermitWithPaddle,
+  type TaiwanCompatriotPermitOcrProgress,
   type TaiwanCompatriotPermitOcrResult,
 } from '../services/paddleOcr'
 import {
@@ -23,6 +24,11 @@ const props = defineProps<{
 }>()
 
 const running = ref(false)
+const ocrProgress = ref<TaiwanCompatriotPermitOcrProgress>({
+  stage: 'initializing',
+  progress: 0,
+  message: '',
+})
 const error = ref('')
 const result = ref<TaiwanCompatriotPermitOcrResult | null>(null)
 
@@ -263,14 +269,29 @@ async function run() {
   error.value = ''
   receipt.value = null
   submitError.value = ''
+  ocrProgress.value = {
+    stage: 'initializing',
+    progress: 0.03,
+    message: '準備辨識…',
+  }
 
   try {
     const ocr =
       await recognizeTaiwanCompatriotPermitWithPaddle(
         props.file,
+        (progress) => {
+          ocrProgress.value = progress
+        },
       )
 
     result.value = ocr
+
+    revokeImageUrl()
+    imageUrl.value = URL.createObjectURL(
+      ocr.orientedImage,
+    )
+    resetImageView()
+
     populate(ocr)
   } catch (err) {
     result.value = null
@@ -392,10 +413,28 @@ onBeforeUnmount(revokeImageUrl)
       class="running-panel"
       aria-live="polite"
     >
-      <div class="running-bar"></div>
-      <span>
-        OCR 執行中。第一次可能需要載入模型，畫面短暫變慢屬正常現象。
-      </span>
+      <div class="running-copy">
+        <span>{{ ocrProgress.message }}</span>
+        <strong>
+          {{ Math.round(ocrProgress.progress * 100) }}%
+        </strong>
+      </div>
+      <div class="running-track">
+        <div
+          class="running-fill"
+          :style="{
+            width:
+              Math.max(
+                4,
+                Math.round(ocrProgress.progress * 100),
+              ) + '%',
+          }"
+        ></div>
+      </div>
+      <small>
+        系統會先判斷 0° / 90° / 180° / 270°，
+        必要時再校正小角度傾斜；不要求客戶先把照片轉正。
+      </small>
     </div>
 
     <p v-if="!file" class="hint">
@@ -408,14 +447,23 @@ onBeforeUnmount(revokeImageUrl)
 
     <div v-if="result" class="ocr-summary">
       <div>
-        <span>本次推論</span>
+        <span>總辨識耗時</span>
         <strong>
-          {{ (result.predictMs / 1000).toFixed(2) }} 秒
+          {{ (result.totalMs / 1000).toFixed(2) }} 秒
         </strong>
       </div>
       <div>
-        <span>辨識文字區塊</span>
-        <strong>{{ result.detectedItems }}</strong>
+        <span>方向校正</span>
+        <strong>
+          {{
+            Math.abs(result.rotationDegrees) < 1
+              ? '原方向'
+              : result.rotationDegrees.toFixed(1) + '°'
+          }}
+        </strong>
+        <small>
+          共測試 {{ result.orientationAttempts }} 次
+        </small>
       </div>
       <div>
         <span>自動帶入欄位</span>
@@ -477,6 +525,14 @@ onBeforeUnmount(revokeImageUrl)
               適合視窗
             </button>
           </div>
+
+          <p
+            v-if="Math.abs(result.rotationDegrees) >= 1"
+            class="orientation-note"
+          >
+            覆核畫面已套用 OCR 選出的方向校正；
+            原始上傳檔本身沒有被修改。
+          </p>
 
           <div
             class="image-panel"
@@ -760,40 +816,43 @@ button:disabled {
 }
 
 .running-panel {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  gap: 8px;
   margin-top: 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
   color: #667085;
 }
 
-.running-bar {
-  position: relative;
-  width: 130px;
+.running-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.running-copy strong {
+  color: #172033;
+}
+
+.running-track {
   height: 9px;
   overflow: hidden;
   border-radius: 999px;
   background: #e9edf3;
 }
 
-.running-bar::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  width: 42%;
+.running-fill {
+  height: 100%;
   border-radius: inherit;
   background: #172033;
-  animation: slide 1.05s ease-in-out infinite;
+  transition: width 180ms ease;
 }
 
-@keyframes slide {
-  from {
-    transform: translateX(-110%);
-  }
-
-  to {
-    transform: translateX(340%);
-  }
+.running-panel small {
+  line-height: 1.45;
 }
 
 .hint,
@@ -866,6 +925,13 @@ button:disabled {
 
 .fit-button {
   margin-left: auto;
+}
+
+.orientation-note {
+  margin: 0 0 8px;
+  color: #667085;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .image-panel {
