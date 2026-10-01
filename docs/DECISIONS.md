@@ -207,3 +207,23 @@ GitHub Actions 在 push / pull request 時執行：
 - Vue / TypeScript `npm run build`（包含 vue-tsc）。
 
 目前 TypeScript 固定於 5.9.x，以維持現有 vue-tsc 相容性。
+
+
+### D-020：台灣護照中文姓名由 VIZ OCR + 人工覆核取得
+
+MRZ 不含中文姓名，但 CRM 需要台灣旅客中文姓名，因此護照流程新增 VIZ parser。
+
+- 繼續使用同一個 PP-OCRv5_mobile_rec；該模型本身支援繁體中文、簡體中文、英文與日文。
+- 先使用整頁 OCR 結果，找不到可靠中文姓名才做 VIZ crop fallback。
+- 中文姓名候選需排除固定護照標籤，並優先採用靠近「姓名」標籤的中文字串。
+- 台灣護照中文姓名為人工覆核必填欄位。
+- OCR 失敗時人工輸入，不從英文名自動音譯。
+- 非台灣護照沒有中文姓名時允許 NULL / 空值。
+
+### D-021：旅客主檔與證件版本都保存中英文姓名
+
+`traveler_master` 保存目前 CRM 採用的 `name_zh` / `name_en`。
+
+`document_versions` 另外保存 `name_zh_on_document` / `name_en_on_document`，確保換發護照、羅馬拼音變更後仍保留歷史版本當時的姓名。
+
+台灣旅客換護照的 exact-match 優先使用「中文姓名 + 出生日期 + 國籍」；沒有中文姓名的護照才退回英文姓名比對。
