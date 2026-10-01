@@ -364,7 +364,13 @@ onBeforeUnmount(() => {
         </label>
 
         <label class="field">
-          <span>證件圖片</span>
+          <span>
+            {{
+              documentType === 'taiwan-compatriot-permit'
+                ? '台胞證圖片（背面機讀碼優先）'
+                : '證件圖片'
+            }}
+          </span>
           <input
             type="file"
             accept="image/*"
@@ -374,7 +380,10 @@ onBeforeUnmount(() => {
       </div>
 
       <p class="privacy-note">
-        證件圖片只在瀏覽器內預覽與執行 OCR，不會為了辨識而把原始圖片送到後端 API。
+        證件圖片只在瀏覽器內預覽與辨識，不會為了辨識而把原始圖片送到後端 API。
+        <template v-if="documentType === 'taiwan-compatriot-permit'">
+          電子台胞證建議上傳背面；系統會優先讀取 3 × 30 機讀碼，正面 OCR 僅作備援。
+        </template>
       </p>
 
       <p v-if="uploadError" class="inline-error">
