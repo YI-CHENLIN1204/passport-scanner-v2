@@ -340,8 +340,16 @@ function chooseTaiwanChineseName(
     !nameLabels.length &&
     !englishNameAnchors.length
   ) {
-    return directLabelValues
-      .sort((a, b) => b.rank - a.rank)[0] ?? null
+    const direct = directLabelValues
+      .filter(
+        (candidate) =>
+          candidate.romanizationStatus === 'compatible',
+      )
+      .sort((a, b) => b.rank - a.rank)[0]
+
+    return direct && direct.score >= 0.65
+      ? direct
+      : null
   }
 
   const spatialCandidates = geometries
@@ -354,6 +362,7 @@ function chooseTaiwanChineseName(
       const candidates: Array<{
         text: string
         score: number
+        romanizationStatus: RomanizationCompatibility
         rank: number
       }> = []
 
@@ -377,14 +386,25 @@ function chooseTaiwanChineseName(
           Math.abs(item.centerX - label.centerX) <= scale * 18
 
         if (sameRow || nextRow) {
+          const romanizationStatus =
+            parsedMrz
+              ? compareChineseNameToMrzRomanization(
+                  text,
+                  parsedMrz.surname,
+                  parsedMrz.givenNames,
+                )
+              : 'unknown'
+
           candidates.push({
             text,
             score,
+            romanizationStatus,
             rank:
               score +
               0.75 -
               Math.min(vertical, Math.max(0, below)) * 0.08 -
-              Math.max(0, rightGap) * 0.008,
+              Math.max(0, rightGap) * 0.008 +
+              (romanizationStatus === 'compatible' ? 1.5 : 0),
           })
         }
       }
