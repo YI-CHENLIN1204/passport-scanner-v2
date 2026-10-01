@@ -1,17 +1,28 @@
-using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 
 namespace PassportScanner.Api.Persistence;
 
-public enum PassportSaveAction
+public enum DocumentSaveAction
 {
     CreatedTravelerAndDocument,
     CreatedDocumentVersion,
     UpdatedExistingDocument
 }
 
-public sealed record PassportSaveResult(
-    PassportSaveAction Action,
+public sealed record ReviewedDocumentInput(
+    string DocumentType,
+    string ChineseName,
+    string EnglishName,
+    DateOnly BirthDate,
+    string Sex,
+    string? Nationality,
+    string DocumentNumber,
+    string? IssuingCountry,
+    DateOnly ExpiryDate,
+    DateTimeOffset VerifiedAt);
+
+public sealed record DocumentSaveResult(
+    DocumentSaveAction Action,
     Guid TravelerId,
     Guid DocumentVersionId,
     int TravelerDocumentVersionCount);
@@ -26,8 +37,8 @@ public sealed class AmbiguousTravelerMatchException : Exception
 
 public interface ITravelerStore
 {
-    PassportSaveResult SavePassportReview(
-        PassportReviewRequest request,
+    DocumentSaveResult SaveDocumentReview(
+        ReviewedDocumentInput input,
         DateTimeOffset now);
 
     int TravelerCount { get; }
