@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getHealth, type HealthResponse } from './services/api'
 import PaddleBaseline from './components/PaddleBaseline.vue'
 import TaiwanCompatriotPermitBaseline from './components/TaiwanCompatriotPermitBaseline.vue'
+import TravelerPanel from './components/TravelerPanel.vue'
 import {
   recognizePassport,
   terminateOcrWorker,
@@ -27,6 +28,7 @@ interface BatchTestResult {
 }
 
 const health = ref<HealthResponse | null>(null)
+const activeView = ref<'scan' | 'travelers'>('scan')
 const error = ref('')
 const loading = ref(true)
 
@@ -293,7 +295,7 @@ onBeforeUnmount(() => {
   <main class="page-shell">
     <section class="hero">
       <p class="eyebrow">Internal Tool · V2</p>
-      <h1>Passport Scanner</h1>
+      <h1>證件掃描系統</h1>
       <p class="subtitle">
         瀏覽器端證件辨識、人工覆核與後續旅客資料流程。
       </p>
@@ -319,7 +321,29 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <section class="scanner-card">
+    <nav class="workspace-nav" aria-label="主要功能">
+      <button
+        type="button"
+        :class="{ active: activeView === 'scan' }"
+        @click="activeView = 'scan'"
+      >
+        證件掃描
+      </button>
+      <button
+        type="button"
+        :class="{ active: activeView === 'travelers' }"
+        @click="activeView = 'travelers'"
+      >
+        旅客資料
+      </button>
+    </nav>
+
+    <TravelerPanel v-if="activeView === 'travelers'" />
+
+    <section
+      v-if="activeView === 'scan'"
+      class="scanner-card"
+    >
       <div class="section-heading">
         <div>
           <p class="label">Step 2 · Document input</p>
@@ -393,17 +417,23 @@ onBeforeUnmount(() => {
     </section>
 
     <PaddleBaseline
-      v-if="documentType === 'passport'"
+      v-if="
+        activeView === 'scan' &&
+        documentType === 'passport'
+      "
       :file="selectedFile"
     />
 
     <TaiwanCompatriotPermitBaseline
-      v-else-if="documentType === 'taiwan-compatriot-permit'"
+      v-else-if="
+        activeView === 'scan' &&
+        documentType === 'taiwan-compatriot-permit'
+      "
       :file="selectedFile"
     />
 
     <section
-      v-else
+      v-else-if="activeView === 'scan'"
       class="notice-box unsupported-document-card"
     >
       <strong>台灣身分證 OCR 目前暫緩。</strong>
@@ -413,7 +443,10 @@ onBeforeUnmount(() => {
       </span>
     </section>
 
-    <details class="dev-lab">
+    <details
+      v-if="activeView === 'scan'"
+      class="dev-lab"
+    >
       <summary>
         開發測試工具：Tesseract Baseline A 與舊泛化測試
       </summary>
