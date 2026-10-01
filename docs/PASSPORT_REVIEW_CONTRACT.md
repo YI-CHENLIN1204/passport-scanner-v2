@@ -8,8 +8,9 @@
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "documentType": "passport",
+  "chineseName": "測試旅客",
   "englishName": "SURNAME, GIVEN NAMES",
   "passportNumber": "XXXXXXXXX",
   "nationality": "TWN",
@@ -24,11 +25,14 @@
     "compositeCheckDigit": true
   },
   "reviewAssertions": {
+    "chineseNameVisuallyConfirmed": true,
     "englishNameVisuallyConfirmed": true
   },
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
+    "chineseNameSource": "viz-crop",
+    "chineseNameScore": 0.93,
     "fallbackUsed": false,
     "averageScore": 0.91
   },
@@ -38,6 +42,7 @@
 
 ## 欄位原則
 
+- `chineseName`：人工覆核後的中文姓名。台灣護照從 VIZ OCR 建議值帶入，沒有 MRZ check digit。
 - `englishName`：人工覆核後的英文姓名，不宣稱有 check digit 保護。
 - `passportNumber`：人工覆核後的護照號碼。
 - `nationality`：3 碼國籍代碼，不固定為 TWN。
@@ -129,3 +134,27 @@ TD3 Line 1 沒有像 Line 2 的護照號碼／生日／效期那樣具有可獨�
 - 人工覆核卡的英文姓名必須由使用者勾選「已對照原圖確認英文姓名正確」。
 - 後端要求 `reviewAssertions.englishNameVisuallyConfirmed = true` 才接受保存。
 - 英文姓名一旦再修改，人工確認勾選會自動失效，必須重新核對。
+
+
+## Schema v2：中文姓名
+
+V2 CRM 需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，因此 schema v2 新增：
+
+- `chineseName`
+- `reviewAssertions.chineseNameVisuallyConfirmed`
+- `ocr.chineseNameSource`
+- `ocr.chineseNameScore`
+
+台灣護照規則：
+
+- 中文姓名為必填。
+- OCR 值只作建議，必須人工對照原始護照。
+- OCR 抓不到時留空，由操作人員人工輸入。
+- 不允許從英文姓名自動音譯中文姓名。
+- 中文姓名修改後，人工確認狀態立即失效。
+- 後端只有在中文姓名與英文姓名都完成必要人工確認後才接受保存。
+
+非台灣護照：
+
+- 沒有中文姓名時允許空字串。
+- 不為了 CRM 強行翻譯或音譯。
