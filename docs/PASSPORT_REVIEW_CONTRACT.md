@@ -33,6 +33,7 @@
     "line2Validated": true,
     "chineseNameSource": "viz-crop",
     "chineseNameScore": 0.93,
+    "chineseNameRomanizationStatus": "compatible",
     "fallbackUsed": false,
     "averageScore": 0.91
   },
@@ -158,3 +159,24 @@ V2 CRM 需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，�
 
 - 沒有中文姓名時允許空字串。
 - 不為了 CRM 強行翻譯或音譯。
+
+
+## MRZ 英文姓名輔助中文姓名驗證
+
+中文姓名 OCR 不能只依賴影像 confidence。台灣護照的 MRZ 已提供人工覆核後的羅馬拼音，因此可作第二個獨立訊號：
+
+- 中文候選先由「姓名」欄位位置產生。
+- 再把候選中文字轉成無聲調拼音。
+- 與 MRZ 的 surname / given names 音節逐字比對。
+- 支援部分台灣護照常見舊式羅馬拼音差異，例如 HSUAN ↔ XUAN、HSIA ↔ XIA、KUEI ↔ GUI/KUI、CHIEH ↔ JIE。
+- 字數／音節數不同，或大部分音節相符但單一字明顯衝突時，視為 conflict。
+- conflict 不自動修字、不猜正確中文，只禁止 autofill。
+- 無法可靠判斷羅馬拼音制度時標記 unknown，仍不自動填，由人工輸入。
+- 只有 compatible 的中文候選才允許自動填入覆核欄。
+
+例如：
+
+`林海注` → LIN / HAI / ZHU  
+MRZ → LIN / HAI / SHENG
+
+前兩音節一致、第三音節明顯衝突，因此候選被拒絕，不會因 OCR confidence 很高就寫入 CRM。
