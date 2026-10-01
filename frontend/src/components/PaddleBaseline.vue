@@ -35,6 +35,13 @@ const reviewForm = ref<PassportReviewForm>({
 })
 const reviewConfirmed = ref(false)
 const reviewImageUrl = ref('')
+const reviewImageZoom = ref(1)
+const reviewImagePanX = ref(0)
+const reviewImagePanY = ref(0)
+const reviewImageDragging = ref(false)
+
+let reviewImagePointerX = 0
+let reviewImagePointerY = 0
 const reviewOriginal = ref<PassportReviewForm | null>(null)
 const reviewedAt = ref<string | null>(null)
 const reviewRef = ref<HTMLElement | null>(null)
@@ -229,6 +236,76 @@ const batchAveragePredictSeconds = computed(() => {
     1000
   )
 })
+
+function resetReviewImageView() {
+  reviewImageZoom.value = 1
+  reviewImagePanX.value = 0
+  reviewImagePanY.value = 0
+  reviewImageDragging.value = false
+}
+
+function setReviewImageZoom(nextZoom: number) {
+  const zoom = Math.min(4, Math.max(1, nextZoom))
+  reviewImageZoom.value = Math.round(zoom * 100) / 100
+
+  if (reviewImageZoom.value === 1) {
+    reviewImagePanX.value = 0
+    reviewImagePanY.value = 0
+  }
+}
+
+function zoomReviewImageIn() {
+  setReviewImageZoom(reviewImageZoom.value + 0.25)
+}
+
+function zoomReviewImageOut() {
+  setReviewImageZoom(reviewImageZoom.value - 0.25)
+}
+
+function onReviewImageWheel(event: WheelEvent) {
+  if (event.deltaY < 0) {
+    zoomReviewImageIn()
+  } else {
+    zoomReviewImageOut()
+  }
+}
+
+function startReviewImageDrag(event: PointerEvent) {
+  if (reviewImageZoom.value <= 1) return
+
+  reviewImageDragging.value = true
+  reviewImagePointerX = event.clientX
+  reviewImagePointerY = event.clientY
+
+  const target = event.currentTarget
+  if (target instanceof HTMLElement) {
+    target.setPointerCapture(event.pointerId)
+  }
+}
+
+function moveReviewImageDrag(event: PointerEvent) {
+  if (!reviewImageDragging.value) return
+
+  const deltaX = event.clientX - reviewImagePointerX
+  const deltaY = event.clientY - reviewImagePointerY
+
+  reviewImagePanX.value += deltaX
+  reviewImagePanY.value += deltaY
+  reviewImagePointerX = event.clientX
+  reviewImagePointerY = event.clientY
+}
+
+function endReviewImageDrag(event: PointerEvent) {
+  reviewImageDragging.value = false
+
+  const target = event.currentTarget
+  if (
+    target instanceof HTMLElement &&
+    target.hasPointerCapture(event.pointerId)
+  ) {
+    target.releasePointerCapture(event.pointerId)
+  }
+}
 
 function revokeReviewImageUrl() {
   if (reviewImageUrl.value) {
@@ -552,6 +629,7 @@ watch(
   () => props.file,
   (file) => {
     revokeReviewImageUrl()
+    resetReviewImageView()
     result.value = null
     error.value = ''
     resetReviewForm()
@@ -699,12 +777,75 @@ async function run() {
       </div>
 
       <div class="review-layout">
-        <div class="review-image">
-          <img
-            v-if="reviewImageUrl"
-            :src="reviewImageUrl"
-            alt="護照原始證件預覽"
-          />
+        <div class="review-image-shell">
+          <div class="review-image-toolbar">
+            <button
+              type="button"
+              class="image-tool-button"
+              :disabled="reviewImageZoom <= 1"
+              title="縮小"
+              @click="zoomReviewImageOut"
+            >
+              −
+            </button>
+
+            <button
+              type="button"
+              class="image-zoom-value"
+              title="回到適合視窗"
+              @click="resetReviewImageView"
+            >
+              {{ Math.round(reviewImageZoom * 100) }}%
+            </button>
+
+            <button
+              type="button"
+              class="image-tool-button"
+              :disabled="reviewImageZoom >= 4"
+              title="放大"
+              @click="zoomReviewImageIn"
+            >
+              ＋
+            </button>
+
+            <button
+              type="button"
+              class="image-reset-button"
+              @click="resetReviewImageView"
+            >
+              適合視窗
+            </button>
+          </div>
+
+          <div
+            class="review-image"
+            :class="{
+              zoomed: reviewImageZoom > 1,
+              dragging: reviewImageDragging,
+            }"
+            @wheel.prevent="onReviewImageWheel"
+            @pointerdown="startReviewImageDrag"
+            @pointermove="moveReviewImageDrag"
+            @pointerup="endReviewImageDrag"
+            @pointercancel="endReviewImageDrag"
+          >
+            <img
+              v-if="reviewImageUrl"
+              :src="reviewImageUrl"
+              :style="{
+                transform:
+                  `translate(${reviewImagePanX}px, ${reviewImagePanY}px) scale(${reviewImageZoom})`,
+              }"
+              alt="護照原始證件預覽"
+              draggable="false"
+              @load="resetReviewImageView"
+              @dblclick="resetReviewImageView"
+            />
+          </div>
+
+          <p class="review-image-hint">
+            滾輪或按鈕縮放；放大後可拖曳移動。雙擊圖片可回到適合視窗。
+          </p>
         </div>
 
         <div class="review-fields">
@@ -1531,6 +1672,49 @@ button:disabled {
   margin-top: 20px;
 }
 
+.review-image-shell {
+  min-width: 0;
+}
+
+.review-image-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.image-tool-button,
+.image-zoom-value,
+.image-reset-button {
+  min-height: 34px;
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #344054;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.image-tool-button {
+  min-width: 38px;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.image-zoom-value {
+  min-width: 64px;
+}
+
+.image-reset-button {
+  margin-left: auto;
+}
+
+.review-image-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .review-image {
   display: grid;
   place-items: center;
@@ -1538,6 +1722,16 @@ button:disabled {
   overflow: hidden;
   border-radius: 14px;
   background: #111827;
+  touch-action: none;
+  user-select: none;
+}
+
+.review-image.zoomed {
+  cursor: grab;
+}
+
+.review-image.dragging {
+  cursor: grabbing;
 }
 
 .review-image img {
@@ -1545,6 +1739,21 @@ button:disabled {
   width: 100%;
   max-height: 620px;
   object-fit: contain;
+  transform-origin: center center;
+  transition: transform 120ms ease-out;
+  pointer-events: none;
+  user-select: none;
+}
+
+.review-image.dragging img {
+  transition: none;
+}
+
+.review-image-hint {
+  margin: 8px 2px 0;
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .review-fields {
