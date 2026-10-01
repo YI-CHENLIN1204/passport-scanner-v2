@@ -3,6 +3,7 @@ namespace PassportScanner.Api.Domain;
 public sealed class TravelerRecord
 {
     public required Guid TravelerId { get; init; }
+    public required string NameZh { get; set; }
     public required string NameEn { get; set; }
     public required DateOnly BirthDate { get; set; }
     public required string Gender { get; set; }
@@ -18,6 +19,8 @@ public sealed class DocumentVersionRecord
     public required Guid DocumentVersionId { get; init; }
     public required Guid TravelerId { get; init; }
     public required string DocumentType { get; init; }
+    public required string NameZhOnDocument { get; set; }
+    public required string NameEnOnDocument { get; set; }
     public required string DocumentNumber { get; set; }
     public required string IssuingCountry { get; set; }
     public required string Nationality { get; set; }
