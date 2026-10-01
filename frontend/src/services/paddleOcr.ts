@@ -2021,6 +2021,122 @@ async function predictPermit(
   }
 }
 
+async function createPermitNameGroupCrop(
+  image: File,
+  prediction: unknown,
+) {
+  const bitmap = await createImageBitmap(image)
+  const imageWidth = bitmap.width
+  const imageHeight = bitmap.height
+  bitmap.close()
+
+  const geometries = predictionItems(prediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null && item.height > 0,
+    )
+
+  const latinAnchors = geometries
+    .map((item) => ({
+      item,
+      parsed: extractPermitLatinName(item.text),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        item: PaddleItemGeometry
+        parsed: PermitLatinName
+      } => entry.parsed !== null,
+    )
+    .sort(
+      (a, b) =>
+        (b.item.score ?? 0) - (a.item.score ?? 0),
+    )
+
+  const labelAnchors = geometries
+    .filter((item) =>
+      permitLabelMatches(item.text, ['姓名', 'Name']),
+    )
+    .sort(
+      (a, b) =>
+        (b.score ?? 0) - (a.score ?? 0),
+    )
+
+  const anchor =
+    latinAnchors[0]?.item ??
+    labelAnchors[0] ??
+    null
+
+  if (!anchor) return null
+
+  const h = Math.max(10, anchor.height)
+  const x = Math.max(
+    0,
+    anchor.minX - h * 5,
+  )
+  const y = Math.max(
+    0,
+    anchor.minY - h * 5.5,
+  )
+
+  const width = Math.min(
+    imageWidth - x,
+    Math.max(
+      anchor.maxX - anchor.minX + h * 12,
+      imageWidth * 0.58,
+    ),
+  )
+  const height = Math.min(
+    imageHeight - y,
+    Math.max(
+      h * 11,
+      imageHeight * 0.24,
+    ),
+  )
+
+  const blob = await createPixelCrop(
+    image,
+    x,
+    y,
+    width,
+    height,
+    1500,
+  )
+
+  return new File(
+    [blob],
+    'permit-name-group.png',
+    { type: 'image/png' },
+  )
+}
+
+async function retryPermitChineseName(
+  instance: PaddleInstance,
+  image: File,
+  prediction: unknown,
+) {
+  const crop = await createPermitNameGroupCrop(
+    image,
+    prediction,
+  )
+
+  if (!crop) return null
+
+  const [namePrediction] =
+    await instance.predict(crop)
+
+  const geometries = predictionItems(namePrediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null,
+    )
+
+  return choosePermitChineseName(geometries)
+}
+
 export async function recognizeTaiwanCompatriotPermitWithPaddle(
   image: File,
   onProgress?: (
@@ -2156,6 +2272,37 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
         prediction: deskewPrediction.prediction,
         result: deskewPrediction.result,
       }
+    }
+  }
+
+  if (!best.result.chineseName) {
+    onProgress?.({
+      stage: 'name-retry',
+      progress: 0.9,
+      message: '姓名尚未取得，正在放大姓名區域重試…',
+    })
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    const retriedName = await retryPermitChineseName(
+      instance,
+      best.image,
+      best.prediction,
+    )
+
+    if (retriedName) {
+      best.result.chineseName = retriedName.value
+      best.result.fieldScores.chineseName =
+        retriedName.score
+      best.result.extractedFieldCount = [
+        best.result.chineseName,
+        best.result.permitNumber,
+        best.result.birthDate,
+        best.result.sex,
+        best.result.expiryDate,
+      ].filter(Boolean).length
     }
   }
 
