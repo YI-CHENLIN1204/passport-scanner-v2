@@ -47,7 +47,7 @@ export interface PaddleBaselineResult {
   parsedMrz: ParsedMrz | null
   chineseName: string | null
   chineseNameScore: number | null
-  chineseNameSource: 'full-page' | 'viz-crop' | null
+  chineseNameSource: 'name-field' | 'viz-crop' | null
   structureComplete: boolean
   fallbackUsed: boolean
   fallbackCropRatio: number | null
@@ -1040,7 +1040,7 @@ async function predictOne(
       if (vizName) {
         best.chineseName = vizName.text
         best.chineseNameScore = vizName.score
-        best.chineseNameSource = 'viz-crop'
+        best.chineseNameSource = crop.source
         break
       }
 
