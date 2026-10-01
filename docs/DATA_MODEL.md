@@ -9,8 +9,8 @@
 候選核心欄位：
 
 - traveler_id
-- name_zh
-- name_en
+- name_zh（CRM 中文姓名；台灣護照由 VIZ OCR + 人工覆核取得）
+- name_en（護照 MRZ 英文姓名）
 - birth_date
 - gender（若保留）
 - nationality
@@ -41,6 +41,8 @@
 - document_version_id
 - traveler_id
 - document_type
+- name_zh_on_document
+- name_en_on_document
 - document_number
 - issuing_country
 - nationality
@@ -96,7 +98,9 @@ Tour / Product
 1. 先以「護照號碼 + 簽發國」找 document version。
    - 找到：更新該版本的覆核／有效資訊，不建立重複版本。
    - 若該版本原本已不是 current，重新掃描不會把舊護照偷偷切回 current。
-2. 若沒有同一本護照，再以「英文姓名 + 出生日期 + 國籍」找 traveler。
+2. 若沒有同一本護照，再找 traveler。
+   - 有中文姓名時（例如台灣護照）：優先以「中文姓名 + 出生日期 + 國籍」exact match。
+   - 沒有中文姓名的外國護照：退回「英文姓名 + 出生日期 + 國籍」exact match。
    - 找到唯一一位：視為同一旅客的新護照，建立新的 document_version；舊護照版本改為非 current。
    - 找不到：建立 traveler_master + 第一個 document_version。
    - 找到多位：回傳 conflict，不自動合併，未來由人工選擇旅客。
@@ -114,3 +118,24 @@ Tour / Product
 - 重複旅客合併不可只靠模糊姓名自動執行。
 
 正式資料庫選定後，以這些業務規則替換 `InMemoryTravelerStore`，不改前端 `PassportReviewDraft` contract。
+
+
+## 中文姓名與護照 VIZ
+
+MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
+
+台灣護照採兩路資料來源：
+
+- MRZ：英文姓名、護照號碼、國籍、出生日期、性別、有效期限、簽發國。
+- VIZ（Visual Inspection Zone）：中文姓名。
+
+`PP-OCRv5_mobile_rec` 本身支援繁體中文，因此不另外建立第二套 OCR engine。先從整頁 OCR 結果尋找符合中文姓名結構的候選；若找不到，才裁切台灣護照 VIZ 區域重試。
+
+資料保存原則：
+
+- `traveler_master.name_zh`：CRM 目前採用的中文姓名。
+- `traveler_master.name_en`：CRM 目前採用的英文姓名。
+- `document_versions.name_zh_on_document`：該證件版本實際覆核後的中文姓名。
+- `document_versions.name_en_on_document`：該證件版本實際覆核後的英文姓名。
+
+換發護照時即使英文羅馬拼音改變，也能保留舊版本當時的姓名。
