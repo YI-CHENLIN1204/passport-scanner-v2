@@ -5,6 +5,7 @@ import {
   recognizePassportsWithPaddle,
   type PaddleBaselineResult,
   type PaddleBatchProgress,
+  type PassportOcrProgress,
 } from '../services/paddleOcr'
 import type {
   PassportReviewDraft,
