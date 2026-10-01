@@ -35,6 +35,7 @@ Content-Type: application/json
     "line2Validated": true,
     "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
+    "chineseNameRomanizationStatus": "compatible",
     "fallbackUsed": false,
     "averageScore": 0.91
   },
@@ -73,6 +74,7 @@ Content-Type: application/json
     "line2Validated": true,
     "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
+    "chineseNameRomanizationStatus": "compatible",
     "fallbackUsed": false,
     "averageScore": 0.91
   },
@@ -111,6 +113,7 @@ Content-Type: application/json
     "line2Validated": true,
     "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
+    "chineseNameRomanizationStatus": "compatible",
     "fallbackUsed": false,
     "averageScore": 0.95
   },
