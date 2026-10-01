@@ -130,7 +130,7 @@ public static partial class PassportReviewValidator
             Add("ocr.chineseNameScore", "中文姓名 OCR 信心值必須介於 0 到 1。");
 
         if (request.Ocr.ChineseNameSource is not null &&
-            request.Ocr.ChineseNameSource is not ("full-page" or "viz-crop"))
+            request.Ocr.ChineseNameSource is not ("name-field" or "viz-crop"))
         {
             Add(
                 "ocr.chineseNameSource",
