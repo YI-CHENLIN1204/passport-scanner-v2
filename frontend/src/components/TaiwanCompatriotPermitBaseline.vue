@@ -392,8 +392,8 @@ onBeforeUnmount(revokeImageUrl)
         <p class="label">Step 3 · Taiwan Compatriot Permit</p>
         <h2>台胞證辨識與人工覆核</h2>
         <p>
-          先以 PP-OCRv5 讀取姓名、8 位台胞證號碼、出生日期、性別與有效期限。
-          台胞證沒有沿用護照 MRZ check digit，因此儲存前必須人工核對整張證件。
+          電子台胞證優先讀取背面 3 × 30 機讀碼，取得證號、出生日期、性別、有效期限與姓名資料；
+          若沒有背面機讀碼，才退回正面 VIZ OCR。儲存前仍保留人工核對。
         </p>
       </div>
 
@@ -438,7 +438,7 @@ onBeforeUnmount(revokeImageUrl)
     </div>
 
     <p v-if="!file" class="hint">
-      先在上方選擇一張台胞證圖片。
+      建議優先上傳台胞證背面（含機讀碼）；只有正面時仍可使用 OCR 備援。
     </p>
 
     <p v-if="error" class="error">
@@ -446,6 +446,19 @@ onBeforeUnmount(revokeImageUrl)
     </p>
 
     <div v-if="result" class="ocr-summary">
+      <div>
+        <span>主要資料來源</span>
+        <strong>
+          {{ result.mrzUsed ? '背面機讀碼' : '正面 VIZ OCR' }}
+        </strong>
+        <small v-if="result.mrzUsed">
+          {{
+            result.parsedMrz?.validation.requiredValid
+              ? '必要檢查碼通過'
+              : '機讀碼仍需人工確認'
+          }}
+        </small>
+      </div>
       <div>
         <span>總辨識耗時</span>
         <strong>
@@ -479,6 +492,36 @@ onBeforeUnmount(revokeImageUrl)
               ? '無'
               : (result.averageScore * 100).toFixed(1) + '%'
           }}
+        </strong>
+      </div>
+    </div>
+
+    <div
+      v-if="result?.parsedMrz"
+      class="mrz-validation"
+    >
+      <div>
+        <span>證號檢查碼</span>
+        <strong :class="{ pass: result.parsedMrz.validation.permitNumber }">
+          {{ result.parsedMrz.validation.permitNumber ? '通過' : '失敗' }}
+        </strong>
+      </div>
+      <div>
+        <span>出生日期檢查碼</span>
+        <strong :class="{ pass: result.parsedMrz.validation.birthDate }">
+          {{ result.parsedMrz.validation.birthDate ? '通過' : '失敗' }}
+        </strong>
+      </div>
+      <div>
+        <span>有效期限檢查碼</span>
+        <strong :class="{ pass: result.parsedMrz.validation.expiryDate }">
+          {{ result.parsedMrz.validation.expiryDate ? '通過' : '失敗' }}
+        </strong>
+      </div>
+      <div>
+        <span>整體檢查碼</span>
+        <strong :class="{ pass: result.parsedMrz.validation.composite }">
+          {{ result.parsedMrz.validation.composite ? '通過' : '失敗' }}
         </strong>
       </div>
     </div>
@@ -619,7 +662,7 @@ onBeforeUnmount(revokeImageUrl)
               type="checkbox"
             />
             <span>
-              我已對照左側原始台胞證，確認姓名、證號、出生日期、性別與有效期限正確
+              我已對照左側台胞證，確認姓名、證號、出生日期、性別與有效期限正確
             </span>
           </label>
         </div>
@@ -893,6 +936,43 @@ button:disabled {
   color: #172033;
 }
 
+.mrz-validation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid #d9e7dc;
+  border-radius: 14px;
+  padding: 12px;
+  background: #f6fbf7;
+}
+
+.mrz-validation > div {
+  border: 1px solid #e2e8e4;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.mrz-validation span,
+.mrz-validation strong {
+  display: block;
+}
+
+.mrz-validation span {
+  color: #667085;
+  font-size: 0.76rem;
+}
+
+.mrz-validation strong {
+  margin-top: 4px;
+  color: #b42318;
+}
+
+.mrz-validation strong.pass {
+  color: #087443;
+}
+
 .review-card {
   margin-top: 20px;
   border: 1px solid #cfd7e6;
@@ -1113,7 +1193,8 @@ button:disabled {
 
   .review-layout,
   .fields,
-  .ocr-summary {
+  .ocr-summary,
+  .mrz-validation {
     grid-template-columns: 1fr;
   }
 
