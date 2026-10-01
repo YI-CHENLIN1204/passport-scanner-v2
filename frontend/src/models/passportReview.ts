@@ -28,6 +28,10 @@ export interface PassportReviewOcrMetadata {
   line2Validated: boolean
   chineseNameSource: 'name-field' | 'viz-crop' | null
   chineseNameScore: number | null
+  chineseNameRomanizationStatus:
+    | 'compatible'
+    | 'conflict'
+    | 'unknown'
   fallbackUsed: boolean
   averageScore: number | null
 }
