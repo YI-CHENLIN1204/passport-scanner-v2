@@ -1,6 +1,7 @@
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Validation;
 using PassportScanner.Api.Persistence;
+using PassportScanner.Api.Mapping;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +57,9 @@ app.MapPost(
         try
         {
             var savedAt = DateTimeOffset.UtcNow;
-            var result = store.SavePassportReview(request, savedAt);
+            var result = store.SaveDocumentReview(
+                PassportReviewMapper.ToDocumentInput(request),
+                savedAt);
 
             return Results.Ok(
                 new PassportReviewSaveResponse(
