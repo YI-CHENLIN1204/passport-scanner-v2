@@ -427,6 +427,8 @@ async function confirmReview() {
         result.value.line2Validation?.requiredValid === true,
       chineseNameSource: result.value.chineseNameSource,
       chineseNameScore: result.value.chineseNameScore,
+      chineseNameRomanizationStatus:
+        result.value.chineseNameRomanizationStatus,
       fallbackUsed: result.value.fallbackUsed,
       averageScore: result.value.averageScore,
     },
@@ -740,6 +742,14 @@ async function run() {
               }}
               <template v-if="result.chineseNameScore !== null">
                 · OCR 信心 {{ (result.chineseNameScore * 100).toFixed(1) }}%
+              </template>
+              <template
+                v-if="
+                  result.chineseNameRomanizationStatus ===
+                  'compatible'
+                "
+              >
+                · MRZ 英文拼音相符
               </template>
             </small>
             <label
