@@ -89,7 +89,7 @@ public static partial class TaiwanCompatriotPermitReviewValidator
         {
             Add(
                 "reviewAssertions.allFieldsVisuallyConfirmed",
-                "台胞證沒有使用本系統可驗證的 MRZ check digit，儲存前必須人工核對所有欄位。");
+                "即使台胞證機讀碼檢查通過，儲存前仍必須人工核對姓名與證件欄位。");
         }
 
         if (!string.Equals(
