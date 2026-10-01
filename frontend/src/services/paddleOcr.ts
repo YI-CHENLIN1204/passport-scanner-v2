@@ -23,6 +23,8 @@ interface PaddleItemGeometry {
   text: string
   score: number | null
   minX: number
+  maxX: number
+  centerX: number
   minY: number
   maxY: number
   centerY: number
@@ -91,6 +93,8 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
       text,
       score: typeof item.score === 'number' ? item.score : null,
       minX: 0,
+      maxX: 0,
+      centerX: 0,
       minY: 0,
       maxY: 0,
       centerY: 0,
@@ -107,6 +111,8 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
     text,
     score: typeof item.score === 'number' ? item.score : null,
     minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    centerX: (Math.min(...xs) + Math.max(...xs)) / 2,
     minY,
     maxY,
     centerY: (minY + maxY) / 2,
@@ -205,41 +211,92 @@ function isPlausibleTaiwanChineseName(value: string) {
 }
 
 function chooseTaiwanChineseName(items: PaddleItemLike[]) {
-  const candidates = items
+  const geometries = items
     .map((item) => {
-      const text =
-        typeof item.text === 'string'
-          ? normalizeChineseNameCandidate(item.text)
-          : ''
-
-      if (!isPlausibleTaiwanChineseName(text)) return null
-
-      const score =
-        typeof item.score === 'number' ? item.score : 0
-
-      // Prefer common short personal-name lengths, while still allowing
-      // longer legally valid names.
-      const lengthBonus =
-        text.length >= 2 && text.length <= 5 ? 0.08 : 0
+      const geometry = toGeometry(item)
+      if (!geometry) return null
 
       return {
-        text,
-        score,
-        rank: score + lengthBonus,
+        ...geometry,
+        rawText: geometry.text,
+        normalized: normalizeChineseNameCandidate(geometry.text),
       }
     })
     .filter(
       (
         item,
-      ): item is {
-        text: string
-        score: number
-        rank: number
+      ): item is PaddleItemGeometry & {
+        rawText: string
+        normalized: string
       } => item !== null,
     )
-    .sort((a, b) => b.rank - a.rank)
 
-  return candidates[0] ?? null
+  const nameLabels = geometries.filter((item) =>
+    item.rawText.includes('姓名'),
+  )
+
+  const directLabelValues = geometries.flatMap((item) => {
+    if (!item.rawText.includes('姓名')) return []
+
+    const afterLabel = item.rawText.split('姓名').slice(1).join('')
+    const hanOnly = afterLabel
+      .replace(/[^\p{Script=Han}·‧]/gu, '')
+      .trim()
+
+    if (!isPlausibleTaiwanChineseName(hanOnly)) return []
+
+    return [
+      {
+        text: hanOnly,
+        score: item.score ?? 0,
+        rank: (item.score ?? 0) + 0.35,
+      },
+    ]
+  })
+
+  const spatialCandidates = geometries
+    .filter((item) =>
+      isPlausibleTaiwanChineseName(item.normalized),
+    )
+    .map((item) => {
+      const score = item.score ?? 0
+      const text = item.normalized
+      const lengthBonus =
+        text.length >= 2 && text.length <= 5 ? 0.08 : 0
+
+      let labelBonus = 0
+
+      if (nameLabels.length && item.height > 0) {
+        const nearest = nameLabels
+          .map((label) => {
+            const scale = Math.max(
+              1,
+              item.height,
+              label.height,
+            )
+            const vertical =
+              Math.abs(item.centerY - label.centerY) / scale
+            const horizontal =
+              Math.abs(item.centerX - label.centerX) / scale
+
+            return vertical + horizontal * 0.2
+          })
+          .sort((a, b) => a - b)[0]
+
+        if (nearest <= 3) {
+          labelBonus = Math.max(0, 0.3 - nearest * 0.06)
+        }
+      }
+
+      return {
+        text,
+        score,
+        rank: score + lengthBonus + labelBonus,
+      }
+    })
+
+  return [...directLabelValues, ...spatialCandidates]
+    .sort((a, b) => b.rank - a.rank)[0] ?? null
 }
 
 function scoreValidation(validation: MrzValidation | null) {
