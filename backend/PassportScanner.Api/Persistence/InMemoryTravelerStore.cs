@@ -1,5 +1,3 @@
-using System.Globalization;
-using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 
 namespace PassportScanner.Api.Persistence;
@@ -32,34 +30,24 @@ public sealed class InMemoryTravelerStore : ITravelerStore
         }
     }
 
-    public PassportSaveResult SavePassportReview(
-        PassportReviewRequest request,
+    public DocumentSaveResult SaveDocumentReview(
+        ReviewedDocumentInput input,
         DateTimeOffset now)
     {
-        var birthDate = DateOnly.ParseExact(
-            request.BirthDate,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture);
-
-        var expiryDate = DateOnly.ParseExact(
-            request.ExpiryDate,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture);
-
-        var nameZh = request.ChineseName.Trim();
-        var nameEn = Normalize(request.EnglishName);
-        var passportNumber = Normalize(request.PassportNumber);
-        var nationality = Normalize(request.Nationality);
-        var issuingState = Normalize(request.IssuingState);
-        var sex = Normalize(request.Sex);
+        var documentType = Normalize(input.DocumentType);
+        var nameZh = input.ChineseName.Trim();
+        var nameEn = Normalize(input.EnglishName);
+        var documentNumber = Normalize(input.DocumentNumber);
+        var nationality = NormalizeNullable(input.Nationality);
+        var issuingCountry = NormalizeNullable(input.IssuingCountry);
+        var sex = Normalize(input.Sex);
 
         lock (_gate)
         {
-            var existingDocument = _documents.SingleOrDefault(
-                document =>
-                    document.DocumentType == "PASSPORT" &&
-                    document.DocumentNumber == passportNumber &&
-                    document.IssuingCountry == issuingState);
+            var existingDocument = FindExistingDocument(
+                documentType,
+                documentNumber,
+                issuingCountry);
 
             if (existingDocument is not null)
             {
@@ -68,53 +56,46 @@ public sealed class InMemoryTravelerStore : ITravelerStore
 
                 if (existingDocument.IsCurrent)
                 {
-                    UpdateTraveler(
+                    MergeTraveler(
                         traveler,
                         nameZh,
                         nameEn,
-                        birthDate,
+                        input.BirthDate,
                         sex,
                         nationality,
-                        passportNumber,
+                        documentType,
+                        documentNumber,
                         now);
                 }
                 else
                 {
-                    traveler.NameZh = nameZh;
-                    traveler.NameEn = nameEn;
-                    traveler.BirthDate = birthDate;
-                    traveler.Gender = sex;
-                    traveler.Nationality = nationality;
-                    traveler.UpdatedAt = now;
+                    MergeTravelerIdentityOnly(
+                        traveler,
+                        nameZh,
+                        nameEn,
+                        input.BirthDate,
+                        sex,
+                        nationality,
+                        now);
                 }
 
                 existingDocument.NameZhOnDocument = nameZh;
                 existingDocument.NameEnOnDocument = nameEn;
                 existingDocument.Nationality = nationality;
-                existingDocument.ExpiryDate = expiryDate;
-                existingDocument.VerifiedAt = now;
+                existingDocument.ExpiryDate = input.ExpiryDate;
+                existingDocument.VerifiedAt = input.VerifiedAt;
 
-                var versionCount = _documents.Count(
-                    item => item.TravelerId == traveler.TravelerId);
-
-                return new PassportSaveResult(
-                    PassportSaveAction.UpdatedExistingDocument,
-                    traveler.TravelerId,
-                    existingDocument.DocumentVersionId,
-                    versionCount);
+                return BuildResult(
+                    DocumentSaveAction.UpdatedExistingDocument,
+                    traveler,
+                    existingDocument);
             }
 
-            var travelerMatches = _travelers
-                .Where(
-                    traveler =>
-                        traveler.BirthDate == birthDate &&
-                        traveler.Nationality == nationality &&
-                        (
-                            !string.IsNullOrWhiteSpace(nameZh)
-                                ? traveler.NameZh == nameZh
-                                : traveler.NameEn == nameEn
-                        ))
-                .ToList();
+            var travelerMatches = FindTravelerMatches(
+                nameZh,
+                nameEn,
+                input.BirthDate,
+                nationality);
 
             if (travelerMatches.Count > 1)
             {
@@ -122,31 +103,32 @@ public sealed class InMemoryTravelerStore : ITravelerStore
             }
 
             TravelerRecord targetTraveler;
-            PassportSaveAction action;
+            DocumentSaveAction action;
 
             if (travelerMatches.Count == 1)
             {
                 targetTraveler = travelerMatches[0];
 
-                UpdateTraveler(
+                MergeTraveler(
                     targetTraveler,
                     nameZh,
                     nameEn,
-                    birthDate,
+                    input.BirthDate,
                     sex,
                     nationality,
-                    passportNumber,
+                    documentType,
+                    documentNumber,
                     now);
 
                 foreach (var oldDocument in _documents.Where(
                              item =>
                                  item.TravelerId == targetTraveler.TravelerId &&
-                                 item.DocumentType == "PASSPORT"))
+                                 item.DocumentType == documentType))
                 {
                     oldDocument.IsCurrent = false;
                 }
 
-                action = PassportSaveAction.CreatedDocumentVersion;
+                action = DocumentSaveAction.CreatedDocumentVersion;
             }
             else
             {
@@ -155,68 +137,193 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                     TravelerId = Guid.NewGuid(),
                     NameZh = nameZh,
                     NameEn = nameEn,
-                    BirthDate = birthDate,
+                    BirthDate = input.BirthDate,
                     Gender = sex,
                     Nationality = nationality,
-                    PersonalIdType = "PASSPORT",
-                    PersonalIdNumber = passportNumber,
+                    PersonalIdType = documentType,
+                    PersonalIdNumber = documentNumber,
                     CreatedAt = now,
                     UpdatedAt = now
                 };
 
                 _travelers.Add(targetTraveler);
-                action = PassportSaveAction.CreatedTravelerAndDocument;
+                action = DocumentSaveAction.CreatedTravelerAndDocument;
             }
 
             var documentVersion = new DocumentVersionRecord
             {
                 DocumentVersionId = Guid.NewGuid(),
                 TravelerId = targetTraveler.TravelerId,
-                DocumentType = "PASSPORT",
+                DocumentType = documentType,
                 NameZhOnDocument = nameZh,
                 NameEnOnDocument = nameEn,
-                DocumentNumber = passportNumber,
-                IssuingCountry = issuingState,
+                DocumentNumber = documentNumber,
+                IssuingCountry = issuingCountry,
                 Nationality = nationality,
-                ExpiryDate = expiryDate,
+                ExpiryDate = input.ExpiryDate,
                 IsCurrent = true,
-                VerifiedAt = request.ReviewedAt,
+                VerifiedAt = input.VerifiedAt,
                 CreatedAt = now
             };
 
             _documents.Add(documentVersion);
 
-            var targetVersionCount = _documents.Count(
-                item => item.TravelerId == targetTraveler.TravelerId);
-
-            return new PassportSaveResult(
+            return BuildResult(
                 action,
-                targetTraveler.TravelerId,
-                documentVersion.DocumentVersionId,
-                targetVersionCount);
+                targetTraveler,
+                documentVersion);
         }
     }
 
-    private static void UpdateTraveler(
+    private DocumentVersionRecord? FindExistingDocument(
+        string documentType,
+        string documentNumber,
+        string? issuingCountry)
+    {
+        return _documents.SingleOrDefault(
+            document =>
+                document.DocumentType == documentType &&
+                document.DocumentNumber == documentNumber &&
+                (
+                    documentType != "PASSPORT" ||
+                    document.IssuingCountry == issuingCountry
+                ));
+    }
+
+    private List<TravelerRecord> FindTravelerMatches(
+        string nameZh,
+        string nameEn,
+        DateOnly birthDate,
+        string? nationality)
+    {
+        return _travelers
+            .Where(
+                traveler =>
+                    traveler.BirthDate == birthDate &&
+                    IdentityNameMatches(
+                        traveler,
+                        nameZh,
+                        nameEn) &&
+                    NationalityCompatible(
+                        traveler.Nationality,
+                        nationality))
+            .ToList();
+    }
+
+    private static bool IdentityNameMatches(
+        TravelerRecord traveler,
+        string nameZh,
+        string nameEn)
+    {
+        if (!string.IsNullOrWhiteSpace(nameZh))
+        {
+            return traveler.NameZh == nameZh;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nameEn))
+        {
+            return traveler.NameEn == nameEn;
+        }
+
+        return false;
+    }
+
+    private static bool NationalityCompatible(
+        string? existing,
+        string? incoming)
+    {
+        if (string.IsNullOrWhiteSpace(existing) ||
+            string.IsNullOrWhiteSpace(incoming))
+        {
+            return true;
+        }
+
+        return existing == incoming;
+    }
+
+    private DocumentSaveResult BuildResult(
+        DocumentSaveAction action,
+        TravelerRecord traveler,
+        DocumentVersionRecord document)
+    {
+        var versionCount = _documents.Count(
+            item => item.TravelerId == traveler.TravelerId);
+
+        return new DocumentSaveResult(
+            action,
+            traveler.TravelerId,
+            document.DocumentVersionId,
+            versionCount);
+    }
+
+    private static void MergeTraveler(
         TravelerRecord traveler,
         string nameZh,
         string nameEn,
         DateOnly birthDate,
         string sex,
-        string nationality,
-        string passportNumber,
+        string? nationality,
+        string documentType,
+        string documentNumber,
         DateTimeOffset now)
     {
-        traveler.NameZh = nameZh;
-        traveler.NameEn = nameEn;
+        MergeTravelerIdentityOnly(
+            traveler,
+            nameZh,
+            nameEn,
+            birthDate,
+            sex,
+            nationality,
+            now);
+
+        traveler.PersonalIdType = documentType;
+        traveler.PersonalIdNumber = documentNumber;
+    }
+
+    private static void MergeTravelerIdentityOnly(
+        TravelerRecord traveler,
+        string nameZh,
+        string nameEn,
+        DateOnly birthDate,
+        string sex,
+        string? nationality,
+        DateTimeOffset now)
+    {
+        if (!string.IsNullOrWhiteSpace(nameZh))
+        {
+            traveler.NameZh = nameZh;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nameEn))
+        {
+            traveler.NameEn = nameEn;
+        }
+
         traveler.BirthDate = birthDate;
-        traveler.Gender = sex;
-        traveler.Nationality = nationality;
-        traveler.PersonalIdType = "PASSPORT";
-        traveler.PersonalIdNumber = passportNumber;
+
+        if (!string.IsNullOrWhiteSpace(sex))
+        {
+            traveler.Gender = sex;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nationality))
+        {
+            traveler.Nationality = nationality;
+        }
+
         traveler.UpdatedAt = now;
     }
 
     private static string Normalize(string value) =>
         value.Trim().ToUpperInvariant();
+
+    private static string? NormalizeNullable(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim().ToUpperInvariant();
+    }
 }
