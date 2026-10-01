@@ -124,3 +124,64 @@ Content-Type: application/json
 
 GET {{PassportScanner_Api_HostAddress}}/api/passport-reviews/store-status
 Accept: application/json
+
+
+###
+
+# Taiwan compatriot permit validation only.
+POST {{PassportScanner_Api_HostAddress}}/api/taiwan-compatriot-permit-reviews/validate
+Content-Type: application/json
+
+{
+  "schemaVersion": 1,
+  "documentType": "taiwan-compatriot-permit",
+  "chineseName": "測試旅客",
+  "permitNumber": "12345678",
+  "birthDate": "1990-01-15",
+  "sex": "M",
+  "expiryDate": "2030-12-31",
+  "reviewAssertions": {
+    "allFieldsVisuallyConfirmed": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "extractedFieldCount": 5,
+    "averageScore": 0.92
+  },
+  "reviewedAt": "2026-10-02T00:00:00+00:00"
+}
+
+###
+
+# Taiwan compatriot permit save.
+POST {{PassportScanner_Api_HostAddress}}/api/taiwan-compatriot-permit-reviews
+Content-Type: application/json
+
+{
+  "schemaVersion": 1,
+  "documentType": "taiwan-compatriot-permit",
+  "chineseName": "測試旅客",
+  "permitNumber": "12345678",
+  "birthDate": "1990-01-15",
+  "sex": "M",
+  "expiryDate": "2030-12-31",
+  "reviewAssertions": {
+    "allFieldsVisuallyConfirmed": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "extractedFieldCount": 5,
+    "averageScore": 0.92
+  },
+  "reviewedAt": "2026-10-02T00:00:00+00:00"
+}
+
+###
+
+GET {{PassportScanner_Api_HostAddress}}/api/document-store/status
+Accept: application/json
+
+###
+
+GET {{PassportScanner_Api_HostAddress}}/api/travelers?limit=20
+Accept: application/json
