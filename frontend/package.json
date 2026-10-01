@@ -12,7 +12,8 @@
   "dependencies": {
     "tesseract.js": "^7.0.0",
     "vue": "^3.5.43",
-    "@paddleocr/paddleocr-js": "^0.4.2"
+    "@paddleocr/paddleocr-js": "^0.4.2",
+    "pinyin-pro": "^3.29.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.9",
