@@ -38,6 +38,42 @@ app.MapGet("/api/health", () =>
         timestamp = DateTimeOffset.UtcNow
     }));
 
+app.MapGet(
+    "/api/document-store/status",
+    (ITravelerStore store) =>
+        Results.Ok(
+            new DocumentStoreStatusResponse(
+                Persistence: "volatile-in-memory",
+                TravelerCount: store.TravelerCount,
+                DocumentVersionCount: store.DocumentVersionCount,
+                CheckedAt: DateTimeOffset.UtcNow)));
+
+app.MapGet(
+    "/api/travelers",
+    (string? query, int? limit, ITravelerStore store) =>
+    {
+        var travelers = store.SearchTravelers(
+            query,
+            limit ?? 20);
+
+        return Results.Ok(
+            travelers
+                .Select(TravelerReadMapper.ToResponse)
+                .ToList());
+    });
+
+app.MapGet(
+    "/api/travelers/{travelerId:guid}",
+    (Guid travelerId, ITravelerStore store) =>
+    {
+        var traveler = store.GetTraveler(travelerId);
+
+        return traveler is null
+            ? Results.NotFound()
+            : Results.Ok(
+                TravelerReadMapper.ToResponse(traveler));
+    });
+
 app.MapPost(
     "/api/passport-reviews",
     (PassportReviewRequest request, ITravelerStore store) =>
