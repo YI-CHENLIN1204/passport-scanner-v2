@@ -20,6 +20,11 @@ const props = defineProps<{
 }>()
 
 const running = ref(false)
+const singleProgress = ref<PassportOcrProgress>({
+  stage: 'initializing',
+  progress: 0,
+  message: '',
+})
 const error = ref('')
 const result = ref<PaddleBaselineResult | null>(null)
 
@@ -680,8 +685,28 @@ async function run() {
   error.value = ''
   result.value = null
 
+  singleProgress.value = {
+    stage: 'initializing',
+    progress: 0.03,
+    message: '準備護照辨識…',
+  }
+
   try {
-    result.value = await recognizePassportWithPaddle(props.file)
+    result.value = await recognizePassportWithPaddle(
+      props.file,
+      (progress) => {
+        singleProgress.value = progress
+      },
+    )
+
+    if (result.value.orientedImage) {
+      revokeReviewImageUrl()
+      reviewImageUrl.value = URL.createObjectURL(
+        result.value.orientedImage,
+      )
+      resetReviewImageView()
+    }
+
     populateReviewForm(result.value)
 
     if (result.value.parsedMrz) {
@@ -725,13 +750,32 @@ async function run() {
       先在上方 Step 2 選擇一張護照圖片。
     </p>
 
-    <p v-if="running" class="hint">
-      第一次可能明顯較久，因為要初始化 PaddleOCR.js 與下載 PP-OCRv5 模型。
-    </p>
-
-    <div v-if="running" class="single-running" aria-live="polite">
-      <div class="single-running-bar"></div>
-      <span>護照 OCR 執行中，畫面可能暫時比較卡，請不要關閉頁面。</span>
+    <div
+      v-if="running"
+      class="single-running"
+      aria-live="polite"
+    >
+      <div class="single-running-copy">
+        <span>{{ singleProgress.message }}</span>
+        <strong>
+          {{ Math.round(singleProgress.progress * 100) }}%
+        </strong>
+      </div>
+      <div class="single-running-track">
+        <div
+          class="single-running-fill"
+          :style="{
+            width:
+              Math.max(
+                4,
+                Math.round(singleProgress.progress * 100),
+              ) + '%',
+          }"
+        ></div>
+      </div>
+      <small>
+        系統會自動嘗試照片方向；必要時再校正小角度傾斜。
+      </small>
     </div>
 
     <p v-if="error" class="error">
@@ -816,6 +860,17 @@ async function run() {
               適合視窗
             </button>
           </div>
+
+          <p
+            v-if="
+              result &&
+              Math.abs(result.rotationDegrees ?? 0) >= 1
+            "
+            class="review-orientation-note"
+          >
+            覆核畫面已套用 OCR 選出的方向校正；
+            原始上傳檔本身沒有被修改。
+          </p>
 
           <div
             class="review-image"
@@ -1713,6 +1768,13 @@ button:disabled {
 .review-image-toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.review-orientation-note {
+  margin: 0 0 8px;
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .review-image {
