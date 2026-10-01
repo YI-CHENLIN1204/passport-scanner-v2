@@ -14,6 +14,10 @@ import {
   compareChineseNameToMrzRomanization,
   type RomanizationCompatibility,
 } from './nameRomanization'
+import {
+  parseTaiwanPermitMrz,
+  type ParsedTaiwanPermitMrz,
+} from './taiwanPermitMrz'
 
 type PaddleInstance = Awaited<ReturnType<typeof PaddleOCR.create>>
 
@@ -1437,6 +1441,8 @@ export interface TaiwanCompatriotPermitOcrResult {
   rotationDegrees: number
   orientationAttempts: number
   orientedImage: File
+  parsedMrz: ParsedTaiwanPermitMrz | null
+  mrzUsed: boolean
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -1883,6 +1889,7 @@ function buildTaiwanCompatriotPermitResult(
     )
 
   const rawRows = buildTextRows(items)
+  const parsedMrz = parseTaiwanPermitMrz(rawRows)
 
   const name = choosePermitChineseName(geometries)
 
@@ -2047,12 +2054,37 @@ function buildTaiwanCompatriotPermitResult(
       scores.length
     : null
 
+  const finalChineseName =
+    parsedMrz?.chineseName ||
+    name?.value ||
+    ''
+
+  const finalPermitNumber =
+    parsedMrz?.permitNumber ||
+    permitNumber?.value ||
+    ''
+
+  const finalBirthDate =
+    parsedMrz?.birthDate ||
+    inferredBirth?.value ||
+    ''
+
+  const finalSex =
+    parsedMrz?.sex ||
+    sex?.value ||
+    ''
+
+  const finalExpiryDate =
+    parsedMrz?.expiryDate ||
+    expiryDate?.value ||
+    ''
+
   const extractedFieldCount = [
-    name?.value,
-    permitNumber?.value,
-    inferredBirth?.value,
-    sex?.value,
-    expiryDate?.value,
+    finalChineseName,
+    finalPermitNumber,
+    finalBirthDate,
+    finalSex,
+    finalExpiryDate,
   ].filter(Boolean).length
 
   return {
@@ -2061,11 +2093,11 @@ function buildTaiwanCompatriotPermitResult(
     totalMs,
     detectedItems: items.length,
     averageScore,
-    chineseName: name?.value ?? '',
-    permitNumber: permitNumber?.value ?? '',
-    birthDate: inferredBirth?.value ?? '',
-    sex: sex?.value ?? '',
-    expiryDate: expiryDate?.value ?? '',
+    chineseName: finalChineseName,
+    permitNumber: finalPermitNumber,
+    birthDate: finalBirthDate,
+    sex: finalSex,
+    expiryDate: finalExpiryDate,
     extractedFieldCount,
     fieldScores: {
       chineseName: name?.score ?? null,
@@ -2075,6 +2107,8 @@ function buildTaiwanCompatriotPermitResult(
       expiryDate: expiryDate?.score ?? null,
     },
     rawRows,
+    parsedMrz,
+    mrzUsed: parsedMrz !== null,
     rotationDegrees: 0,
     orientationAttempts: 1,
     orientedImage: new File([], 'placeholder.png', {
@@ -2153,6 +2187,8 @@ function permitResultQuality(
   result: TaiwanCompatriotPermitOcrResult,
 ) {
   return (
+    (result.parsedMrz?.validation.requiredValid ? 1000 : 0) +
+    (result.mrzUsed ? 100 : 0) +
     (result.chineseName ? 8 : 0) +
     (result.permitNumber ? 6 : 0) +
     (result.birthDate ? 4 : 0) +
@@ -2419,9 +2455,12 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   const original = await tryRotation(0, 0.16)
 
   const strongEnough =
-    original.extractedFieldCount >= 4 &&
-    Boolean(original.chineseName) &&
-    Boolean(original.permitNumber)
+    original.parsedMrz?.validation.requiredValid === true ||
+    (
+      original.extractedFieldCount >= 4 &&
+      Boolean(original.chineseName) &&
+      Boolean(original.permitNumber)
+    )
 
   if (!strongEnough) {
     await tryRotation(90, 0.34)
@@ -2434,7 +2473,10 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     )[0]
 
     if (
-      currentBest.result.extractedFieldCount < 4 ||
+      (
+        currentBest.result.parsedMrz?.validation.requiredValid !== true &&
+        currentBest.result.extractedFieldCount < 4
+      ) ||
       !currentBest.result.chineseName
     ) {
       await tryRotation(180, 0.66)
@@ -2490,7 +2532,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     }
   }
 
-  if (!best.result.chineseName) {
+  if (!best.result.chineseName && !best.result.mrzUsed) {
     onProgress?.({
       stage: 'name-retry',
       progress: 0.9,
