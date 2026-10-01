@@ -23,6 +23,8 @@ interface PaddleItemGeometry {
   text: string
   score: number | null
   minX: number
+  minY: number
+  maxY: number
   centerY: number
   height: number
 }
@@ -41,6 +43,9 @@ export interface PaddleBaselineResult {
   line2Validation: MrzValidation | null
   mrzRepair: MrzRepairInfo | null
   parsedMrz: ParsedMrz | null
+  chineseName: string | null
+  chineseNameScore: number | null
+  chineseNameSource: 'full-page' | 'viz-crop' | null
   structureComplete: boolean
   fallbackUsed: boolean
   fallbackCropRatio: number | null
@@ -86,6 +91,8 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
       text,
       score: typeof item.score === 'number' ? item.score : null,
       minX: 0,
+      minY: 0,
+      maxY: 0,
       centerY: 0,
       height: 0,
     }
@@ -100,6 +107,8 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
     text,
     score: typeof item.score === 'number' ? item.score : null,
     minX: Math.min(...xs),
+    minY,
+    maxY,
     centerY: (minY + maxY) / 2,
     height: Math.max(1, maxY - minY),
   }
@@ -152,6 +161,85 @@ function buildTextRows(items: PaddleItemLike[]) {
       .map((item) => item.text)
       .join(''),
   )
+}
+
+
+const taiwanVizChineseLabels = new Set([
+  '中華民國',
+  '護照',
+  '姓名',
+  '國籍',
+  '性別',
+  '出生日期',
+  '出生地',
+  '發照日期',
+  '有效日期',
+  '有效期限',
+  '簽發機關',
+  '外交部',
+  '持照人簽名',
+  '身分證統一編號',
+  '個人身分證字號',
+  '種類',
+  '國家代碼',
+  '護照號碼',
+])
+
+function normalizeChineseNameCandidate(value: string) {
+  return value
+    .replace(/\s+/g, '')
+    .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
+    .trim()
+}
+
+function isPlausibleTaiwanChineseName(value: string) {
+  const normalized = normalizeChineseNameCandidate(value)
+
+  if (normalized.length < 2 || normalized.length > 12) return false
+  if (taiwanVizChineseLabels.has(normalized)) return false
+  if (/\d/.test(normalized)) return false
+
+  // Taiwan passport Chinese names are normally Han characters, with a
+  // possible middle dot for compound / indigenous naming styles.
+  return /^[\p{Script=Han}·‧]+$/u.test(normalized)
+}
+
+function chooseTaiwanChineseName(items: PaddleItemLike[]) {
+  const candidates = items
+    .map((item) => {
+      const text =
+        typeof item.text === 'string'
+          ? normalizeChineseNameCandidate(item.text)
+          : ''
+
+      if (!isPlausibleTaiwanChineseName(text)) return null
+
+      const score =
+        typeof item.score === 'number' ? item.score : 0
+
+      // Prefer common short personal-name lengths, while still allowing
+      // longer legally valid names.
+      const lengthBonus =
+        text.length >= 2 && text.length <= 5 ? 0.08 : 0
+
+      return {
+        text,
+        score,
+        rank: score + lengthBonus,
+      }
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        text: string
+        score: number
+        rank: number
+      } => item !== null,
+    )
+    .sort((a, b) => b.rank - a.rank)
+
+  return candidates[0] ?? null
 }
 
 function scoreValidation(validation: MrzValidation | null) {
@@ -329,6 +417,7 @@ function buildBaselineResult(
 
   const items = (typedPrediction?.items ?? []) as PaddleItemLike[]
   const mrz = chooseMrz(items)
+  const chineseNameCandidate = chooseTaiwanChineseName(items)
 
   const numericScores = items
     .map((item) => item.score)
@@ -384,6 +473,9 @@ function buildBaselineResult(
     line2Validation: mrz.validation,
     mrzRepair: mrz.repair,
     parsedMrz,
+    chineseName: chineseNameCandidate?.text ?? null,
+    chineseNameScore: chineseNameCandidate?.score ?? null,
+    chineseNameSource: chineseNameCandidate ? 'full-page' : null,
     structureComplete:
       line1Valid &&
       mrz.line2?.length === 44,
@@ -391,6 +483,83 @@ function buildBaselineResult(
     fallbackCropRatio,
     runtime,
   }
+}
+
+async function createRelativeCrop(
+  image: File,
+  leftRatio: number,
+  topRatio: number,
+  widthRatio: number,
+  heightRatio: number,
+) {
+  const bitmap = await createImageBitmap(image)
+
+  const sourceX = Math.max(
+    0,
+    Math.floor(bitmap.width * leftRatio),
+  )
+  const sourceY = Math.max(
+    0,
+    Math.floor(bitmap.height * topRatio),
+  )
+  const sourceWidth = Math.min(
+    bitmap.width - sourceX,
+    Math.floor(bitmap.width * widthRatio),
+  )
+  const sourceHeight = Math.min(
+    bitmap.height - sourceY,
+    Math.floor(bitmap.height * heightRatio),
+  )
+
+  const targetWidth = Math.min(1800, sourceWidth)
+  const scale = targetWidth / sourceWidth
+  const targetHeight = Math.max(
+    1,
+    Math.round(sourceHeight * scale),
+  )
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    bitmap.close()
+    throw new Error('無法建立護照 VIZ 裁切 Canvas。')
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, targetWidth, targetHeight)
+  context.drawImage(
+    bitmap,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    targetWidth,
+    targetHeight,
+  )
+
+  bitmap.close()
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('無法建立護照 VIZ 裁切圖片。'))
+      }
+    }, 'image/png')
+  })
+}
+
+async function createTaiwanVizCrop(image: File) {
+  // Exclude most of the portrait and the bottom MRZ. This intentionally
+  // remains broad enough for small layout differences between passport
+  // generations; candidate filtering decides which Han text is a name.
+  return createRelativeCrop(image, 0.24, 0.12, 0.74, 0.58)
 }
 
 async function createBottomCrop(
@@ -517,6 +686,32 @@ async function predictOne(
 
     if (resultQuality(fallback) > resultQuality(best)) {
       best = fallback
+    }
+  }
+
+  const isTaiwanPassport =
+    best.parsedMrz?.nationality === 'TWN' ||
+    best.parsedMrz?.issuingState === 'TWN'
+
+  if (isTaiwanPassport && !best.chineseName) {
+    const vizCrop = await createTaiwanVizCrop(image)
+    const vizStartedAt = performance.now()
+    const [vizPrediction] = await instance.predict(vizCrop)
+    const vizPredictMs = performance.now() - vizStartedAt
+
+    const typedViz = vizPrediction as
+      | { items?: unknown }
+      | undefined
+    const vizItems = (typedViz?.items ?? []) as PaddleItemLike[]
+    const vizName = chooseTaiwanChineseName(vizItems)
+
+    best.predictMs += vizPredictMs
+    best.totalMs = performance.now() - totalStartedAt
+
+    if (vizName) {
+      best.chineseName = vizName.text
+      best.chineseNameScore = vizName.score
+      best.chineseNameSource = 'viz-crop'
     }
   }
 
