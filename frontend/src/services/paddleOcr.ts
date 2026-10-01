@@ -10,6 +10,10 @@ import {
   type MrzValidation,
   type ParsedMrz,
 } from './ocr'
+import {
+  compareChineseNameToMrzRomanization,
+  type RomanizationCompatibility,
+} from './nameRomanization'
 
 type PaddleInstance = Awaited<ReturnType<typeof PaddleOCR.create>>
 
@@ -48,6 +52,7 @@ export interface PaddleBaselineResult {
   chineseName: string | null
   chineseNameScore: number | null
   chineseNameSource: 'name-field' | 'viz-crop' | null
+  chineseNameRomanizationStatus: RomanizationCompatibility
   structureComplete: boolean
   fallbackUsed: boolean
   fallbackCropRatio: number | null
@@ -309,11 +314,24 @@ function chooseTaiwanChineseName(
 
     if (!isPlausibleTaiwanChineseName(hanOnly)) return []
 
+    const romanizationStatus =
+      parsedMrz
+        ? compareChineseNameToMrzRomanization(
+            hanOnly,
+            parsedMrz.surname,
+            parsedMrz.givenNames,
+          )
+        : 'unknown'
+
     return [
       {
         text: hanOnly,
         score: item.score ?? 0,
-        rank: (item.score ?? 0) + 2,
+        romanizationStatus,
+        rank:
+          (item.score ?? 0) +
+          2 +
+          (romanizationStatus === 'compatible' ? 1.5 : 0),
       },
     ]
   })
@@ -387,14 +405,25 @@ function chooseTaiwanChineseName(
           above <= 5 &&
           horizontalDistance <= 14
         ) {
+          const romanizationStatus =
+            parsedMrz
+              ? compareChineseNameToMrzRomanization(
+                  text,
+                  parsedMrz.surname,
+                  parsedMrz.givenNames,
+                )
+              : 'unknown'
+
           candidates.push({
             text,
             score,
+            romanizationStatus,
             rank:
               score +
               1.25 -
               Math.max(0, above) * 0.08 -
-              horizontalDistance * 0.015,
+              horizontalDistance * 0.015 +
+              (romanizationStatus === 'compatible' ? 1.5 : 0),
           })
         }
       }
@@ -402,12 +431,28 @@ function chooseTaiwanChineseName(
       return candidates
     })
 
-  const best = [...directLabelValues, ...spatialCandidates]
+  const eligible = [
+    ...directLabelValues,
+    ...spatialCandidates,
+  ].filter(
+    (candidate) =>
+      candidate.romanizationStatus !== 'conflict',
+  )
+
+  const best = eligible
     .sort((a, b) => b.rank - a.rank)[0]
 
-  // Precision is more important than recall here: when OCR confidence is
-  // weak, leave the field blank and require manual entry.
+  // Precision is more important than recall here. If MRZ exists, only
+  // phonetic-compatible Chinese names are allowed to auto-fill; unknown
+  // romanization systems fall back to manual entry rather than guessing.
   if (!best || best.score < 0.65) return null
+
+  if (
+    parsedMrz &&
+    best.romanizationStatus !== 'compatible'
+  ) {
+    return null
+  }
 
   return best
 }
@@ -645,6 +690,7 @@ function buildBaselineResult(
     chineseName: null,
     chineseNameScore: null,
     chineseNameSource: null,
+    chineseNameRomanizationStatus: 'unknown',
     structureComplete:
       line1Valid &&
       mrz.line2?.length === 44,
@@ -1041,6 +1087,8 @@ async function predictOne(
         best.chineseName = vizName.text
         best.chineseNameScore = vizName.score
         best.chineseNameSource = crop.source
+        best.chineseNameRomanizationStatus =
+          vizName.romanizationStatus
         break
       }
 
