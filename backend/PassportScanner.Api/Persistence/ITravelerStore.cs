@@ -27,6 +27,33 @@ public sealed record DocumentSaveResult(
     Guid DocumentVersionId,
     int TravelerDocumentVersionCount);
 
+public sealed record TravelerSummary(
+    Guid TravelerId,
+    string NameZh,
+    string NameEn,
+    DateOnly BirthDate,
+    string Gender,
+    string? Nationality,
+    int DocumentVersionCount,
+    IReadOnlyList<string> CurrentDocumentTypes);
+
+public sealed record DocumentVersionSummary(
+    Guid DocumentVersionId,
+    string DocumentType,
+    string NameZhOnDocument,
+    string NameEnOnDocument,
+    string DocumentNumber,
+    string? IssuingCountry,
+    string? Nationality,
+    DateOnly ExpiryDate,
+    bool IsCurrent,
+    DateTimeOffset VerifiedAt,
+    DateTimeOffset CreatedAt);
+
+public sealed record TravelerDetail(
+    TravelerSummary Traveler,
+    IReadOnlyList<DocumentVersionSummary> Documents);
+
 public sealed class AmbiguousTravelerMatchException : Exception
 {
     public AmbiguousTravelerMatchException()
@@ -40,6 +67,12 @@ public interface ITravelerStore
     DocumentSaveResult SaveDocumentReview(
         ReviewedDocumentInput input,
         DateTimeOffset now);
+
+    IReadOnlyList<TravelerSummary> SearchTravelers(
+        string? query,
+        int limit);
+
+    TravelerDetail? GetTraveler(Guid travelerId);
 
     int TravelerCount { get; }
     int DocumentVersionCount { get; }
