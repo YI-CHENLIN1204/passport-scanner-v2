@@ -1,6 +1,7 @@
 export type PassportSex = '' | 'M' | 'F' | 'X'
 
 export interface PassportReviewForm {
+  chineseName: string
   englishName: string
   passportNumber: string
   nationality: string
@@ -18,19 +19,23 @@ export interface PassportReviewVerification {
 }
 
 export interface PassportReviewAssertions {
+  chineseNameVisuallyConfirmed: boolean
   englishNameVisuallyConfirmed: boolean
 }
 
 export interface PassportReviewOcrMetadata {
   engine: 'paddleocr-ppocrv5'
   line2Validated: boolean
+  chineseNameSource: 'full-page' | 'viz-crop' | null
+  chineseNameScore: number | null
   fallbackUsed: boolean
   averageScore: number | null
 }
 
 export interface PassportReviewDraft {
-  schemaVersion: 1
+  schemaVersion: 2
   documentType: 'passport'
+  chineseName: string
   englishName: string
   passportNumber: string
   nationality: string
