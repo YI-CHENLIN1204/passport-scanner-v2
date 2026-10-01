@@ -718,7 +718,7 @@ async function run() {
               >
                 {{
                   result.chineseName
-                    ? 'VIZ OCR'
+                    ? '姓名欄 OCR'
                     : isTaiwanReview
                       ? '請人工填寫'
                       : '選填'
@@ -734,9 +734,9 @@ async function run() {
             />
             <small v-if="result.chineseName">
               {{
-                result.chineseNameSource === 'viz-crop'
-                  ? '來源：台灣護照 VIZ 裁切辨識'
-                  : '來源：護照整頁 VIZ 辨識'
+                result.chineseNameSource === 'name-field'
+                  ? '來源：姓名欄動態裁切辨識'
+                  : '來源：台灣護照 VIZ 備援裁切辨識'
               }}
               <template v-if="result.chineseNameScore !== null">
                 · OCR 信心 {{ (result.chineseNameScore * 100).toFixed(1) }}%
