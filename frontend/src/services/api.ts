@@ -211,3 +211,94 @@ export async function saveTaiwanCompatriotPermitReview(
 
   return response.json() as Promise<TaiwanCompatriotPermitReviewSaveResponse>
 }
+
+
+export interface TravelerSummaryResponse {
+  travelerId: string
+  nameZh: string
+  nameEn: string
+  birthDate: string
+  gender: string
+  nationality: string | null
+  documentVersionCount: number
+  currentDocumentTypes: string[]
+}
+
+export interface DocumentVersionResponse {
+  documentVersionId: string
+  documentType: string
+  nameZhOnDocument: string
+  nameEnOnDocument: string
+  documentNumber: string
+  issuingCountry: string | null
+  nationality: string | null
+  expiryDate: string
+  isCurrent: boolean
+  verifiedAt: string
+  createdAt: string
+}
+
+export interface TravelerDetailResponse {
+  traveler: TravelerSummaryResponse
+  documents: DocumentVersionResponse[]
+}
+
+export interface DocumentStoreStatusResponse {
+  persistence: 'volatile-in-memory'
+  travelerCount: number
+  documentVersionCount: number
+  checkedAt: string
+}
+
+export async function getDocumentStoreStatus() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/document-store/status`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Document store status failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<DocumentStoreStatusResponse>
+}
+
+export async function searchTravelers(
+  query = '',
+  limit = 20,
+) {
+  const params = new URLSearchParams()
+  if (query.trim()) params.set('query', query.trim())
+  params.set('limit', String(limit))
+
+  const response = await fetch(
+    `${apiBaseUrl}/api/travelers?${params.toString()}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Traveler search failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<TravelerSummaryResponse[]>
+}
+
+export async function getTravelerDetail(
+  travelerId: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/travelers/${travelerId}`,
+  )
+
+  if (response.status === 404) return null
+
+  if (!response.ok) {
+    throw new Error(
+      `Traveler detail failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<TravelerDetailResponse>
+}
