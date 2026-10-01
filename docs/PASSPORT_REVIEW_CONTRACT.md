@@ -142,7 +142,7 @@ V2 CRM 需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，�
 
 - `chineseName`
 - `reviewAssertions.chineseNameVisuallyConfirmed`
-- `ocr.chineseNameSource`
+- `ocr.chineseNameSource`（`name-field` 或 `viz-crop`）
 - `ocr.chineseNameScore`
 
 台灣護照規則：
