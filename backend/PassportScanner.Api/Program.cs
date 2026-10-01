@@ -95,6 +95,86 @@ app.MapGet(
                 CheckedAt: DateTimeOffset.UtcNow)));
 
 app.MapPost(
+    "/api/taiwan-compatriot-permit-reviews",
+    (TaiwanCompatriotPermitReviewRequest request, ITravelerStore store) =>
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var errors = TaiwanCompatriotPermitReviewValidator.Validate(
+            request,
+            today);
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(
+                errors,
+                title: "Taiwan compatriot permit review validation failed.");
+        }
+
+        var warnings =
+            TaiwanCompatriotPermitReviewValidator.GetWarnings(
+                request,
+                today);
+
+        try
+        {
+            var savedAt = DateTimeOffset.UtcNow;
+            var result = store.SaveDocumentReview(
+                TaiwanCompatriotPermitReviewMapper.ToDocumentInput(request),
+                savedAt);
+
+            return Results.Ok(
+                new TaiwanCompatriotPermitReviewSaveResponse(
+                    Accepted: true,
+                    Persistence: "volatile-in-memory",
+                    Action: result.Action.ToString(),
+                    TravelerId: result.TravelerId,
+                    DocumentVersionId: result.DocumentVersionId,
+                    TravelerDocumentVersionCount:
+                        result.TravelerDocumentVersionCount,
+                    SavedAt: savedAt,
+                    Warnings: warnings));
+        }
+        catch (AmbiguousTravelerMatchException ex)
+        {
+            return Results.Conflict(
+                new
+                {
+                    code = "ambiguousTravelerMatch",
+                    message = ex.Message
+                });
+        }
+    });
+
+app.MapPost(
+    "/api/taiwan-compatriot-permit-reviews/validate",
+    (TaiwanCompatriotPermitReviewRequest request) =>
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var errors = TaiwanCompatriotPermitReviewValidator.Validate(
+            request,
+            today);
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(
+                errors,
+                title: "Taiwan compatriot permit review validation failed.");
+        }
+
+        var warnings =
+            TaiwanCompatriotPermitReviewValidator.GetWarnings(
+                request,
+                today);
+
+        return Results.Ok(
+            new PassportReviewValidationResponse(
+                Accepted: true,
+                Persistence: "validated-only",
+                ReceivedAt: DateTimeOffset.UtcNow,
+                Warnings: warnings));
+    });
+
+app.MapPost(
     "/api/passport-reviews/validate",
     (PassportReviewRequest request) =>
     {
