@@ -175,6 +175,112 @@ public sealed class InMemoryTravelerStore : ITravelerStore
         }
     }
 
+    public IReadOnlyList<TravelerSummary> SearchTravelers(
+        string? query,
+        int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 50);
+        var normalizedQuery =
+            string.IsNullOrWhiteSpace(query)
+                ? string.Empty
+                : query.Trim().ToUpperInvariant();
+
+        lock (_gate)
+        {
+            var travelerIdsFromDocuments = string.IsNullOrEmpty(normalizedQuery)
+                ? new HashSet<Guid>()
+                : _documents
+                    .Where(document =>
+                        document.DocumentNumber.Contains(
+                            normalizedQuery,
+                            StringComparison.OrdinalIgnoreCase))
+                    .Select(document => document.TravelerId)
+                    .ToHashSet();
+
+            return _travelers
+                .Where(traveler =>
+                    string.IsNullOrEmpty(normalizedQuery) ||
+                    traveler.NameZh.Contains(
+                        query!.Trim(),
+                        StringComparison.OrdinalIgnoreCase) ||
+                    traveler.NameEn.Contains(
+                        normalizedQuery,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    traveler.PersonalIdNumber.Contains(
+                        normalizedQuery,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    travelerIdsFromDocuments.Contains(
+                        traveler.TravelerId))
+                .OrderByDescending(traveler => traveler.UpdatedAt)
+                .Take(safeLimit)
+                .Select(BuildTravelerSummary)
+                .ToList();
+        }
+    }
+
+    public TravelerDetail? GetTraveler(Guid travelerId)
+    {
+        lock (_gate)
+        {
+            var traveler = _travelers.SingleOrDefault(
+                item => item.TravelerId == travelerId);
+
+            if (traveler is null)
+            {
+                return null;
+            }
+
+            var documents = _documents
+                .Where(item => item.TravelerId == travelerId)
+                .OrderByDescending(item => item.IsCurrent)
+                .ThenByDescending(item => item.CreatedAt)
+                .Select(item =>
+                    new DocumentVersionSummary(
+                        item.DocumentVersionId,
+                        item.DocumentType,
+                        item.NameZhOnDocument,
+                        item.NameEnOnDocument,
+                        item.DocumentNumber,
+                        item.IssuingCountry,
+                        item.Nationality,
+                        item.ExpiryDate,
+                        item.IsCurrent,
+                        item.VerifiedAt,
+                        item.CreatedAt))
+                .ToList();
+
+            return new TravelerDetail(
+                BuildTravelerSummary(traveler),
+                documents);
+        }
+    }
+
+    private TravelerSummary BuildTravelerSummary(
+        TravelerRecord traveler)
+    {
+        var travelerDocuments = _documents
+            .Where(
+                item => item.TravelerId == traveler.TravelerId)
+            .ToList();
+
+        var currentTypes = travelerDocuments
+            .Where(item => item.IsCurrent)
+            .Select(item => item.DocumentType)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value)
+            .ToList();
+
+        return new TravelerSummary(
+            traveler.TravelerId,
+            traveler.NameZh,
+            traveler.NameEn,
+            traveler.BirthDate,
+            traveler.Gender,
+            traveler.Nationality,
+            travelerDocuments.Count,
+            currentTypes);
+    }
+
     private DocumentVersionRecord? FindExistingDocument(
         string documentType,
         string documentNumber,
