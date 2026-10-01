@@ -46,7 +46,8 @@ public sealed class InMemoryTravelerStore : ITravelerStore
             "yyyy-MM-dd",
             CultureInfo.InvariantCulture);
 
-        var name = Normalize(request.EnglishName);
+        var nameZh = request.ChineseName.Trim();
+        var nameEn = Normalize(request.EnglishName);
         var passportNumber = Normalize(request.PassportNumber);
         var nationality = Normalize(request.Nationality);
         var issuingState = Normalize(request.IssuingState);
@@ -69,7 +70,8 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                 {
                     UpdateTraveler(
                         traveler,
-                        name,
+                        nameZh,
+                        nameEn,
                         birthDate,
                         sex,
                         nationality,
@@ -78,13 +80,16 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                 }
                 else
                 {
-                    traveler.NameEn = name;
+                    traveler.NameZh = nameZh;
+                    traveler.NameEn = nameEn;
                     traveler.BirthDate = birthDate;
                     traveler.Gender = sex;
                     traveler.Nationality = nationality;
                     traveler.UpdatedAt = now;
                 }
 
+                existingDocument.NameZhOnDocument = nameZh;
+                existingDocument.NameEnOnDocument = nameEn;
                 existingDocument.Nationality = nationality;
                 existingDocument.ExpiryDate = expiryDate;
                 existingDocument.VerifiedAt = now;
@@ -102,9 +107,13 @@ public sealed class InMemoryTravelerStore : ITravelerStore
             var travelerMatches = _travelers
                 .Where(
                     traveler =>
-                        traveler.NameEn == name &&
                         traveler.BirthDate == birthDate &&
-                        traveler.Nationality == nationality)
+                        traveler.Nationality == nationality &&
+                        (
+                            !string.IsNullOrWhiteSpace(nameZh)
+                                ? traveler.NameZh == nameZh
+                                : traveler.NameEn == nameEn
+                        ))
                 .ToList();
 
             if (travelerMatches.Count > 1)
@@ -121,7 +130,8 @@ public sealed class InMemoryTravelerStore : ITravelerStore
 
                 UpdateTraveler(
                     targetTraveler,
-                    name,
+                    nameZh,
+                    nameEn,
                     birthDate,
                     sex,
                     nationality,
@@ -143,7 +153,8 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                 targetTraveler = new TravelerRecord
                 {
                     TravelerId = Guid.NewGuid(),
-                    NameEn = name,
+                    NameZh = nameZh,
+                    NameEn = nameEn,
                     BirthDate = birthDate,
                     Gender = sex,
                     Nationality = nationality,
@@ -162,6 +173,8 @@ public sealed class InMemoryTravelerStore : ITravelerStore
                 DocumentVersionId = Guid.NewGuid(),
                 TravelerId = targetTraveler.TravelerId,
                 DocumentType = "PASSPORT",
+                NameZhOnDocument = nameZh,
+                NameEnOnDocument = nameEn,
                 DocumentNumber = passportNumber,
                 IssuingCountry = issuingState,
                 Nationality = nationality,
@@ -186,14 +199,16 @@ public sealed class InMemoryTravelerStore : ITravelerStore
 
     private static void UpdateTraveler(
         TravelerRecord traveler,
-        string name,
+        string nameZh,
+        string nameEn,
         DateOnly birthDate,
         string sex,
         string nationality,
         string passportNumber,
         DateTimeOffset now)
     {
-        traveler.NameEn = name;
+        traveler.NameZh = nameZh;
+        traveler.NameEn = nameEn;
         traveler.BirthDate = birthDate;
         traveler.Gender = sex;
         traveler.Nationality = nationality;
