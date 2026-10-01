@@ -1219,6 +1219,20 @@ export interface TaiwanCompatriotPermitOcrResult {
     expiryDate: number | null
   }
   rawRows: string[]
+  rotationDegrees: number
+  orientationAttempts: number
+  orientedImage: File
+}
+
+export interface TaiwanCompatriotPermitOcrProgress {
+  stage:
+    | 'initializing'
+    | 'orientation'
+    | 'deskew'
+    | 'name-retry'
+    | 'completed'
+  progress: number
+  message: string
 }
 
 interface PermitCandidate<T> {
@@ -1377,6 +1391,168 @@ function extractHanNameFromPermitText(text: string) {
   )
 }
 
+interface PermitLatinName {
+  surname: string
+  givenNames: string
+}
+
+const permitEnglishStopWords = new Set([
+  'TAIWAN',
+  'RESIDENT',
+  'MAINLAND',
+  'TRAVEL',
+  'PERMIT',
+  'HOLDER',
+  'PEOPLES',
+  'REPUBLIC',
+  'CHINA',
+  'NAME',
+  'SEX',
+  'DATE',
+  'BIRTH',
+  'VALID',
+  'EXPIRY',
+  'AUTHORITY',
+  'ISSUE',
+  'NUMBER',
+])
+
+function extractPermitLatinName(
+  text: string,
+): PermitLatinName | null {
+  const upper = text
+    .toUpperCase()
+    .replace(/[0-9]/g, ' ')
+    .replace(/[^A-Z,\- ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!upper || upper.length < 5 || upper.length > 45) {
+    return null
+  }
+
+  const tokens = upper
+    .replace(/,/g, ' ')
+    .split(/[\s\-]+/)
+    .filter(Boolean)
+
+  if (tokens.length < 2 || tokens.length > 5) {
+    return null
+  }
+
+  if (
+    tokens.some((token) =>
+      permitEnglishStopWords.has(token),
+    )
+  ) {
+    return null
+  }
+
+  if (!tokens.every((token) => token.length >= 2)) {
+    return null
+  }
+
+  const commaIndex = upper.indexOf(',')
+
+  if (commaIndex >= 0) {
+    const surname = upper
+      .slice(0, commaIndex)
+      .replace(/[^A-Z]/g, '')
+    const givenNames = upper
+      .slice(commaIndex + 1)
+      .replace(/[^A-Z\- ]/g, '')
+      .trim()
+
+    return surname && givenNames
+      ? { surname, givenNames }
+      : null
+  }
+
+  return {
+    surname: tokens[0],
+    givenNames: tokens.slice(1).join(' '),
+  }
+}
+
+function choosePermitChineseName(
+  geometries: PaddleItemGeometry[],
+) {
+  const labelAnchored = findLabelAnchoredCandidate(
+    geometries,
+    ['姓名', 'Name'],
+    extractHanNameFromPermitText,
+  )
+
+  const latinAnchors = geometries
+    .map((item) => ({
+      item,
+      parsed: extractPermitLatinName(item.text),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        item: PaddleItemGeometry
+        parsed: PermitLatinName
+      } => entry.parsed !== null,
+    )
+
+  const phoneticCandidates: Array<
+    PermitCandidate<string>
+  > = []
+
+  for (const item of geometries) {
+    const chineseName =
+      extractHanNameFromPermitText(item.text)
+
+    if (!chineseName) continue
+
+    for (const anchor of latinAnchors) {
+      const compatibility =
+        compareChineseNameToMrzRomanization(
+          chineseName,
+          anchor.parsed.surname,
+          anchor.parsed.givenNames,
+        )
+
+      if (compatibility !== 'compatible') continue
+
+      const scale = Math.max(
+        1,
+        item.height,
+        anchor.item.height,
+      )
+      const vertical =
+        Math.abs(
+          item.centerY - anchor.item.centerY,
+        ) / scale
+      const horizontal =
+        Math.abs(
+          item.centerX - anchor.item.centerX,
+        ) / scale
+
+      // Chinese and romanized names are normally within the same visual
+      // name group. This fallback does not require the tiny 姓名 label.
+      if (vertical > 7 || horizontal > 20) continue
+
+      phoneticCandidates.push({
+        value: chineseName,
+        score: item.score,
+        rank:
+          (item.score ?? 0) +
+          1.6 -
+          vertical * 0.08 -
+          horizontal * 0.015,
+      })
+    }
+  }
+
+  return [
+    ...(labelAnchored ? [labelAnchored] : []),
+    ...phoneticCandidates,
+  ].sort((a, b) => b.rank - a.rank)[0] ?? null
+}
+
 function extractPermitNumberFromText(text: string) {
   const digits = text.replace(/[^0-9]/g, '')
 
@@ -1493,11 +1669,7 @@ function buildTaiwanCompatriotPermitResult(
 
   const rawRows = buildTextRows(items)
 
-  const name = findLabelAnchoredCandidate(
-    geometries,
-    ['姓名', 'Name'],
-    extractHanNameFromPermitText,
-  )
+  const name = choosePermitChineseName(geometries)
 
   let permitNumber = findLabelAnchoredCandidate(
     geometries,
@@ -1688,23 +1860,321 @@ function buildTaiwanCompatriotPermitResult(
       expiryDate: expiryDate?.score ?? null,
     },
     rawRows,
+    rotationDegrees: 0,
+    orientationAttempts: 1,
+    orientedImage: new File([], 'placeholder.png', {
+      type: 'image/png',
+    }),
   }
 }
 
-export async function recognizeTaiwanCompatriotPermitWithPaddle(
+function normalizeRotation(degrees: number) {
+  let value = degrees % 360
+  if (value > 180) value -= 360
+  if (value <= -180) value += 360
+  return value
+}
+
+async function rotateImageFile(
   image: File,
-): Promise<TaiwanCompatriotPermitOcrResult> {
-  const totalStartedAt = performance.now()
-  const { instance, initializationMs } = await getPaddle()
+  degrees: number,
+) {
+  const normalized = normalizeRotation(degrees)
+  if (Math.abs(normalized) < 0.01) return image
 
-  const predictStartedAt = performance.now()
+  const bitmap = await createImageBitmap(image)
+  const radians = (normalized * Math.PI) / 180
+  const sin = Math.abs(Math.sin(radians))
+  const cos = Math.abs(Math.cos(radians))
+
+  const width = Math.ceil(
+    bitmap.width * cos + bitmap.height * sin,
+  )
+  const height = Math.ceil(
+    bitmap.width * sin + bitmap.height * cos,
+  )
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    bitmap.close()
+    throw new Error('無法建立台胞證方向校正 Canvas。')
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, width, height)
+  context.translate(width / 2, height / 2)
+  context.rotate(radians)
+  context.drawImage(
+    bitmap,
+    -bitmap.width / 2,
+    -bitmap.height / 2,
+  )
+
+  bitmap.close()
+
+  const blob = await new Promise<Blob>(
+    (resolve, reject) => {
+      canvas.toBlob((value) => {
+        if (value) resolve(value)
+        else reject(
+          new Error('無法產生方向校正後的台胞證圖片。'),
+        )
+      }, 'image/png')
+    },
+  )
+
+  return new File(
+    [blob],
+    `permit-rotated-${Math.round(normalized)}.png`,
+    { type: 'image/png' },
+  )
+}
+
+function permitResultQuality(
+  result: TaiwanCompatriotPermitOcrResult,
+) {
+  return (
+    (result.chineseName ? 8 : 0) +
+    (result.permitNumber ? 6 : 0) +
+    (result.birthDate ? 4 : 0) +
+    (result.expiryDate ? 4 : 0) +
+    (result.sex ? 2 : 0) +
+    Math.min(result.detectedItems, 30) * 0.03 +
+    (result.averageScore ?? 0)
+  )
+}
+
+function predictionItems(prediction: unknown) {
+  const typed = prediction as
+    | { items?: unknown }
+    | undefined
+
+  return (typed?.items ?? []) as PaddleItemLike[]
+}
+
+function estimateTextSkewDegrees(
+  prediction: unknown,
+) {
+  const angles = predictionItems(prediction)
+    .flatMap((item) => {
+      const points = pointsFromPoly(item.poly)
+      if (points.length < 2) return []
+
+      const [x1, y1] = points[0]
+      const [x2, y2] = points[1]
+      const dx = x2 - x1
+      const dy = y2 - y1
+
+      if (Math.abs(dx) < 8) return []
+
+      let angle =
+        (Math.atan2(dy, dx) * 180) / Math.PI
+
+      while (angle > 45) angle -= 90
+      while (angle < -45) angle += 90
+
+      return Math.abs(angle) <= 20
+        ? [angle]
+        : []
+    })
+    .sort((a, b) => a - b)
+
+  if (angles.length < 4) return 0
+
+  const middle = Math.floor(angles.length / 2)
+  const median =
+    angles.length % 2
+      ? angles[middle]
+      : (angles[middle - 1] + angles[middle]) / 2
+
+  return Math.abs(median) >= 2.5
+    ? median
+    : 0
+}
+
+async function predictPermit(
+  instance: PaddleInstance,
+  image: File,
+  initializationMs: number,
+  totalStartedAt: number,
+) {
+  const startedAt = performance.now()
   const [prediction] = await instance.predict(image)
-  const predictMs = performance.now() - predictStartedAt
+  const predictMs = performance.now() - startedAt
 
-  return buildTaiwanCompatriotPermitResult(
+  const result = buildTaiwanCompatriotPermitResult(
     prediction,
     initializationMs,
     predictMs,
     performance.now() - totalStartedAt,
   )
+
+  result.orientedImage = image
+
+  return {
+    prediction,
+    result,
+  }
+}
+
+export async function recognizeTaiwanCompatriotPermitWithPaddle(
+  image: File,
+  onProgress?: (
+    progress: TaiwanCompatriotPermitOcrProgress,
+  ) => void,
+): Promise<TaiwanCompatriotPermitOcrResult> {
+  const totalStartedAt = performance.now()
+  onProgress?.({
+    stage: 'initializing',
+    progress: 0.05,
+    message: '正在準備 PaddleOCR…',
+  })
+
+  const { instance, initializationMs } = await getPaddle()
+
+  const attempts: Array<{
+    rotation: number
+    image: File
+    prediction: unknown
+    result: TaiwanCompatriotPermitOcrResult
+  }> = []
+
+  const tryRotation = async (
+    rotation: number,
+    progress: number,
+  ) => {
+    onProgress?.({
+      stage: 'orientation',
+      progress,
+      message:
+        rotation === 0
+          ? '正在辨識原始方向…'
+          : `正在測試旋轉 ${rotation}° 的方向…`,
+    })
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    const rotated =
+      await rotateImageFile(image, rotation)
+    const predicted = await predictPermit(
+      instance,
+      rotated,
+      attempts.length === 0
+        ? initializationMs
+        : 0,
+      totalStartedAt,
+    )
+
+    predicted.result.rotationDegrees = rotation
+    predicted.result.orientationAttempts =
+      attempts.length + 1
+
+    attempts.push({
+      rotation,
+      image: rotated,
+      prediction: predicted.prediction,
+      result: predicted.result,
+    })
+
+    return predicted.result
+  }
+
+  const original = await tryRotation(0, 0.16)
+
+  const strongEnough =
+    original.extractedFieldCount >= 4 &&
+    Boolean(original.chineseName) &&
+    Boolean(original.permitNumber)
+
+  if (!strongEnough) {
+    await tryRotation(90, 0.34)
+    await tryRotation(-90, 0.52)
+
+    const currentBest = [...attempts].sort(
+      (a, b) =>
+        permitResultQuality(b.result) -
+        permitResultQuality(a.result),
+    )[0]
+
+    if (
+      currentBest.result.extractedFieldCount < 4 ||
+      !currentBest.result.chineseName
+    ) {
+      await tryRotation(180, 0.66)
+    }
+  }
+
+  let best = [...attempts].sort(
+    (a, b) =>
+      permitResultQuality(b.result) -
+      permitResultQuality(a.result),
+  )[0]
+
+  // After the best cardinal direction is known, estimate a small remaining
+  // camera tilt from OCR text boxes and deskew once.
+  const skew =
+    estimateTextSkewDegrees(best.prediction)
+
+  if (Math.abs(skew) >= 2.5 && Math.abs(skew) <= 20) {
+    onProgress?.({
+      stage: 'deskew',
+      progress: 0.78,
+      message:
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正…`,
+    })
+
+    const deskewed = await rotateImageFile(
+      best.image,
+      -skew,
+    )
+    const deskewPrediction = await predictPermit(
+      instance,
+      deskewed,
+      0,
+      totalStartedAt,
+    )
+
+    deskewPrediction.result.rotationDegrees =
+      normalizeRotation(best.rotation - skew)
+    deskewPrediction.result.orientationAttempts =
+      attempts.length + 1
+
+    if (
+      permitResultQuality(deskewPrediction.result) >=
+      permitResultQuality(best.result)
+    ) {
+      best = {
+        rotation:
+          deskewPrediction.result.rotationDegrees,
+        image: deskewed,
+        prediction: deskewPrediction.prediction,
+        result: deskewPrediction.result,
+      }
+    }
+  }
+
+  best.result.orientationAttempts =
+    Math.max(
+      best.result.orientationAttempts,
+      attempts.length,
+    )
+  best.result.totalMs =
+    performance.now() - totalStartedAt
+
+  onProgress?.({
+    stage: 'completed',
+    progress: 1,
+    message:
+      Math.abs(best.result.rotationDegrees) < 1
+        ? '辨識完成。'
+        : `辨識完成，已自動校正方向 ${best.result.rotationDegrees.toFixed(1)}°。`,
+  })
+
+  return best.result
 }
