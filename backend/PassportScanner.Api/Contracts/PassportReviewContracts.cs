@@ -31,6 +31,7 @@ public sealed record PassportReviewOcrMetadata(
     bool Line2Validated,
     string? ChineseNameSource,
     double? ChineseNameScore,
+    string ChineseNameRomanizationStatus,
     bool FallbackUsed,
     double? AverageScore);
 
