@@ -33,7 +33,7 @@ Content-Type: application/json
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
-    "chineseNameSource": "full-page",
+    "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
     "fallbackUsed": false,
     "averageScore": 0.91
@@ -71,7 +71,7 @@ Content-Type: application/json
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
-    "chineseNameSource": "full-page",
+    "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
     "fallbackUsed": false,
     "averageScore": 0.91
@@ -109,7 +109,7 @@ Content-Type: application/json
   "ocr": {
     "engine": "paddleocr-ppocrv5",
     "line2Validated": true,
-    "chineseNameSource": "full-page",
+    "chineseNameSource": "name-field",
     "chineseNameScore": 0.93,
     "fallbackUsed": false,
     "averageScore": 0.95
