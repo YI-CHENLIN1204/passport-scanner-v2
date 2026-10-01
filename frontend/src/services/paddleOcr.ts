@@ -1499,7 +1499,7 @@ function buildTaiwanCompatriotPermitResult(
     extractHanNameFromPermitText,
   )
 
-  const permitNumber = findLabelAnchoredCandidate(
+  let permitNumber = findLabelAnchoredCandidate(
     geometries,
     [
       '证件号码',
