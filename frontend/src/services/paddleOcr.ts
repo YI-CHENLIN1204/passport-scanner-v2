@@ -203,6 +203,26 @@ function isPlausibleTaiwanChineseName(value: string) {
 
   if (normalized.length < 2 || normalized.length > 12) return false
   if (taiwanVizChineseLabels.has(normalized)) return false
+  if (
+    [
+      '中華民國',
+      '護照',
+      '外交',
+      '姓名',
+      '國籍',
+      '出生',
+      '發照',
+      '有效',
+      '簽發',
+      '機關',
+      '持照人',
+      '身分證',
+      '國家代碼',
+      '種類',
+    ].some((label) => normalized.includes(label))
+  ) {
+    return false
+  }
   if (/\d/.test(normalized)) return false
 
   // Taiwan passport Chinese names are normally Han characters, with a
@@ -210,7 +230,16 @@ function isPlausibleTaiwanChineseName(value: string) {
   return /^[\p{Script=Han}·‧]+$/u.test(normalized)
 }
 
-function chooseTaiwanChineseName(items: PaddleItemLike[]) {
+function normalizeLatinNameForMatch(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+}
+
+function chooseTaiwanChineseName(
+  items: PaddleItemLike[],
+  parsedMrz: ParsedMrz | null,
+) {
   const geometries = items
     .map((item) => {
       const geometry = toGeometry(item)
@@ -235,6 +264,41 @@ function chooseTaiwanChineseName(items: PaddleItemLike[]) {
     item.rawText.includes('姓名'),
   )
 
+  const expectedSurname = normalizeLatinNameForMatch(
+    parsedMrz?.surname ?? '',
+  )
+  const expectedGiven = normalizeLatinNameForMatch(
+    parsedMrz?.givenNames ?? '',
+  )
+  const expectedFull = expectedSurname + expectedGiven
+
+  const englishNameAnchors = geometries.filter((item) => {
+    const latin = normalizeLatinNameForMatch(item.rawText)
+    if (!latin || expectedSurname.length < 2) return false
+
+    const surnameMatch = latin.includes(expectedSurname)
+    const fullMatch =
+      expectedFull.length >= 4 &&
+      (
+        latin.includes(expectedFull) ||
+        expectedFull.includes(latin)
+      )
+
+    const givenPrefix =
+      expectedGiven.length >= 2
+        ? expectedGiven.slice(0, Math.min(4, expectedGiven.length))
+        : ''
+
+    const partialMatch =
+      surnameMatch &&
+      (
+        !givenPrefix ||
+        latin.includes(givenPrefix)
+      )
+
+    return fullMatch || partialMatch
+  })
+
   const directLabelValues = geometries.flatMap((item) => {
     if (!item.rawText.includes('姓名')) return []
 
@@ -249,15 +313,15 @@ function chooseTaiwanChineseName(items: PaddleItemLike[]) {
       {
         text: hanOnly,
         score: item.score ?? 0,
-        rank: (item.score ?? 0) + 1,
+        rank: (item.score ?? 0) + 2,
       },
     ]
   })
 
-  // Safety rule: without an actual 姓名 anchor we do not guess.
-  // A high OCR confidence only means the text itself was recognized
-  // confidently; it does not prove that text belongs to the name field.
-  if (!nameLabels.length) {
+  if (
+    !nameLabels.length &&
+    !englishNameAnchors.length
+  ) {
     return directLabelValues
       .sort((a, b) => b.rank - a.rank)[0] ?? null
   }
@@ -269,76 +333,83 @@ function chooseTaiwanChineseName(items: PaddleItemLike[]) {
     .flatMap((item) => {
       const text = item.normalized
       const score = item.score ?? 0
+      const candidates: Array<{
+        text: string
+        score: number
+        rank: number
+      }> = []
 
-      const anchored = nameLabels
-        .map((label) => {
-          const scale = Math.max(
-            1,
-            item.height,
-            label.height,
-          )
+      for (const label of nameLabels) {
+        const scale = Math.max(1, item.height, label.height)
+        const vertical =
+          Math.abs(item.centerY - label.centerY) / scale
+        const below =
+          (item.centerY - label.centerY) / scale
+        const rightGap =
+          (item.minX - label.maxX) / scale
 
-          const vertical =
-            Math.abs(item.centerY - label.centerY) / scale
-          const below =
-            (item.centerY - label.centerY) / scale
-          const rightGap =
-            (item.minX - label.maxX) / scale
-          const horizontalOverlap =
-            Math.min(item.maxX, label.maxX) -
-            Math.max(item.minX, label.minX)
+        const sameRow =
+          vertical <= 1.6 &&
+          rightGap >= -1 &&
+          rightGap <= 18
 
-          // Passport generations / OCR grouping can put the Chinese name
-          // either on the same visual row as the label or immediately
-          // below it. Anything farther away is not auto-filled.
-          const sameRow =
-            vertical <= 1.6 &&
-            rightGap >= -1 &&
-            rightGap <= 18
+        const nextRow =
+          below > 0 &&
+          below <= 3.8 &&
+          Math.abs(item.centerX - label.centerX) <= scale * 18
 
-          const nextRow =
-            below > 0 &&
-            below <= 3.5 &&
-            (
-              horizontalOverlap >= -scale * 5 ||
-              Math.abs(item.centerX - label.centerX) <= scale * 16
-            )
-
-          if (!sameRow && !nextRow) return null
-
-          const distancePenalty =
-            Math.min(vertical, Math.max(0, below)) * 0.08 +
-            Math.max(0, rightGap) * 0.008
-
-          const shortNameBonus =
-            text.length >= 2 && text.length <= 5 ? 0.12 : 0
-
-          return {
+        if (sameRow || nextRow) {
+          candidates.push({
             text,
             score,
             rank:
               score +
-              shortNameBonus +
-              0.6 -
-              distancePenalty,
-          }
-        })
-        .filter(
-          (
-            candidate,
-          ): candidate is {
-            text: string
-            score: number
-            rank: number
-          } => candidate !== null,
-        )
-        .sort((a, b) => b.rank - a.rank)[0]
+              0.75 -
+              Math.min(vertical, Math.max(0, below)) * 0.08 -
+              Math.max(0, rightGap) * 0.008,
+          })
+        }
+      }
 
-      return anchored ? [anchored] : []
+      for (const english of englishNameAnchors) {
+        const scale = Math.max(1, item.height, english.height)
+        const above =
+          (english.centerY - item.centerY) / scale
+        const horizontalDistance =
+          Math.abs(item.centerX - english.centerX) / scale
+
+        // On Taiwan biodata pages, the Chinese name and romanized name
+        // belong to the same Name group. A Han candidate immediately above
+        // the MRZ-confirmed romanized name is a much stronger signal than
+        // OCR confidence alone.
+        if (
+          above >= -0.5 &&
+          above <= 5 &&
+          horizontalDistance <= 14
+        ) {
+          candidates.push({
+            text,
+            score,
+            rank:
+              score +
+              1.25 -
+              Math.max(0, above) * 0.08 -
+              horizontalDistance * 0.015,
+          })
+        }
+      }
+
+      return candidates
     })
 
-  return [...directLabelValues, ...spatialCandidates]
-    .sort((a, b) => b.rank - a.rank)[0] ?? null
+  const best = [...directLabelValues, ...spatialCandidates]
+    .sort((a, b) => b.rank - a.rank)[0]
+
+  // Precision is more important than recall here: when OCR confidence is
+  // weak, leave the field blank and require manual entry.
+  if (!best || best.score < 0.65) return null
+
+  return best
 }
 
 function scoreValidation(validation: MrzValidation | null) {
@@ -583,6 +654,133 @@ function buildBaselineResult(
   }
 }
 
+async function createPixelCrop(
+  image: File,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  minimumTargetWidth = 1200,
+) {
+  const bitmap = await createImageBitmap(image)
+
+  const x = Math.max(0, Math.floor(sourceX))
+  const y = Math.max(0, Math.floor(sourceY))
+  const width = Math.max(
+    1,
+    Math.min(bitmap.width - x, Math.floor(sourceWidth)),
+  )
+  const height = Math.max(
+    1,
+    Math.min(bitmap.height - y, Math.floor(sourceHeight)),
+  )
+
+  const targetWidth = Math.min(
+    1800,
+    Math.max(minimumTargetWidth, width),
+  )
+  const scale = targetWidth / width
+  const targetHeight = Math.max(
+    1,
+    Math.round(height * scale),
+  )
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    bitmap.close()
+    throw new Error('無法建立護照姓名欄裁切 Canvas。')
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, targetWidth, targetHeight)
+  context.drawImage(
+    bitmap,
+    x,
+    y,
+    width,
+    height,
+    0,
+    0,
+    targetWidth,
+    targetHeight,
+  )
+
+  bitmap.close()
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('無法建立護照姓名欄裁切圖片。'))
+      }
+    }, 'image/png')
+  })
+}
+
+async function createTaiwanNameFieldCrop(
+  image: File,
+  items: PaddleItemLike[],
+) {
+  const bitmap = await createImageBitmap(image)
+  const imageWidth = bitmap.width
+  const imageHeight = bitmap.height
+  bitmap.close()
+
+  const labels = items
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null &&
+        item.height > 0 &&
+        item.text.includes('姓名') &&
+        item.minX >= 0 &&
+        item.minY >= 0 &&
+        item.maxX <= imageWidth * 1.1 &&
+        item.maxY <= imageHeight * 1.1,
+    )
+    .filter(
+      (item) =>
+        item.centerY < imageHeight * 0.7,
+    )
+    .sort((a, b) => a.centerY - b.centerY)
+
+  const label = labels[0]
+  if (!label) return null
+
+  const h = Math.max(8, label.height)
+  const x = Math.max(0, label.minX - h * 2)
+  const y = Math.max(0, label.minY - h * 1.8)
+
+  const width = Math.min(
+    imageWidth - x,
+    Math.max(
+      imageWidth * 0.62,
+      h * 34,
+    ),
+  )
+  const height = Math.min(
+    imageHeight - y,
+    Math.max(
+      imageHeight * 0.22,
+      h * 9,
+    ),
+  )
+
+  return createPixelCrop(
+    image,
+    x,
+    y,
+    width,
+    height,
+    1400,
+  )
+}
+
 async function createRelativeCrop(
   image: File,
   leftRatio: number,
@@ -737,6 +935,11 @@ async function predictOne(
   const fullStartedAt = performance.now()
   const [prediction] = await instance.predict(image)
   const fullPredictMs = performance.now() - fullStartedAt
+  const fullPrediction = prediction as
+    | { items?: unknown }
+    | undefined
+  const fullItems =
+    (fullPrediction?.items ?? []) as PaddleItemLike[]
 
   let best = buildBaselineResult(
     prediction,
@@ -792,24 +995,58 @@ async function predictOne(
     best.parsedMrz?.issuingState === 'TWN'
 
   if (isTaiwanPassport) {
-    const vizCrop = await createTaiwanVizCrop(image)
-    const vizStartedAt = performance.now()
-    const [vizPrediction] = await instance.predict(vizCrop)
-    const vizPredictMs = performance.now() - vizStartedAt
+    const crops: Array<{
+      blob: Blob
+      source: 'name-field' | 'viz-crop'
+    }> = []
 
-    const typedViz = vizPrediction as
-      | { items?: unknown }
-      | undefined
-    const vizItems = (typedViz?.items ?? []) as PaddleItemLike[]
-    const vizName = chooseTaiwanChineseName(vizItems)
+    const anchoredCrop = await createTaiwanNameFieldCrop(
+      image,
+      fullItems,
+    )
 
-    best.predictMs += vizPredictMs
-    best.totalMs = performance.now() - totalStartedAt
+    if (anchoredCrop) {
+      crops.push({
+        blob: anchoredCrop,
+        source: 'name-field',
+      })
+    }
 
-    if (vizName) {
-      best.chineseName = vizName.text
-      best.chineseNameScore = vizName.score
-      best.chineseNameSource = 'viz-crop'
+    // Broad VIZ is fallback only. It is still subject to the same strict
+    // 姓名 / romanized-name anchoring rules.
+    crops.push({
+      blob: await createTaiwanVizCrop(image),
+      source: 'viz-crop',
+    })
+
+    for (const crop of crops) {
+      const vizStartedAt = performance.now()
+      const [vizPrediction] = await instance.predict(crop.blob)
+      const vizPredictMs = performance.now() - vizStartedAt
+
+      const typedViz = vizPrediction as
+        | { items?: unknown }
+        | undefined
+      const vizItems =
+        (typedViz?.items ?? []) as PaddleItemLike[]
+      const vizName = chooseTaiwanChineseName(
+        vizItems,
+        best.parsedMrz,
+      )
+
+      best.predictMs += vizPredictMs
+      best.totalMs = performance.now() - totalStartedAt
+
+      if (vizName) {
+        best.chineseName = vizName.text
+        best.chineseNameScore = vizName.score
+        best.chineseNameSource = 'viz-crop'
+        break
+      }
+
+      // The dynamic name-field crop is preferred. Only if it fails do we
+      // spend another inference on the broader VIZ area.
+      if (crop.source === 'viz-crop') break
     }
   }
 
