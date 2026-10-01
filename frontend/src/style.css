@@ -666,3 +666,38 @@ progress {
 .dev-lab-body .batch-card {
   margin-top: 18px;
 }
+
+
+.workspace-nav {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 18px;
+  border: 1px solid #dfe3ea;
+  border-radius: 12px;
+  padding: 5px;
+  background: #ffffff;
+}
+
+.workspace-nav button {
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 15px;
+  background: transparent;
+  color: #667085;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-nav button.active {
+  background: #172033;
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .workspace-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+}
