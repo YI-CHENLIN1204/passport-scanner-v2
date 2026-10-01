@@ -377,7 +377,7 @@ const recognitionModelUrl =
 
 function createPaddlePromise() {
   paddlePromise = PaddleOCR.create({
-    lang: 'en',
+    lang: 'chinese_cht',
     ocrVersion: 'PP-OCRv5',
     textDetectionModelName: 'PP-OCRv5_mobile_det',
     textDetectionModelAsset: {
