@@ -24,6 +24,7 @@ const error = ref('')
 const result = ref<PaddleBaselineResult | null>(null)
 
 const reviewForm = ref<PassportReviewForm>({
+  chineseName: '',
   englishName: '',
   passportNumber: '',
   nationality: '',
@@ -38,6 +39,7 @@ const reviewOriginal = ref<PassportReviewForm | null>(null)
 const reviewedAt = ref<string | null>(null)
 const reviewRef = ref<HTMLElement | null>(null)
 const confirmedDraft = ref<PassportReviewDraft | null>(null)
+const chineseNameVisuallyConfirmed = ref(false)
 const nameVisuallyConfirmed = ref(false)
 const reviewSubmitting = ref(false)
 const reviewSubmitError = ref('')
@@ -105,9 +107,30 @@ const batchPassCount = computed(
     ).length,
 )
 
+const isTaiwanReview = computed(
+  () =>
+    reviewForm.value.nationality.trim().toUpperCase() === 'TWN' ||
+    reviewForm.value.issuingState.trim().toUpperCase() === 'TWN',
+)
+
+const needsChineseNameConfirmation = computed(
+  () =>
+    isTaiwanReview.value ||
+    reviewForm.value.chineseName.trim().length > 0,
+)
+
 const reviewErrors = computed(() => {
   const errors: string[] = []
   const form = reviewForm.value
+
+  if (isTaiwanReview.value && !form.chineseName.trim()) {
+    errors.push('台灣護照中文姓名不可空白，請依原始護照確認。')
+  } else if (
+    form.chineseName.trim() &&
+    !/^[\p{Script=Han}·‧ ]{2,20}$/u.test(form.chineseName.trim())
+  ) {
+    errors.push('中文姓名格式不正確，請對照原始護照。')
+  }
 
   if (!form.englishName.trim()) {
     errors.push('英文姓名不可空白。')
@@ -167,6 +190,7 @@ const changedReviewFields = computed(() => {
   if (!reviewOriginal.value) return []
 
   const labels: Record<keyof PassportReviewForm, string> = {
+    chineseName: '中文姓名',
     englishName: '英文姓名',
     passportNumber: '護照號碼',
     nationality: '國籍',
@@ -188,7 +212,11 @@ const canConfirmReview = computed(
   () =>
     Boolean(result.value?.parsedMrz) &&
     reviewErrors.value.length === 0 &&
-    nameVisuallyConfirmed.value,
+    nameVisuallyConfirmed.value &&
+    (
+      !needsChineseNameConfirmation.value ||
+      chineseNameVisuallyConfirmed.value
+    ),
 )
 
 const batchAveragePredictSeconds = computed(() => {
@@ -211,6 +239,7 @@ function revokeReviewImageUrl() {
 
 function resetReviewForm() {
   reviewForm.value = {
+    chineseName: '',
     englishName: '',
     passportNumber: '',
     nationality: '',
@@ -220,6 +249,7 @@ function resetReviewForm() {
     expiryDate: '',
   }
   reviewConfirmed.value = false
+  chineseNameVisuallyConfirmed.value = false
   nameVisuallyConfirmed.value = false
   reviewOriginal.value = null
   reviewedAt.value = null
@@ -280,6 +310,13 @@ function mrzExpiryDateToIso(value: string) {
   return formatIsoDate(year, month, day)
 }
 
+function normalizeChineseName() {
+  reviewForm.value.chineseName =
+    reviewForm.value.chineseName
+      .trim()
+      .replace(/\s+/g, ' ')
+}
+
 function normalizeReviewText(
   field: 'englishName' | 'passportNumber' | 'nationality' | 'issuingState',
 ) {
@@ -292,6 +329,7 @@ function normalizeReviewText(
 function resetReviewToOcr() {
   if (!reviewOriginal.value) return
   reviewForm.value = { ...reviewOriginal.value }
+  chineseNameVisuallyConfirmed.value = false
   nameVisuallyConfirmed.value = false
   reviewConfirmed.value = false
   reviewedAt.value = null
@@ -330,6 +368,7 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
       : ''
 
   reviewForm.value = {
+    chineseName: ocrResult.chineseName ?? '',
     englishName,
     passportNumber: parsed.documentNumber,
     nationality: parsed.nationality,
@@ -339,6 +378,7 @@ function populateReviewForm(ocrResult: PaddleBaselineResult) {
     expiryDate: mrzExpiryDateToIso(parsed.expiryDate),
   }
   reviewOriginal.value = { ...reviewForm.value }
+  chineseNameVisuallyConfirmed.value = false
   nameVisuallyConfirmed.value = false
   reviewConfirmed.value = false
   reviewedAt.value = null
@@ -356,8 +396,9 @@ async function confirmReview() {
 
   const timestamp = new Date().toISOString()
   const draft: PassportReviewDraft = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     documentType: 'passport',
+    chineseName: reviewForm.value.chineseName.trim(),
     englishName: reviewForm.value.englishName.trim(),
     passportNumber: reviewForm.value.passportNumber.trim(),
     nationality: reviewForm.value.nationality.trim(),
@@ -376,12 +417,16 @@ async function confirmReview() {
         result.value.line2Validation?.composite ?? null,
     },
     reviewAssertions: {
+      chineseNameVisuallyConfirmed:
+        chineseNameVisuallyConfirmed.value,
       englishNameVisuallyConfirmed: nameVisuallyConfirmed.value,
     },
     ocr: {
       engine: 'paddleocr-ppocrv5',
       line2Validated:
         result.value.line2Validation?.requiredValid === true,
+      chineseNameSource: result.value.chineseNameSource,
+      chineseNameScore: result.value.chineseNameScore,
       fallbackUsed: result.value.fallbackUsed,
       averageScore: result.value.averageScore,
     },
@@ -514,6 +559,13 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => reviewForm.value.chineseName,
+  () => {
+    chineseNameVisuallyConfirmed.value = false
+  },
 )
 
 watch(
@@ -654,6 +706,54 @@ async function run() {
         </div>
 
         <div class="review-fields">
+          <label class="review-field full">
+            <span>
+              中文姓名
+              <em
+                :class="
+                  result.chineseName
+                    ? 'validated'
+                    : 'needs-review'
+                "
+              >
+                {{
+                  result.chineseName
+                    ? 'VIZ OCR'
+                    : isTaiwanReview
+                      ? '請人工填寫'
+                      : '選填'
+                }}
+              </em>
+            </span>
+            <input
+              v-model="reviewForm.chineseName"
+              type="text"
+              maxlength="20"
+              placeholder="例如：劉宣奎"
+              @blur="normalizeChineseName"
+            />
+            <small v-if="result.chineseName">
+              {{
+                result.chineseNameSource === 'viz-crop'
+                  ? '來源：台灣護照 VIZ 裁切辨識'
+                  : '來源：護照整頁 VIZ 辨識'
+              }}
+              <template v-if="result.chineseNameScore !== null">
+                · OCR 信心 {{ (result.chineseNameScore * 100).toFixed(1) }}%
+              </template>
+            </small>
+            <label
+              v-if="needsChineseNameConfirmation"
+              class="name-confirmation"
+            >
+              <input
+                v-model="chineseNameVisuallyConfirmed"
+                type="checkbox"
+              />
+              <span>我已對照左側原始護照，確認中文姓名正確</span>
+            </label>
+          </label>
+
           <label class="review-field full">
             <span>
               英文姓名
@@ -903,6 +1003,12 @@ async function run() {
         <div>
           <span>辨識文字區塊</span>
           <strong>{{ result.detectedItems }}</strong>
+        </div>
+        <div>
+          <span>VIZ 中文姓名</span>
+          <strong :class="result.chineseName ? 'pass' : 'unknown'">
+            {{ result.chineseName ? '已擷取' : '未擷取' }}
+          </strong>
         </div>
         <div>
           <span>MRZ 姓名行</span>
