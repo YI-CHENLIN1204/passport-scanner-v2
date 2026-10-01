@@ -24,7 +24,7 @@ public static partial class PassportReviewValidator
             list.Add(message);
         }
 
-        if (request.SchemaVersion != 1)
+        if (request.SchemaVersion != 2)
             Add(nameof(request.SchemaVersion), "不支援的資料版本。");
 
         if (!string.Equals(
@@ -33,6 +33,41 @@ public static partial class PassportReviewValidator
                 StringComparison.Ordinal))
         {
             Add(nameof(request.DocumentType), "證件類型必須為 passport。");
+        }
+
+        var isTaiwanPassport =
+            string.Equals(
+                request.Nationality,
+                "TWN",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                request.IssuingState,
+                "TWN",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (isTaiwanPassport)
+        {
+            if (string.IsNullOrWhiteSpace(request.ChineseName) ||
+                !ChineseNameRegex().IsMatch(request.ChineseName.Trim()))
+            {
+                Add(
+                    nameof(request.ChineseName),
+                    "台灣護照中文姓名不可空白，且應使用中文姓名字元。");
+            }
+
+            if (!request.ReviewAssertions.ChineseNameVisuallyConfirmed)
+            {
+                Add(
+                    "reviewAssertions.chineseNameVisuallyConfirmed",
+                    "中文姓名必須先由人工對照原始護照確認。");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.ChineseName) &&
+                 !ChineseNameRegex().IsMatch(request.ChineseName.Trim()))
+        {
+            Add(
+                nameof(request.ChineseName),
+                "中文姓名格式不正確。");
         }
 
         if (string.IsNullOrWhiteSpace(request.EnglishName) ||
@@ -90,6 +125,17 @@ public static partial class PassportReviewValidator
 
         if (request.Ocr.AverageScore is < 0 or > 1)
             Add("ocr.averageScore", "OCR 平均信心值必須介於 0 到 1。");
+
+        if (request.Ocr.ChineseNameScore is < 0 or > 1)
+            Add("ocr.chineseNameScore", "中文姓名 OCR 信心值必須介於 0 到 1。");
+
+        if (request.Ocr.ChineseNameSource is not null &&
+            request.Ocr.ChineseNameSource is not ("full-page" or "viz-crop"))
+        {
+            Add(
+                "ocr.chineseNameSource",
+                "中文姓名 OCR 來源格式不正確。");
+        }
 
         if (request.ReviewedAt > DateTimeOffset.UtcNow.AddMinutes(5))
             Add(nameof(request.ReviewedAt), "覆核時間不可晚於目前時間。");
@@ -163,6 +209,9 @@ public static partial class PassportReviewValidator
         string.IsNullOrEmpty(value)
             ? value
             : char.ToLowerInvariant(value[0]) + value[1..];
+
+    [GeneratedRegex("^[\p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ChineseNameRegex();
 
     [GeneratedRegex("^[A-Z][A-Z .,'-]*$", RegexOptions.CultureInvariant)]
     private static partial Regex EnglishNameRegex();
