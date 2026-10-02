@@ -613,6 +613,26 @@ onBeforeUnmount(revokeImageUrl)
               placeholder="OCR 抓不到時請人工輸入"
               @blur="normalizeName"
             />
+            <small v-if="result.chineseName">
+              來源：
+              {{ result.mrzUsed ? '機讀碼 / 證件資料' : '正面姓名 OCR' }}
+              <template
+                v-if="result.fieldScores.chineseName !== null"
+              >
+                · 原始 OCR
+                {{ (result.fieldScores.chineseName * 100).toFixed(1) }}%
+              </template>
+              <template
+                v-if="result.chineseNameConfidence !== null"
+              >
+                · 姓名判定可信度
+                {{ (result.chineseNameConfidence * 100).toFixed(1) }}%
+              </template>
+              <template v-if="result.chineseNamePasses > 1">
+                · {{ result.chineseNameConsensus }} /
+                {{ result.chineseNamePasses }} 次辨識一致
+              </template>
+            </small>
           </label>
 
           <label class="field">
