@@ -1,5 +1,6 @@
 import type { PassportReviewDraft } from '../models/passportReview'
 import type { TaiwanCompatriotPermitReviewDraft } from '../models/taiwanCompatriotPermitReview'
+import type { TaiwanNationalIdReviewDraft } from '../models/taiwanNationalIdReview'
 
 export interface HealthResponse {
   status: string
@@ -232,7 +233,7 @@ export interface DocumentVersionResponse {
   documentNumber: string
   issuingCountry: string | null
   nationality: string | null
-  expiryDate: string
+  expiryDate: string | null
   isCurrent: boolean
   verifiedAt: string
   createdAt: string
@@ -301,4 +302,60 @@ export async function getTravelerDetail(
   }
 
   return response.json() as Promise<TravelerDetailResponse>
+}
+
+
+export interface TaiwanNationalIdReviewSaveResponse {
+  accepted: boolean
+  persistence: 'volatile-in-memory'
+  action: PassportReviewSaveAction
+  travelerId: string
+  documentVersionId: string
+  travelerDocumentVersionCount: number
+  savedAt: string
+  warnings: string[]
+}
+
+export async function saveTaiwanNationalIdReview(
+  draft: TaiwanNationalIdReviewDraft,
+): Promise<TaiwanNationalIdReviewSaveResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/taiwan-national-id-reviews`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(draft),
+    },
+  )
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      try {
+        const conflict = (await response.json()) as ApiConflict
+        throw new Error(
+          conflict.message ??
+            '找到多位可能相同的旅客，需要人工選擇，系統沒有自動合併。',
+        )
+      } catch (err) {
+        if (err instanceof Error) throw err
+      }
+    }
+
+    let message =
+      `Taiwan national ID review save failed: ${response.status}`
+
+    try {
+      const problem =
+        (await response.json()) as ValidationProblemDetails
+      message = flattenValidationProblem(problem)
+    } catch {
+      // Keep the status-only message when the response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<TaiwanNationalIdReviewSaveResponse>
 }
