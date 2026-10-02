@@ -18,7 +18,7 @@ public sealed record DocumentVersionResponse(
     string DocumentNumber,
     string? IssuingCountry,
     string? Nationality,
-    string ExpiryDate,
+    string? ExpiryDate,
     bool IsCurrent,
     DateTimeOffset VerifiedAt,
     DateTimeOffset CreatedAt);
