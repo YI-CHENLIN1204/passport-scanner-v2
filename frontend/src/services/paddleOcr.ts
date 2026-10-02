@@ -3849,12 +3849,39 @@ function classifyDocumentFromItems(
     ) ||
     joined.includes('IDENTITY CARD')
 
-  if (idText) {
-    evidence.push('偵測到身分證固定文字')
+  const taiwanNationalId =
+    extractTaiwanNationalIdFromText(
+      rows.join(' '),
+    )
+
+  if (
+    idText ||
+    (
+      taiwanNationalId &&
+      validateTaiwanNationalId(
+        taiwanNationalId,
+      )
+    )
+  ) {
+    if (idText) {
+      evidence.push('偵測到身分證固定文字')
+    }
+
+    if (
+      taiwanNationalId &&
+      validateTaiwanNationalId(
+        taiwanNationalId,
+      )
+    ) {
+      evidence.push('偵測到通過檢查碼的國民身分證統一編號')
+    }
 
     return {
       type: 'tw-id',
-      confidence: 'high',
+      confidence:
+        idText && taiwanNationalId
+          ? 'high'
+          : 'medium',
       evidence,
     }
   }
