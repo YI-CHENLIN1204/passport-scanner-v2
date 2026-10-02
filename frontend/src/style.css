@@ -701,3 +701,134 @@ progress {
     width: 100%;
   }
 }
+
+
+.document-type-checking,
+.document-type-check-note {
+  margin-top: 12px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.document-type-checking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d9e2f0;
+  background: #f7f9fc;
+  color: #475467;
+}
+
+.document-type-check-note {
+  border: 1px solid #d9e7dc;
+  background: #f6fbf7;
+  color: #087443;
+}
+
+.document-type-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 2px solid #c8d0dc;
+  border-top-color: #172033;
+  border-radius: 50%;
+  animation: document-type-spin 0.8s linear infinite;
+}
+
+@keyframes document-type-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.document-mismatch-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(17 24 39 / 52%);
+  backdrop-filter: blur(2px);
+}
+
+.document-mismatch-dialog {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  width: min(620px, 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  padding: 22px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+}
+
+.document-mismatch-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.document-mismatch-dialog h3 {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 1.25rem;
+}
+
+.document-mismatch-dialog p:not(.label) {
+  margin: 10px 0 0;
+  color: #475467;
+  line-height: 1.65;
+}
+
+.document-mismatch-evidence {
+  border-left: 3px solid #fdba74;
+  padding-left: 10px;
+  font-size: 0.86rem;
+}
+
+.document-mismatch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.document-mismatch-actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #172033;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.document-mismatch-actions .secondary-button {
+  border: 1px solid #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+}
+
+@media (max-width: 600px) {
+  .document-mismatch-dialog {
+    grid-template-columns: 1fr;
+  }
+
+  .document-mismatch-actions {
+    flex-direction: column-reverse;
+  }
+
+  .document-mismatch-actions button {
+    width: 100%;
+  }
+}
