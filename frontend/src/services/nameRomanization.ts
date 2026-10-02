@@ -100,6 +100,39 @@ function addCommonTaiwanAliases(
   }
 }
 
+function romanizationTokenMatchesAlias(
+  token: string,
+  alias: string,
+) {
+  if (token === alias) return true
+
+  if (token.length !== alias.length) {
+    return false
+  }
+
+  let mismatches = 0
+
+  for (let index = 0; index < token.length; index += 1) {
+    if (token[index] === alias[index]) continue
+
+    const pair =
+      token[index] + alias[index]
+
+    // OCR commonly confuses capital I and lower-case-looking L in passport /
+    // permit romanized names. Keep the tolerance intentionally narrow:
+    // one character only, and only this visually similar pair.
+    if (pair !== 'il' && pair !== 'li') {
+      return false
+    }
+
+    mismatches += 1
+
+    if (mismatches > 1) return false
+  }
+
+  return mismatches === 1
+}
+
 function pinyinAliasesForCharacter(character: string) {
   const readings = pinyin(character, {
     type: 'array',
@@ -160,7 +193,14 @@ export function compareChineseNameToMrzRomanization(
     )
     const token = mrzTokens[index]
 
-    if (aliases.has(token)) {
+    if (
+      [...aliases].some((alias) =>
+        romanizationTokenMatchesAlias(
+          token,
+          alias,
+        ),
+      )
+    ) {
       matched += 1
     }
   }
