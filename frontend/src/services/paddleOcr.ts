@@ -64,6 +64,7 @@ export interface PaddleBaselineResult {
   rotationDegrees?: number
   orientationAttempts?: number
   detectedSkewDegrees?: number
+  textHorizontalScore?: number
   orientedImage?: File
 }
 
@@ -738,6 +739,8 @@ function buildBaselineResult(
     runtime,
     detectedSkewDegrees:
       estimateTextSkewDegrees(prediction),
+    textHorizontalScore:
+      estimateTextHorizontalScore(prediction),
   }
 }
 
@@ -1146,6 +1149,7 @@ function passportOrientationQuality(
   result: PaddleBaselineResult,
 ) {
   return (
+    (result.textHorizontalScore ?? 0.5) * 1200 +
     resultQuality(result) +
     (result.chineseName ? 100 : 0)
   )
@@ -1446,6 +1450,7 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNamePasses: number
   chineseNameConsensus: number
   chineseNameConfidence: number | null
+  textHorizontalScore: number
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -2193,6 +2198,8 @@ function buildTaiwanCompatriotPermitResult(
         : name?.score !== null && name?.score !== undefined
           ? Math.min(name.score, 0.85)
           : null,
+    textHorizontalScore:
+      estimateTextHorizontalScore(prediction),
     rotationDegrees: 0,
     orientationAttempts: 1,
     orientedImage: new File([], 'placeholder.png', {
@@ -2271,6 +2278,7 @@ function permitResultQuality(
   result: TaiwanCompatriotPermitOcrResult,
 ) {
   return (
+    result.textHorizontalScore * 320 +
     (result.parsedMrz?.validation.requiredValid ? 1000 : 0) +
     (result.mrzUsed ? 100 : 0) +
     (result.chineseName ? 8 : 0) +
@@ -2289,6 +2297,56 @@ function predictionItems(prediction: unknown) {
     | undefined
 
   return (typed?.items ?? []) as PaddleItemLike[]
+}
+
+function estimateTextHorizontalScore(
+  prediction: unknown,
+) {
+  const scores = predictionItems(prediction)
+    .flatMap((item) => {
+      const points = pointsFromPoly(item.poly)
+      if (points.length < 2) return []
+
+      const [x1, y1] = points[0]
+      const [x2, y2] = points[1]
+      const dx = x2 - x1
+      const dy = y2 - y1
+      const length = Math.hypot(dx, dy)
+
+      if (length < 16) return []
+
+      let angle =
+        Math.abs(
+          (Math.atan2(dy, dx) * 180) / Math.PI,
+        )
+
+      while (angle >= 180) angle -= 180
+      if (angle > 90) angle = 180 - angle
+
+      // 1.0 = horizontal, 0.0 = vertical.
+      const horizontal =
+        Math.max(0, 1 - angle / 90)
+
+      return [
+        {
+          score: horizontal,
+          weight: Math.min(4, Math.max(1, length / 80)),
+        },
+      ]
+    })
+
+  if (!scores.length) return 0.5
+
+  const totalWeight = scores.reduce(
+    (sum, item) => sum + item.weight,
+    0,
+  )
+
+  return scores.reduce(
+    (sum, item) =>
+      sum + item.score * item.weight,
+    0,
+  ) / totalWeight
 }
 
 function estimateTextSkewDegrees(
