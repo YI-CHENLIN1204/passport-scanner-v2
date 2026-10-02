@@ -131,6 +131,80 @@ app.MapGet(
                 CheckedAt: DateTimeOffset.UtcNow)));
 
 app.MapPost(
+    "/api/taiwan-national-id-reviews",
+    (TaiwanNationalIdReviewRequest request, ITravelerStore store) =>
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var errors = TaiwanNationalIdReviewValidator.Validate(
+            request,
+            today);
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(
+                errors,
+                title: "Taiwan national ID review validation failed.");
+        }
+
+        var warnings =
+            TaiwanNationalIdReviewValidator.GetWarnings(request);
+
+        try
+        {
+            var savedAt = DateTimeOffset.UtcNow;
+            var result = store.SaveDocumentReview(
+                TaiwanNationalIdReviewMapper.ToDocumentInput(request),
+                savedAt);
+
+            return Results.Ok(
+                new TaiwanNationalIdReviewSaveResponse(
+                    Accepted: true,
+                    Persistence: "volatile-in-memory",
+                    Action: result.Action.ToString(),
+                    TravelerId: result.TravelerId,
+                    DocumentVersionId: result.DocumentVersionId,
+                    TravelerDocumentVersionCount:
+                        result.TravelerDocumentVersionCount,
+                    SavedAt: savedAt,
+                    Warnings: warnings));
+        }
+        catch (AmbiguousTravelerMatchException ex)
+        {
+            return Results.Conflict(
+                new
+                {
+                    code = "ambiguousTravelerMatch",
+                    message = ex.Message
+                });
+        }
+    });
+
+app.MapPost(
+    "/api/taiwan-national-id-reviews/validate",
+    (TaiwanNationalIdReviewRequest request) =>
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var errors = TaiwanNationalIdReviewValidator.Validate(
+            request,
+            today);
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(
+                errors,
+                title: "Taiwan national ID review validation failed.");
+        }
+
+        return Results.Ok(
+            new PassportReviewValidationResponse(
+                Accepted: true,
+                Persistence: "validated-only",
+                ReceivedAt: DateTimeOffset.UtcNow,
+                Warnings:
+                    TaiwanNationalIdReviewValidator.GetWarnings(request)));
+    });
+
+app.MapPost(
     "/api/taiwan-compatriot-permit-reviews",
     (TaiwanCompatriotPermitReviewRequest request, ITravelerStore store) =>
     {
