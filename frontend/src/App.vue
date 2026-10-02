@@ -5,6 +5,10 @@ import PaddleBaseline from './components/PaddleBaseline.vue'
 import TaiwanCompatriotPermitBaseline from './components/TaiwanCompatriotPermitBaseline.vue'
 import TravelerPanel from './components/TravelerPanel.vue'
 import {
+  detectDocumentTypeWithPaddle,
+  type DetectedDocumentType,
+} from './services/paddleOcr'
+import {
   recognizePassport,
   terminateOcrWorker,
   type OcrProgress,
@@ -36,6 +40,17 @@ const documentType = ref<DocumentType>('passport')
 const selectedFile = ref<File | null>(null)
 const previewUrl = ref('')
 const uploadError = ref('')
+const documentTypeChecking = ref(false)
+const documentTypeCheckNote = ref('')
+const detectedDocumentType =
+  ref<DetectedDocumentType>('unknown')
+
+const documentMismatch = ref<{
+  expected: DocumentType
+  detected: Exclude<DetectedDocumentType, 'unknown'>
+  file: File
+  evidence: string[]
+} | null>(null)
 
 const ocrRunning = ref(false)
 const ocrError = ref('')
@@ -139,14 +154,98 @@ function clearPreview() {
   previewUrl.value = ''
   selectedFile.value = null
   uploadError.value = ''
+  documentTypeCheckNote.value = ''
+  detectedDocumentType.value = 'unknown'
   resetOcrResult()
 }
 
-function handleFileChange(event: Event) {
+function documentTypeLabel(
+  value: DocumentType | DetectedDocumentType,
+) {
+  if (value === 'passport') return '護照'
+  if (value === 'taiwan-compatriot-permit') return '台胞證'
+  if (value === 'tw-id') return '台灣身分證'
+  return '無法確認'
+}
+
+function loadAcceptedFile(file: File) {
+  selectedFile.value = file
+  previewUrl.value = URL.createObjectURL(file)
+}
+
+function rejectMismatchedFile(
+  file: File,
+  detected: Exclude<DetectedDocumentType, 'unknown'>,
+  evidence: string[],
+) {
+  documentMismatch.value = {
+    expected: documentType.value,
+    detected,
+    file,
+    evidence,
+  }
+
+  detectedDocumentType.value = detected
+  documentTypeCheckNote.value = ''
+}
+
+function useDetectedDocumentType() {
+  const mismatch = documentMismatch.value
+  if (!mismatch) return
+
+  documentType.value =
+    mismatch.detected as DocumentType
+  resetOcrResult()
+  detectedDocumentType.value =
+    mismatch.detected
+
+  loadAcceptedFile(mismatch.file)
+
+  documentTypeCheckNote.value =
+    `已切換為${documentTypeLabel(mismatch.detected)}，可繼續辨識。`
+
+  documentMismatch.value = null
+}
+
+function dismissDocumentMismatch() {
+  documentMismatch.value = null
+}
+
+function handleDocumentTypeChange() {
+  resetOcrResult()
+
+  if (
+    !selectedFile.value ||
+    detectedDocumentType.value === 'unknown' ||
+    detectedDocumentType.value === documentType.value
+  ) {
+    return
+  }
+
+  const file = selectedFile.value
+
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
+
+  selectedFile.value = null
+
+  rejectMismatchedFile(
+    file,
+    detectedDocumentType.value,
+    ['已載入圖片的自動證件分類結果與新選擇不一致'],
+  )
+}
+
+async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
 
   clearPreview()
+  documentMismatch.value = null
+  documentTypeCheckNote.value = ''
+  detectedDocumentType.value = 'unknown'
 
   if (!file) return
 
@@ -163,8 +262,44 @@ function handleFileChange(event: Event) {
     return
   }
 
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
+  documentTypeChecking.value = true
+  documentTypeCheckNote.value = '正在確認證件類型…'
+
+  try {
+    const detected =
+      await detectDocumentTypeWithPaddle(file)
+
+    detectedDocumentType.value = detected.type
+
+    if (
+      detected.type !== 'unknown' &&
+      detected.type !== documentType.value
+    ) {
+      rejectMismatchedFile(
+        file,
+        detected.type,
+        detected.evidence,
+      )
+      input.value = ''
+      return
+    }
+
+    loadAcceptedFile(file)
+
+    documentTypeCheckNote.value =
+      detected.type === 'unknown'
+        ? '系統無法可靠判斷證件類型，已保留你手動選擇的類型。'
+        : `證件類型已確認：${documentTypeLabel(detected.type)}。`
+  } catch {
+    // Classification is a safety/UX guard, not a hard dependency.
+    // If it cannot run, keep the user's manual selection and allow work.
+    loadAcceptedFile(file)
+    detectedDocumentType.value = 'unknown'
+    documentTypeCheckNote.value =
+      '自動證件類型檢查未完成，已保留手動選擇，可繼續辨識。'
+  } finally {
+    documentTypeChecking.value = false
+  }
 }
 
 function validationText(value: boolean | null) {
@@ -356,7 +491,11 @@ onBeforeUnmount(() => {
       <div class="form-grid">
         <label class="field">
           <span>證件類型</span>
-          <select v-model="documentType" @change="resetOcrResult">
+          <select
+            v-model="documentType"
+            :disabled="documentTypeChecking"
+            @change="handleDocumentTypeChange"
+          >
             <option value="passport">護照</option>
             <option value="taiwan-compatriot-permit">台胞證</option>
             <option value="tw-id">台灣身分證（暫緩）</option>
@@ -384,6 +523,22 @@ onBeforeUnmount(() => {
 
       <p v-if="uploadError" class="inline-error">
         {{ uploadError }}
+      </p>
+
+      <div
+        v-if="documentTypeChecking"
+        class="document-type-checking"
+        aria-live="polite"
+      >
+        <span class="document-type-spinner"></span>
+        <span>正在確認證件類型，避免使用錯誤的辨識流程…</span>
+      </div>
+
+      <p
+        v-else-if="documentTypeCheckNote"
+        class="document-type-check-note"
+      >
+        {{ documentTypeCheckNote }}
       </p>
 
       <div v-if="previewUrl" class="preview-layout">
@@ -420,6 +575,61 @@ onBeforeUnmount(() => {
         選擇一張證件圖片後，預覽會顯示在這裡。
       </div>
     </section>
+
+    <div
+      v-if="documentMismatch"
+      class="document-mismatch-backdrop"
+      role="presentation"
+    >
+      <section
+        class="document-mismatch-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="document-mismatch-title"
+      >
+        <span class="document-mismatch-icon">!</span>
+
+        <div>
+          <p class="label">證件類型不一致</p>
+          <h3 id="document-mismatch-title">
+            這張圖片看起來不是{{ documentTypeLabel(documentMismatch.expected) }}
+          </h3>
+
+          <p>
+            目前選擇的是
+            <strong>{{ documentTypeLabel(documentMismatch.expected) }}</strong>，
+            但系統偵測到
+            <strong>{{ documentTypeLabel(documentMismatch.detected) }}</strong>。
+            為避免用錯 parser，這張圖片尚未進入後續辨識。
+          </p>
+
+          <p
+            v-if="documentMismatch.evidence.length"
+            class="document-mismatch-evidence"
+          >
+            判斷依據：
+            {{ documentMismatch.evidence.join('、') }}
+          </p>
+
+          <div class="document-mismatch-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              @click="dismissDocumentMismatch"
+            >
+              重新選擇圖片
+            </button>
+
+            <button
+              type="button"
+              @click="useDetectedDocumentType"
+            >
+              切換為{{ documentTypeLabel(documentMismatch.detected) }}並使用這張照片
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <PaddleBaseline
       v-if="
