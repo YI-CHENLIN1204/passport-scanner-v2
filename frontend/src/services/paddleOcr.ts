@@ -1602,6 +1602,10 @@ function extractHanNameFromPermitText(text: string) {
     cleaned = cleaned.replaceAll(label, '')
   }
 
+  cleaned = cleaned
+    .replace(/\s+/g, '')
+    .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
+
   const matches = cleaned.match(/[\p{Script=Han}·‧]{2,20}/gu)
   if (!matches) return null
 
@@ -1736,7 +1740,14 @@ function choosePermitChineseName(
           anchor.parsed.givenNames,
         )
 
-      if (compatibility !== 'compatible') continue
+      if (compatibility === 'conflict') continue
+
+      if (
+        compatibility === 'unknown' &&
+        (item.score ?? 0) < 0.78
+      ) {
+        continue
+      }
 
       const scale = Math.max(
         1,
@@ -1761,7 +1772,7 @@ function choosePermitChineseName(
         score: item.score,
         rank:
           (item.score ?? 0) +
-          1.6 -
+          (compatibility === 'compatible' ? 1.6 : 0.8) -
           vertical * 0.08 -
           horizontal * 0.015,
       })
