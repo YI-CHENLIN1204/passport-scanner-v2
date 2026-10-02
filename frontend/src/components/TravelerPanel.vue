@@ -23,6 +23,7 @@ const error = ref('')
 function documentTypeLabel(value: string) {
   if (value === 'PASSPORT') return '護照'
   if (value === 'TAIWAN_COMPATRIOT_PERMIT') return '台胞證'
+  if (value === 'TAIWAN_NATIONAL_ID') return '台灣身分證'
   return value
 }
 
@@ -93,7 +94,7 @@ onMounted(refresh)
         <p class="eyebrow">CRM · Traveler archive</p>
         <h2>旅客資料</h2>
         <p>
-          查看目前已完成人工覆核的旅客與證件版本。護照與台胞證都會歸到同一位旅客主檔。
+          查看目前已完成人工覆核的旅客與證件版本。護照、台胞證與台灣身分證都會歸到同一位旅客主檔。
         </p>
       </div>
 
@@ -261,7 +262,9 @@ onMounted(refresh)
                 </span>
               </div>
 
-              <span>{{ document.expiryDate }}</span>
+              <span>
+                {{ document.expiryDate ?? '無到期日' }}
+              </span>
             </div>
 
             <dl>
