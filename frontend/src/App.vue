@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getHealth, type HealthResponse } from './services/api'
 import PaddleBaseline from './components/PaddleBaseline.vue'
 import TaiwanCompatriotPermitBaseline from './components/TaiwanCompatriotPermitBaseline.vue'
+import TaiwanNationalIdBaseline from './components/TaiwanNationalIdBaseline.vue'
 import TravelerPanel from './components/TravelerPanel.vue'
 import {
   detectDocumentTypeWithPaddle,
@@ -498,7 +499,7 @@ onBeforeUnmount(() => {
           >
             <option value="passport">護照</option>
             <option value="taiwan-compatriot-permit">台胞證</option>
-            <option value="tw-id">台灣身分證（暫緩）</option>
+            <option value="tw-id">台灣身分證</option>
           </select>
         </label>
 
@@ -647,16 +648,13 @@ onBeforeUnmount(() => {
       :file="selectedFile"
     />
 
-    <section
-      v-else-if="activeView === 'scan'"
-      class="notice-box unsupported-document-card"
-    >
-      <strong>台灣身分證 OCR 目前暫緩。</strong>
-      <span>
-        先把護照、台胞證、後端證件版本管理與正式操作介面做完整。
-        身分證需要更高比例的中文欄位 OCR 與身分證字號檢查碼測試，之後再獨立處理。
-      </span>
-    </section>
+    <TaiwanNationalIdBaseline
+      v-else-if="
+        activeView === 'scan' &&
+        documentType === 'tw-id'
+      "
+      :file="selectedFile"
+    />
 
     <details
       v-if="activeView === 'scan'"
