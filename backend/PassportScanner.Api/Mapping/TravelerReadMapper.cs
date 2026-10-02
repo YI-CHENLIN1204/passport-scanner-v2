@@ -34,7 +34,7 @@ public static class TravelerReadMapper
                         document.DocumentNumber,
                         document.IssuingCountry,
                         document.Nationality,
-                        document.ExpiryDate.ToString("yyyy-MM-dd"),
+                        document.ExpiryDate?.ToString("yyyy-MM-dd"),
                         document.IsCurrent,
                         document.VerifiedAt,
                         document.CreatedAt))
