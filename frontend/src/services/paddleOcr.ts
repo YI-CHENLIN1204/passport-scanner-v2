@@ -3032,6 +3032,717 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
 }
 
 
+
+export type TaiwanNationalIdSex = 'M' | 'F' | ''
+
+export interface TaiwanNationalIdOcrResult {
+  initializationMs: number
+  predictMs: number
+  totalMs: number
+  detectedItems: number
+  averageScore: number | null
+  chineseName: string
+  nationalId: string
+  birthDate: string
+  sex: TaiwanNationalIdSex
+  idChecksumValid: boolean
+  extractedFieldCount: number
+  fieldScores: {
+    chineseName: number | null
+    nationalId: number | null
+    birthDate: number | null
+  }
+  rawRows: string[]
+  rotationDegrees: number
+  orientationAttempts: number
+  orientedImage: File
+  textHorizontalScore: number
+}
+
+export interface TaiwanNationalIdOcrProgress {
+  stage:
+    | 'initializing'
+    | 'orientation'
+    | 'deskew'
+    | 'name-retry'
+    | 'completed'
+  progress: number
+  message: string
+}
+
+const taiwanIdAreaCodes: Record<string, number> = {
+  A: 10, B: 11, C: 12, D: 13,
+  E: 14, F: 15, G: 16, H: 17,
+  I: 34, J: 18, K: 19, L: 20,
+  M: 21, N: 22, O: 35, P: 23,
+  Q: 24, R: 25, S: 26, T: 27,
+  U: 28, V: 29, W: 32, X: 30,
+  Y: 31, Z: 33,
+}
+
+export function validateTaiwanNationalId(
+  value: string,
+) {
+  const id = value
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+
+  if (!/^[A-Z][12]\d{8}$/.test(id)) {
+    return false
+  }
+
+  const area = taiwanIdAreaCodes[id[0]]
+  if (area === undefined) return false
+
+  let sum =
+    Math.floor(area / 10) +
+    (area % 10) * 9
+
+  const weights = [8, 7, 6, 5, 4, 3, 2, 1]
+
+  for (let index = 0; index < 8; index += 1) {
+    sum += Number(id[index + 1]) * weights[index]
+  }
+
+  sum += Number(id[9])
+
+  return sum % 10 === 0
+}
+
+function extractTaiwanNationalIdFromText(
+  value: string,
+) {
+  const compact = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+
+  const matches = compact.match(/[A-Z][12]\d{8}/g) ?? []
+
+  const valid = matches.find(
+    validateTaiwanNationalId,
+  )
+
+  return valid ?? matches[0] ?? null
+}
+
+const taiwanIdFixedChineseLabels = [
+  '中華民國',
+  '中华民国',
+  '國民身分證',
+  '国民身份证',
+  '身分證',
+  '身份证',
+  '姓名',
+  '出生日期',
+  '出生',
+  '統一編號',
+  '统一编号',
+  '身分證統一編號',
+  '身分证统一编号',
+  '發證日期',
+  '发证日期',
+  '發證地點',
+  '发证地点',
+  '父',
+  '母',
+  '配偶',
+  '役別',
+  '役别',
+]
+
+function extractTaiwanIdChineseName(
+  value: string,
+) {
+  let cleaned = value
+    .replace(/姓名/gu, '')
+    .replace(/Name/giu, '')
+    .replace(/\s+/g, '')
+    .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
+
+  const candidates =
+    cleaned.match(/[\p{Script=Han}·‧]{2,12}/gu) ?? []
+
+  return (
+    candidates
+      .map((candidate) => candidate.trim())
+      .find((candidate) => {
+        if (
+          taiwanIdFixedChineseLabels.some(
+            (label) =>
+              candidate === label ||
+              candidate.includes(label) ||
+              label.includes(candidate),
+          )
+        ) {
+          return false
+        }
+
+        if (
+          /(?:日期|地點|地点|地址|身分證|身份证|編號|编号)$/.test(
+            candidate,
+          )
+        ) {
+          return false
+        }
+
+        return true
+      }) ?? null
+  )
+}
+
+function chooseTaiwanIdChineseName(
+  geometries: PaddleItemGeometry[],
+  rows: string[],
+) {
+  const anchored = findLabelAnchoredCandidate(
+    geometries,
+    ['姓名', 'Name'],
+    extractTaiwanIdChineseName,
+  )
+
+  if (anchored) return anchored
+
+  for (let index = 0; index < rows.length; index += 1) {
+    if (!/姓名|NAME/i.test(rows[index])) continue
+
+    const sameRow =
+      extractTaiwanIdChineseName(rows[index])
+
+    if (sameRow) {
+      return {
+        value: sameRow,
+        score: null,
+        rank: 2,
+      }
+    }
+
+    const nextRow =
+      rows[index + 1]
+        ? extractTaiwanIdChineseName(rows[index + 1])
+        : null
+
+    if (nextRow) {
+      return {
+        value: nextRow,
+        score: null,
+        rank: 1.5,
+      }
+    }
+  }
+
+  return null
+}
+
+function normalizeTaiwanIdDate(
+  year: number,
+  month: number,
+  day: number,
+) {
+  const date = new Date(
+    Date.UTC(year, month - 1, day),
+  )
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null
+  }
+
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
+}
+
+function extractTaiwanIdDatesFromText(
+  value: string,
+) {
+  const dates: string[] = []
+
+  const rocPattern =
+    /(?:民國|民国)?\s*(\d{2,3})\s*[年./\-]\s*(\d{1,2})\s*[月./\-]\s*(\d{1,2})\s*日?/g
+
+  for (const match of value.matchAll(rocPattern)) {
+    const rocYear = Number(match[1])
+
+    if (rocYear < 1 || rocYear > 300) continue
+
+    const normalized = normalizeTaiwanIdDate(
+      rocYear + 1911,
+      Number(match[2]),
+      Number(match[3]),
+    )
+
+    if (normalized) dates.push(normalized)
+  }
+
+  const adPattern =
+    /(?:19|20)\d{2}\s*[./\-]\s*\d{1,2}\s*[./\-]\s*\d{1,2}/g
+
+  for (const match of value.matchAll(adPattern)) {
+    const parts = match[0]
+      .split(/[./\-]/)
+      .map((part) => Number(part.trim()))
+
+    const normalized = normalizeTaiwanIdDate(
+      parts[0],
+      parts[1],
+      parts[2],
+    )
+
+    if (normalized && !dates.includes(normalized)) {
+      dates.push(normalized)
+    }
+  }
+
+  return dates
+}
+
+function extractTaiwanIdBirthDateFromRows(
+  rows: string[],
+) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+
+    if (!/出生日期|出生/.test(row)) continue
+
+    const sameRow = extractTaiwanIdDatesFromText(row)[0]
+    if (sameRow) return sameRow
+
+    const nextRow = rows[index + 1]
+      ? extractTaiwanIdDatesFromText(rows[index + 1])[0]
+      : null
+
+    if (nextRow) return nextRow
+  }
+
+  const allDates = rows
+    .flatMap(extractTaiwanIdDatesFromText)
+    .sort()
+
+  return allDates[0] ?? null
+}
+
+function sexFromTaiwanNationalId(
+  nationalId: string,
+): TaiwanNationalIdSex {
+  if (!/^[A-Z][12]\d{8}$/.test(nationalId)) {
+    return ''
+  }
+
+  return nationalId[1] === '1' ? 'M' : 'F'
+}
+
+function buildTaiwanNationalIdResult(
+  prediction: unknown,
+  initializationMs: number,
+  predictMs: number,
+  totalMs: number,
+): TaiwanNationalIdOcrResult {
+  const items = predictionItems(prediction)
+  const geometries = items
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null,
+    )
+  const rawRows = buildTextRows(items)
+
+  const name =
+    chooseTaiwanIdChineseName(
+      geometries,
+      rawRows,
+    )
+
+  const idCandidates = geometries
+    .map((item) => {
+      const value =
+        extractTaiwanNationalIdFromText(
+          item.text,
+        )
+
+      if (!value) return null
+
+      return {
+        value,
+        score: item.score,
+        valid: validateTaiwanNationalId(value),
+      }
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        value: string
+        score: number | null
+        valid: boolean
+      } => item !== null,
+    )
+    .sort((a, b) => {
+      if (a.valid !== b.valid) {
+        return a.valid ? -1 : 1
+      }
+
+      return (b.score ?? 0) - (a.score ?? 0)
+    })
+
+  let nationalId =
+    idCandidates[0]?.value ?? ''
+
+  if (!nationalId) {
+    const fromRows =
+      extractTaiwanNationalIdFromText(
+        rawRows.join(' '),
+      )
+
+    nationalId = fromRows ?? ''
+  }
+
+  const idChecksumValid =
+    Boolean(nationalId) &&
+    validateTaiwanNationalId(nationalId)
+
+  const birthDate =
+    extractTaiwanIdBirthDateFromRows(rawRows) ?? ''
+
+  const sex =
+    idChecksumValid
+      ? sexFromTaiwanNationalId(nationalId)
+      : ''
+
+  const scores = items
+    .map((item) =>
+      typeof item.score === 'number'
+        ? item.score
+        : null,
+    )
+    .filter(
+      (score): score is number =>
+        score !== null,
+    )
+
+  const averageScore = scores.length
+    ? scores.reduce(
+        (sum, score) => sum + score,
+        0,
+      ) / scores.length
+    : null
+
+  return {
+    initializationMs,
+    predictMs,
+    totalMs,
+    detectedItems: items.length,
+    averageScore,
+    chineseName: name?.value ?? '',
+    nationalId,
+    birthDate,
+    sex,
+    idChecksumValid,
+    extractedFieldCount: [
+      name?.value,
+      nationalId,
+      birthDate,
+      sex,
+    ].filter(Boolean).length,
+    fieldScores: {
+      chineseName: name?.score ?? null,
+      nationalId: idCandidates[0]?.score ?? null,
+      birthDate: null,
+    },
+    rawRows,
+    rotationDegrees: 0,
+    orientationAttempts: 1,
+    orientedImage: new File(
+      [],
+      'placeholder.png',
+      { type: 'image/png' },
+    ),
+    textHorizontalScore:
+      estimateTextHorizontalScore(prediction),
+  }
+}
+
+function taiwanIdResultQuality(
+  result: TaiwanNationalIdOcrResult,
+) {
+  return (
+    result.textHorizontalScore * 420 +
+    (result.idChecksumValid ? 1000 : 0) +
+    (result.chineseName ? 16 : 0) +
+    (result.birthDate ? 10 : 0) +
+    (result.sex ? 6 : 0) +
+    Math.min(result.detectedItems, 24) * 0.03 +
+    (result.averageScore ?? 0)
+  )
+}
+
+async function predictTaiwanNationalId(
+  instance: PaddleInstance,
+  image: File,
+  initializationMs: number,
+  totalStartedAt: number,
+) {
+  const startedAt = performance.now()
+  const [prediction] = await instance.predict(image)
+  const predictMs = performance.now() - startedAt
+
+  const result = buildTaiwanNationalIdResult(
+    prediction,
+    initializationMs,
+    predictMs,
+    performance.now() - totalStartedAt,
+  )
+
+  result.orientedImage = image
+
+  return {
+    prediction,
+    result,
+  }
+}
+
+async function retryTaiwanIdName(
+  instance: PaddleInstance,
+  image: File,
+) {
+  const cropBlob = await createRelativeCrop(
+    image,
+    0.04,
+    0.04,
+    0.76,
+    0.62,
+  )
+
+  const crop = new File(
+    [cropBlob],
+    'tw-id-name-region.png',
+    { type: 'image/png' },
+  )
+
+  const [prediction] =
+    await instance.predict(crop)
+
+  const items = predictionItems(prediction)
+  const geometries = items
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null,
+    )
+
+  return chooseTaiwanIdChineseName(
+    geometries,
+    buildTextRows(items),
+  )
+}
+
+export async function recognizeTaiwanNationalIdWithPaddle(
+  image: File,
+  onProgress?: (
+    progress: TaiwanNationalIdOcrProgress,
+  ) => void,
+): Promise<TaiwanNationalIdOcrResult> {
+  const totalStartedAt = performance.now()
+
+  onProgress?.({
+    stage: 'initializing',
+    progress: 0.05,
+    message: '正在準備身分證 OCR…',
+  })
+
+  const { instance, initializationMs } =
+    await getPaddle()
+
+  const attempts: Array<{
+    rotation: number
+    image: File
+    prediction: unknown
+    result: TaiwanNationalIdOcrResult
+  }> = []
+
+  const tryRotation = async (
+    rotation: number,
+    progress: number,
+  ) => {
+    onProgress?.({
+      stage: 'orientation',
+      progress,
+      message:
+        rotation === 0
+          ? '正在辨識原始方向…'
+          : `正在測試旋轉 ${rotation}° 的身分證…`,
+    })
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    const rotated =
+      await rotateImageFile(image, rotation)
+
+    const predicted =
+      await predictTaiwanNationalId(
+        instance,
+        rotated,
+        attempts.length === 0
+          ? initializationMs
+          : 0,
+        totalStartedAt,
+      )
+
+    predicted.result.rotationDegrees =
+      rotation
+    predicted.result.orientationAttempts =
+      attempts.length + 1
+
+    attempts.push({
+      rotation,
+      image: rotated,
+      prediction: predicted.prediction,
+      result: predicted.result,
+    })
+
+    return predicted.result
+  }
+
+  const original =
+    await tryRotation(0, 0.16)
+
+  const strongEnough =
+    original.idChecksumValid &&
+    Boolean(original.chineseName) &&
+    Boolean(original.birthDate) &&
+    original.textHorizontalScore >= 0.78
+
+  if (!strongEnough) {
+    await tryRotation(90, 0.34)
+    await tryRotation(-90, 0.52)
+
+    const currentBest = [...attempts]
+      .sort(
+        (a, b) =>
+          taiwanIdResultQuality(b.result) -
+          taiwanIdResultQuality(a.result),
+      )[0]
+
+    const currentStrong =
+      currentBest.result.idChecksumValid &&
+      Boolean(currentBest.result.chineseName) &&
+      Boolean(currentBest.result.birthDate) &&
+      currentBest.result.textHorizontalScore >= 0.78
+
+    if (!currentStrong) {
+      await tryRotation(180, 0.66)
+    }
+  }
+
+  let best = [...attempts]
+    .sort(
+      (a, b) =>
+        taiwanIdResultQuality(b.result) -
+        taiwanIdResultQuality(a.result),
+    )[0]
+
+  const skew =
+    estimateTextSkewDegrees(best.prediction)
+
+  if (
+    Math.abs(skew) >= 2.5 &&
+    Math.abs(skew) <= 20
+  ) {
+    onProgress?.({
+      stage: 'deskew',
+      progress: 0.8,
+      message:
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正身分證…`,
+    })
+
+    const deskewed =
+      await rotateImageFile(
+        best.image,
+        -skew,
+      )
+
+    const predicted =
+      await predictTaiwanNationalId(
+        instance,
+        deskewed,
+        0,
+        totalStartedAt,
+      )
+
+    predicted.result.rotationDegrees =
+      normalizeRotation(
+        best.rotation - skew,
+      )
+    predicted.result.orientationAttempts =
+      attempts.length + 1
+
+    if (
+      taiwanIdResultQuality(predicted.result) >=
+      taiwanIdResultQuality(best.result)
+    ) {
+      best = {
+        rotation:
+          predicted.result.rotationDegrees,
+        image: deskewed,
+        prediction: predicted.prediction,
+        result: predicted.result,
+      }
+    }
+  }
+
+  if (!best.result.chineseName) {
+    onProgress?.({
+      stage: 'name-retry',
+      progress: 0.92,
+      message: '姓名尚未取得，正在放大姓名區域重試…',
+    })
+
+    const retry = await retryTaiwanIdName(
+      instance,
+      best.image,
+    )
+
+    if (retry) {
+      best.result.chineseName = retry.value
+      best.result.fieldScores.chineseName =
+        retry.score
+      best.result.extractedFieldCount = [
+        best.result.chineseName,
+        best.result.nationalId,
+        best.result.birthDate,
+        best.result.sex,
+      ].filter(Boolean).length
+    }
+  }
+
+  best.result.orientationAttempts =
+    Math.max(
+      best.result.orientationAttempts,
+      attempts.length,
+    )
+  best.result.totalMs =
+    performance.now() - totalStartedAt
+  best.result.orientedImage = best.image
+
+  onProgress?.({
+    stage: 'completed',
+    progress: 1,
+    message:
+      Math.abs(best.result.rotationDegrees) < 1
+        ? '身分證辨識完成。'
+        : `身分證辨識完成，已自動校正方向 ${best.result.rotationDegrees.toFixed(1)}°。`,
+  })
+
+  return best.result
+}
+
 export type DetectedDocumentType =
   | 'passport'
   | 'taiwan-compatriot-permit'
