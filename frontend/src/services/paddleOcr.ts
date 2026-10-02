@@ -1443,6 +1443,9 @@ export interface TaiwanCompatriotPermitOcrResult {
   orientedImage: File
   parsedMrz: ParsedTaiwanPermitMrz | null
   mrzUsed: boolean
+  chineseNamePasses: number
+  chineseNameConsensus: number
+  chineseNameConfidence: number | null
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -2120,6 +2123,18 @@ function buildTaiwanCompatriotPermitResult(
     rawRows,
     parsedMrz,
     mrzUsed: parsedMrz !== null,
+    chineseNamePasses:
+      parsedMrz?.chineseName || name?.value ? 1 : 0,
+    chineseNameConsensus:
+      parsedMrz?.chineseName || name?.value ? 1 : 0,
+    chineseNameConfidence:
+      parsedMrz?.chineseName
+        ? (
+            parsedMrz.validation.requiredValid
+              ? 0.99
+              : 0.9
+          )
+        : name?.score ?? null,
     rotationDegrees: 0,
     orientationAttempts: 1,
     orientedImage: new File([], 'placeholder.png', {
