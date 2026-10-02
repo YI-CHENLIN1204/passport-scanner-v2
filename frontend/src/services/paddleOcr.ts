@@ -1943,6 +1943,102 @@ function extractPermitSex(text: string): PermitSex | null {
   return null
 }
 
+function extractPermitBirthDateFromRows(
+  rows: string[],
+) {
+  const joined = rows.join(' ')
+  const datePattern =
+    '(19|20)\\d{2}\\s*[年./\\-]\\s*\\d{1,2}\\s*[月./\\-]\\s*\\d{1,2}'
+
+  const beforeLabel = new RegExp(
+    `(${datePattern})\\s*(?:出生日期|出生|DATEOFBIRTH|DOB)`,
+    'i',
+  ).exec(joined.replace(/\s+/g, ''))
+
+  if (beforeLabel?.[1]) {
+    return extractSinglePermitDate(
+      beforeLabel[1],
+    )
+  }
+
+  const afterLabel = new RegExp(
+    `(?:出生日期|出生|DATEOFBIRTH|DOB)[:：]?(${datePattern})`,
+    'i',
+  ).exec(joined.replace(/\s+/g, ''))
+
+  return afterLabel?.[1]
+    ? extractSinglePermitDate(afterLabel[1])
+    : null
+}
+
+function extractPermitExpiryFromRows(
+  rows: string[],
+) {
+  const joined = rows.join(' ')
+  const compact = joined.replace(/\s+/g, '')
+
+  // Typical front-side layout may OCR the whole row as:
+  // 2025.10.02-2030.10.01有效期限1977.01.13出生日期
+  // The later date in the validity interval is the expiry date.
+  const validityPair =
+    /((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\s*[-~～至]\s*((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\s*(?:有效期限|有效期|VALIDUNTIL|EXPIRY)/i.exec(
+      compact,
+    )
+
+  if (validityPair?.[2]) {
+    return extractSinglePermitDate(
+      validityPair[2],
+    )
+  }
+
+  const labelAfterDate =
+    /((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\s*(?:有效期限|有效期|VALIDUNTIL|EXPIRY)/i.exec(
+      compact,
+    )
+
+  if (labelAfterDate?.[1]) {
+    return extractSinglePermitDate(
+      labelAfterDate[1],
+    )
+  }
+
+  const dateAfterLabel =
+    /(?:有效期限|有效期|VALIDUNTIL|EXPIRY)[:：]?((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})/i.exec(
+      compact,
+    )
+
+  return dateAfterLabel?.[1]
+    ? extractSinglePermitDate(dateAfterLabel[1])
+    : null
+}
+
+function extractPermitSexFromRows(
+  rows: string[],
+): PermitSex | null {
+  const compact = rows
+    .join('')
+    .replace(/\s+/g, '')
+    .toUpperCase()
+
+  if (
+    /女(?:性别|性別)/.test(compact) ||
+    /(?:性别|性別)[:：]?女/.test(compact) ||
+    /(?:SEX)[:：]?F/.test(compact)
+  ) {
+    return 'F'
+  }
+
+  if (
+    /男(?:性别|性別)/.test(compact) ||
+    /(?:性别|性別)[:：]?男/.test(compact) ||
+    /(?:SEX)[:：]?M/.test(compact)
+  ) {
+    return 'M'
+  }
+
+  return null
+}
+
 function buildTaiwanCompatriotPermitResult(
   prediction: unknown,
   initializationMs: number,
@@ -1980,6 +2076,15 @@ function buildTaiwanCompatriotPermitResult(
     ],
     extractPermitNumberFromText,
   )
+
+  const semanticBirthDate =
+    extractPermitBirthDateFromRows(rawRows)
+
+  const semanticExpiryDate =
+    extractPermitExpiryFromRows(rawRows)
+
+  const semanticSex =
+    extractPermitSexFromRows(rawRows)
 
   const birthDate = findLabelAnchoredCandidate(
     geometries,
@@ -2081,6 +2186,14 @@ function buildTaiwanCompatriotPermitResult(
 
   let inferredBirth = birthDate
 
+  if (!inferredBirth && semanticBirthDate) {
+    inferredBirth = {
+      value: semanticBirthDate,
+      score: null,
+      rank: 3,
+    }
+  }
+
   if (!inferredBirth && allDates.length) {
     const today = new Date()
     const todayIso = [
@@ -2100,6 +2213,20 @@ function buildTaiwanCompatriotPermitResult(
         score: first.score,
         rank: first.score ?? 0,
       }
+    }
+  }
+
+  if (
+    semanticExpiryDate &&
+    (
+      !expiryDate ||
+      expiryDate.value === inferredBirth?.value
+    )
+  ) {
+    expiryDate = {
+      value: semanticExpiryDate,
+      score: null,
+      rank: 4,
     }
   }
 
@@ -2147,10 +2274,12 @@ function buildTaiwanCompatriotPermitResult(
   const finalSex =
     parsedMrz?.sex ||
     sex?.value ||
+    semanticSex ||
     ''
 
   const finalExpiryDate =
     parsedMrz?.expiryDate ||
+    semanticExpiryDate ||
     expiryDate?.value ||
     ''
 
@@ -2299,38 +2428,78 @@ function predictionItems(prediction: unknown) {
   return (typed?.items ?? []) as PaddleItemLike[]
 }
 
+function dominantTextEdgeAngle(
+  points: Array<[number, number]>,
+) {
+  if (points.length < 2) return null
+
+  const edges = points.map((point, index) => {
+    const next = points[(index + 1) % points.length]
+    const dx = next[0] - point[0]
+    const dy = next[1] - point[1]
+
+    return {
+      dx,
+      dy,
+      length: Math.hypot(dx, dy),
+    }
+  })
+
+  const longest = edges.sort(
+    (a, b) => b.length - a.length,
+  )[0]
+
+  if (!longest || longest.length < 8) {
+    return null
+  }
+
+  return (
+    Math.atan2(longest.dy, longest.dx) *
+    180 /
+    Math.PI
+  )
+}
+
 function estimateTextHorizontalScore(
   prediction: unknown,
 ) {
   const scores = predictionItems(prediction)
     .flatMap((item) => {
       const points = pointsFromPoly(item.poly)
-      if (points.length < 2) return []
+      const angle = dominantTextEdgeAngle(points)
 
-      const [x1, y1] = points[0]
-      const [x2, y2] = points[1]
-      const dx = x2 - x1
-      const dy = y2 - y1
-      const length = Math.hypot(dx, dy)
+      if (angle === null) return []
 
-      if (length < 16) return []
+      let normalized = Math.abs(angle) % 180
+      if (normalized > 90) {
+        normalized = 180 - normalized
+      }
 
-      let angle =
-        Math.abs(
-          (Math.atan2(dy, dx) * 180) / Math.PI,
-        )
+      const longestEdge = points
+        .map((point, index) => {
+          const next =
+            points[(index + 1) % points.length]
 
-      while (angle >= 180) angle -= 180
-      if (angle > 90) angle = 180 - angle
+          return Math.hypot(
+            next[0] - point[0],
+            next[1] - point[1],
+          )
+        })
+        .sort((a, b) => b - a)[0] ?? 0
 
-      // 1.0 = horizontal, 0.0 = vertical.
+      if (longestEdge < 16) return []
+
+      // 1.0 = text baseline horizontal, 0.0 = vertical.
       const horizontal =
-        Math.max(0, 1 - angle / 90)
+        Math.max(0, 1 - normalized / 90)
 
       return [
         {
           score: horizontal,
-          weight: Math.min(4, Math.max(1, length / 80)),
+          weight: Math.min(
+            5,
+            Math.max(1, longestEdge / 80),
+          ),
         },
       ]
     })
@@ -2355,20 +2524,20 @@ function estimateTextSkewDegrees(
   const angles = predictionItems(prediction)
     .flatMap((item) => {
       const points = pointsFromPoly(item.poly)
-      if (points.length < 2) return []
+      const edgeAngle =
+        dominantTextEdgeAngle(points)
 
-      const [x1, y1] = points[0]
-      const [x2, y2] = points[1]
-      const dx = x2 - x1
-      const dy = y2 - y1
+      if (edgeAngle === null) return []
 
-      if (Math.abs(dx) < 8) return []
+      let angle = edgeAngle
 
-      let angle =
-        (Math.atan2(dy, dx) * 180) / Math.PI
+      // Deskew only measures the small residual tilt around a horizontal
+      // baseline. Cardinal 90° orientation is handled separately.
+      while (angle > 90) angle -= 180
+      while (angle < -90) angle += 180
 
-      while (angle > 45) angle -= 90
-      while (angle < -45) angle += 90
+      if (angle > 45) angle -= 90
+      if (angle < -45) angle += 90
 
       return Math.abs(angle) <= 20
         ? [angle]
