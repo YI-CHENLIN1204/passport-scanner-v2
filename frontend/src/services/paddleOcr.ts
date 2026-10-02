@@ -2742,3 +2742,165 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
 
   return best.result
 }
+
+
+export type DetectedDocumentType =
+  | 'passport'
+  | 'taiwan-compatriot-permit'
+  | 'tw-id'
+  | 'unknown'
+
+export interface DocumentTypeDetectionResult {
+  type: DetectedDocumentType
+  confidence: 'high' | 'medium' | 'low'
+  evidence: string[]
+}
+
+function classifyDocumentFromItems(
+  items: PaddleItemLike[],
+): DocumentTypeDetectionResult {
+  const rows = buildTextRows(items)
+  const joined = rows
+    .join('\n')
+    .toUpperCase()
+
+  const compactChinese = rows
+    .join('')
+    .replace(/\s+/g, '')
+
+  const evidence: string[] = []
+
+  const permitMrz = parseTaiwanPermitMrz(rows)
+
+  if (permitMrz) {
+    evidence.push('偵測到台胞證 3 × 30 機讀碼')
+
+    return {
+      type: 'taiwan-compatriot-permit',
+      confidence:
+        permitMrz.validation.requiredValid
+          ? 'high'
+          : 'medium',
+      evidence,
+    }
+  }
+
+  const permitText =
+    /台[灣湾]居民[來来]往大[陸陆]通行[證证]/.test(
+      compactChinese,
+    ) ||
+    joined.includes(
+      'TAIWAN RESIDENT',
+    ) ||
+    joined.includes(
+      'TRAVEL TO THE MAINLAND OF CHINA',
+    )
+
+  if (permitText) {
+    evidence.push('偵測到台胞證標題／固定文字')
+
+    return {
+      type: 'taiwan-compatriot-permit',
+      confidence: 'high',
+      evidence,
+    }
+  }
+
+  const passportMrzLike = rows.some((row) => {
+    const normalized = row
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .replace(/[^A-Z0-9<]/g, '')
+
+    return (
+      normalized.startsWith('P<') &&
+      normalized.length >= 38
+    )
+  })
+
+  const passportText =
+    joined.includes('PASSPORT') ||
+    /護照|护照/.test(compactChinese)
+
+  if (passportMrzLike || passportText) {
+    if (passportMrzLike) {
+      evidence.push('偵測到護照 P< MRZ')
+    }
+
+    if (passportText) {
+      evidence.push('偵測到護照固定文字')
+    }
+
+    return {
+      type: 'passport',
+      confidence:
+        passportMrzLike
+          ? 'high'
+          : 'medium',
+      evidence,
+    }
+  }
+
+  const idText =
+    /(?:中華民國)?國民身分證/.test(
+      compactChinese,
+    ) ||
+    /(?:中华人民共和国)?居民身份证/.test(
+      compactChinese,
+    ) ||
+    joined.includes('IDENTITY CARD')
+
+  if (idText) {
+    evidence.push('偵測到身分證固定文字')
+
+    return {
+      type: 'tw-id',
+      confidence: 'high',
+      evidence,
+    }
+  }
+
+  return {
+    type: 'unknown',
+    confidence: 'low',
+    evidence: [],
+  }
+}
+
+export async function detectDocumentTypeWithPaddle(
+  image: File,
+): Promise<DocumentTypeDetectionResult> {
+  const { instance } = await getPaddle()
+
+  const rotations = [0, 90, -90]
+
+  for (const rotation of rotations) {
+    const candidate =
+      rotation === 0
+        ? image
+        : await rotateImageFile(
+            image,
+            rotation,
+          )
+
+    const [prediction] =
+      await instance.predict(candidate)
+
+    const result = classifyDocumentFromItems(
+      predictionItems(prediction),
+    )
+
+    if (
+      result.type !== 'unknown' &&
+      result.confidence !== 'low'
+    ) {
+      return result
+    }
+  }
+
+  return {
+    type: 'unknown',
+    confidence: 'low',
+    evidence: [],
+  }
+}
