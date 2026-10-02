@@ -118,7 +118,9 @@ const errors = computed(() => {
     }
   }
 
-  if (expectedSex.value && form.value.sex !== expectedSex.value) {
+  if (!['M', 'F'].includes(form.value.sex)) {
+    messages.push('性別尚未確認。')
+  } else if (expectedSex.value && form.value.sex !== expectedSex.value) {
     messages.push(
       '性別與身分證字號第 2 碼不一致。',
     )
@@ -255,7 +257,7 @@ function populate(
     chineseName: ocr.chineseName,
     nationalId: ocr.nationalId,
     birthDate: ocr.birthDate,
-    sex: ocr.sex || 'M',
+    sex: ocr.sex,
   }
 
   original.value = { ...form.value }
@@ -372,7 +374,7 @@ watch(
       chineseName: '',
       nationalId: '',
       birthDate: '',
-      sex: 'M',
+      sex: '',
     }
 
     if (file) {
@@ -638,6 +640,7 @@ onBeforeUnmount(revokeImageUrl)
           <label class="field">
             <span>性別</span>
             <select v-model="form.sex">
+              <option value="">未指定</option>
               <option value="M">M</option>
               <option value="F">F</option>
             </select>
