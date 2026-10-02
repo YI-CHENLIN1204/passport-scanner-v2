@@ -2394,24 +2394,94 @@ async function retryPermitChineseName(
   image: File,
   prediction: unknown,
 ) {
-  const crop = await createPermitNameGroupCrop(
+  const crops: File[] = []
+
+  const anchored = await createPermitNameGroupCrop(
     image,
     prediction,
   )
 
-  if (!crop) return null
+  if (anchored) {
+    crops.push(anchored)
+  }
 
-  const [namePrediction] =
-    await instance.predict(crop)
+  const broadBlob = await createRelativeCrop(
+    image,
+    0.08,
+    0.06,
+    0.84,
+    0.72,
+  )
 
-  const geometries = predictionItems(namePrediction)
-    .map(toGeometry)
-    .filter(
-      (item): item is PaddleItemGeometry =>
-        item !== null,
+  crops.push(
+    new File(
+      [broadBlob],
+      'permit-name-broad.png',
+      { type: 'image/png' },
+    ),
+  )
+
+  const candidates: Array<
+    PermitCandidate<string>
+  > = []
+
+  for (const crop of crops) {
+    const [namePrediction] =
+      await instance.predict(crop)
+
+    const geometries =
+      predictionItems(namePrediction)
+        .map(toGeometry)
+        .filter(
+          (
+            item,
+          ): item is PaddleItemGeometry =>
+            item !== null,
+        )
+
+    const candidate =
+      choosePermitChineseName(geometries)
+
+    if (candidate) candidates.push(candidate)
+  }
+
+  if (!candidates.length) return null
+
+  const grouped = new Map<
+    string,
+    Array<PermitCandidate<string>>
+  >()
+
+  for (const candidate of candidates) {
+    const key = normalizePermitChineseName(
+      candidate.value,
     )
+    const group = grouped.get(key) ?? []
+    group.push(candidate)
+    grouped.set(key, group)
+  }
 
-  return choosePermitChineseName(geometries)
+  return [...grouped.entries()]
+    .map(([value, group]) => {
+      const bestScore = Math.max(
+        ...group.map((item) => item.score ?? 0),
+      )
+      const consensus = group.length
+      const confidence = Math.min(
+        0.99,
+        bestScore + (consensus >= 2 ? 0.06 : 0),
+      )
+
+      return {
+        value,
+        score: bestScore,
+        rank: consensus * 2 + bestScore,
+        passes: crops.length,
+        consensus,
+        confidence,
+      }
+    })
+    .sort((a, b) => b.rank - a.rank)[0]
 }
 
 export async function recognizeTaiwanCompatriotPermitWithPaddle(
@@ -2579,6 +2649,12 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       best.result.chineseName = retriedName.value
       best.result.fieldScores.chineseName =
         retriedName.score
+      best.result.chineseNamePasses =
+        retriedName.passes
+      best.result.chineseNameConsensus =
+        retriedName.consensus
+      best.result.chineseNameConfidence =
+        retriedName.confidence
       best.result.extractedFieldCount = [
         best.result.chineseName,
         best.result.permitNumber,
