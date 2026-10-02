@@ -18,7 +18,7 @@ public sealed record ReviewedDocumentInput(
     string? Nationality,
     string DocumentNumber,
     string? IssuingCountry,
-    DateOnly ExpiryDate,
+    DateOnly? ExpiryDate,
     DateTimeOffset VerifiedAt);
 
 public sealed record DocumentSaveResult(
@@ -45,7 +45,7 @@ public sealed record DocumentVersionSummary(
     string DocumentNumber,
     string? IssuingCountry,
     string? Nationality,
-    DateOnly ExpiryDate,
+    DateOnly? ExpiryDate,
     bool IsCurrent,
     DateTimeOffset VerifiedAt,
     DateTimeOffset CreatedAt);
