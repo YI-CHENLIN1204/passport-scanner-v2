@@ -392,8 +392,8 @@ onBeforeUnmount(revokeImageUrl)
         <p class="label">Step 3 · Taiwan Compatriot Permit</p>
         <h2>台胞證辨識與人工覆核</h2>
         <p>
-          電子台胞證優先讀取背面 3 × 30 機讀碼，取得證號、出生日期、性別、有效期限與姓名資料；
-          若沒有背面機讀碼，才退回正面 VIZ OCR。儲存前仍保留人工核對。
+          正面或背面皆可直接上傳。系統若偵測到 3 × 30 機讀碼就使用機讀碼，
+          否則直接走正面 VIZ OCR；不要求客戶額外補拍另一面。儲存前仍保留人工核對。
         </p>
       </div>
 
@@ -438,7 +438,7 @@ onBeforeUnmount(revokeImageUrl)
     </div>
 
     <p v-if="!file" class="hint">
-      建議優先上傳台胞證背面（含機讀碼）；只有正面時仍可使用 OCR 備援。
+      先在上方選擇一張台胞證圖片；正面或背面都可以。
     </p>
 
     <p v-if="error" class="error">
