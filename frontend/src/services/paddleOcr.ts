@@ -1491,11 +1491,59 @@ function normalizePermitChineseName(value: string) {
     .trim()
 }
 
+const permitAdministrativeNames = new Set([
+  '北京', '北京市',
+  '天津', '天津市',
+  '上海', '上海市',
+  '重慶', '重庆', '重慶市', '重庆市',
+  '河北', '河北省',
+  '山西', '山西省',
+  '遼寧', '辽宁', '遼寧省', '辽宁省',
+  '吉林', '吉林省',
+  '黑龍江', '黑龙江', '黑龍江省', '黑龙江省',
+  '江蘇', '江苏', '江蘇省', '江苏省',
+  '浙江', '浙江省',
+  '安徽', '安徽省',
+  '福建', '福建省',
+  '江西', '江西省',
+  '山東', '山东', '山東省', '山东省',
+  '河南', '河南省',
+  '湖北', '湖北省',
+  '湖南', '湖南省',
+  '廣東', '广东', '廣東省', '广东省',
+  '海南', '海南省',
+  '四川', '四川省',
+  '貴州', '贵州', '貴州省', '贵州省',
+  '雲南', '云南', '雲南省', '云南省',
+  '陝西', '陕西', '陝西省', '陕西省',
+  '甘肅', '甘肃', '甘肅省', '甘肃省',
+  '青海', '青海省',
+  '內蒙古', '内蒙古',
+  '廣西', '广西',
+  '西藏',
+  '寧夏', '宁夏',
+  '新疆',
+  '香港',
+  '澳門', '澳门',
+])
+
 function isPlausiblePermitChineseName(value: string) {
   const normalized = normalizePermitChineseName(value)
 
   if (normalized.length < 2 || normalized.length > 20) return false
   if (!/^[\p{Script=Han}·‧]+$/u.test(normalized)) return false
+
+  if (permitAdministrativeNames.has(normalized)) {
+    return false
+  }
+
+  if (
+    /(?:省|市|縣|县|區|区|自治區|自治区|自治州)$/.test(
+      normalized,
+    )
+  ) {
+    return false
+  }
 
   return !permitFixedChineseLabels.some(
     (label) =>
@@ -1782,10 +1830,18 @@ function choosePermitChineseName(
     }
   }
 
-  return [
-    ...(labelAnchored ? [labelAnchored] : []),
-    ...phoneticCandidates,
-  ].sort((a, b) => b.rank - a.rank)[0] ?? null
+  if (latinAnchors.length > 0) {
+    // Once the document itself exposes a romanized personal name, do not
+    // let a merely-nearby high-confidence Chinese location/authority label
+    // outrank it. A Chinese candidate must survive the phonetic cross-check.
+    return (
+      phoneticCandidates
+        .sort((a, b) => b.rank - a.rank)[0] ??
+      null
+    )
+  }
+
+  return labelAnchored
 }
 
 function extractPermitNumberFromText(text: string) {
@@ -2134,7 +2190,9 @@ function buildTaiwanCompatriotPermitResult(
               ? 0.99
               : 0.9
           )
-        : name?.score ?? null,
+        : name?.score !== null && name?.score !== undefined
+          ? Math.min(name.score, 0.85)
+          : null,
     rotationDegrees: 0,
     orientationAttempts: 1,
     orientedImage: new File([], 'placeholder.png', {
