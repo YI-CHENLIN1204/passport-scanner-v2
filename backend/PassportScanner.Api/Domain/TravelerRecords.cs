@@ -24,7 +24,7 @@ public sealed class DocumentVersionRecord
     public required string DocumentNumber { get; set; }
     public string? IssuingCountry { get; set; }
     public string? Nationality { get; set; }
-    public required DateOnly ExpiryDate { get; set; }
+    public DateOnly? ExpiryDate { get; set; }
     public required bool IsCurrent { get; set; }
     public required DateTimeOffset VerifiedAt { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
