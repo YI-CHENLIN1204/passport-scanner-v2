@@ -2039,6 +2039,46 @@ function extractPermitSexFromRows(
   return null
 }
 
+function extractPermitChineseNameFromRows(
+  rows: string[],
+) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const latin = extractPermitLatinName(rows[index])
+    if (!latin) continue
+
+    for (
+      let offset = 1;
+      offset <= 2 && index - offset >= 0;
+      offset += 1
+    ) {
+      const candidate =
+        extractHanNameFromPermitText(
+          rows[index - offset],
+        )
+
+      if (!candidate) continue
+
+      const compatibility =
+        compareChineseNameToMrzRomanization(
+          candidate,
+          latin.surname,
+          latin.givenNames,
+        )
+
+      if (compatibility === 'conflict') {
+        continue
+      }
+
+      return {
+        value: candidate,
+        compatibility,
+      }
+    }
+  }
+
+  return null
+}
+
 function buildTaiwanCompatriotPermitResult(
   prediction: unknown,
   initializationMs: number,
@@ -2061,6 +2101,9 @@ function buildTaiwanCompatriotPermitResult(
 
   const rawRows = buildTextRows(items)
   const parsedMrz = parseTaiwanPermitMrz(rawRows)
+
+  const rowName =
+    extractPermitChineseNameFromRows(rawRows)
 
   const name = choosePermitChineseName(geometries)
 
@@ -2258,6 +2301,7 @@ function buildTaiwanCompatriotPermitResult(
 
   const finalChineseName =
     parsedMrz?.chineseName ||
+    rowName?.value ||
     name?.value ||
     ''
 
@@ -2304,7 +2348,10 @@ function buildTaiwanCompatriotPermitResult(
     expiryDate: finalExpiryDate,
     extractedFieldCount,
     fieldScores: {
-      chineseName: name?.score ?? null,
+      chineseName:
+        rowName?.value
+          ? null
+          : name?.score ?? null,
       permitNumber: permitNumber?.score ?? null,
       birthDate: inferredBirth?.score ?? null,
       sex: sex?.score ?? null,
@@ -2314,9 +2361,17 @@ function buildTaiwanCompatriotPermitResult(
     parsedMrz,
     mrzUsed: parsedMrz !== null,
     chineseNamePasses:
-      parsedMrz?.chineseName || name?.value ? 1 : 0,
+      parsedMrz?.chineseName ||
+      rowName?.value ||
+      name?.value
+        ? 1
+        : 0,
     chineseNameConsensus:
-      parsedMrz?.chineseName || name?.value ? 1 : 0,
+      parsedMrz?.chineseName ||
+      rowName?.value ||
+      name?.value
+        ? 1
+        : 0,
     chineseNameConfidence:
       parsedMrz?.chineseName
         ? (
@@ -2324,9 +2379,15 @@ function buildTaiwanCompatriotPermitResult(
               ? 0.99
               : 0.9
           )
-        : name?.score !== null && name?.score !== undefined
-          ? Math.min(name.score, 0.85)
-          : null,
+        : rowName?.value
+          ? (
+              rowName.compatibility === 'compatible'
+                ? 0.92
+                : 0.82
+            )
+          : name?.score !== null && name?.score !== undefined
+            ? Math.min(name.score, 0.85)
+            : null,
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
     rotationDegrees: 0,
