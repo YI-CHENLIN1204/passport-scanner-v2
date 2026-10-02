@@ -185,3 +185,52 @@ Accept: application/json
 
 GET {{PassportScanner_Api_HostAddress}}/api/travelers?limit=20
 Accept: application/json
+
+
+###
+
+# Taiwan national ID validation only.
+POST {{PassportScanner_Api_HostAddress}}/api/taiwan-national-id-reviews/validate
+Content-Type: application/json
+
+{
+  "schemaVersion": 1,
+  "documentType": "tw-id",
+  "chineseName": "測試旅客",
+  "nationalId": "A123456789",
+  "birthDate": "1990-01-15",
+  "sex": "M",
+  "reviewAssertions": {
+    "allFieldsVisuallyConfirmed": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "extractedFieldCount": 4,
+    "averageScore": 0.94
+  },
+  "reviewedAt": "2026-10-02T00:00:00+00:00"
+}
+
+###
+
+# Taiwan national ID save.
+POST {{PassportScanner_Api_HostAddress}}/api/taiwan-national-id-reviews
+Content-Type: application/json
+
+{
+  "schemaVersion": 1,
+  "documentType": "tw-id",
+  "chineseName": "測試旅客",
+  "nationalId": "A123456789",
+  "birthDate": "1990-01-15",
+  "sex": "M",
+  "reviewAssertions": {
+    "allFieldsVisuallyConfirmed": true
+  },
+  "ocr": {
+    "engine": "paddleocr-ppocrv5",
+    "extractedFieldCount": 4,
+    "averageScore": 0.94
+  },
+  "reviewedAt": "2026-10-02T00:00:00+00:00"
+}
