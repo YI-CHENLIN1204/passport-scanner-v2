@@ -1,4 +1,4 @@
-export type TaiwanNationalIdSex = 'M' | 'F'
+export type TaiwanNationalIdSex = '' | 'M' | 'F'
 
 export interface TaiwanNationalIdReviewForm {
   chineseName: string
