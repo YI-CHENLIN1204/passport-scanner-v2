@@ -22,6 +22,7 @@ import type {
 
 const props = defineProps<{
   file: File | null
+  tourId?: string | null
 }>()
 
 const running = ref(false)
@@ -346,7 +347,7 @@ async function save() {
 
   try {
     receipt.value =
-      await saveTaiwanNationalIdReview(draft)
+      await saveTaiwanNationalIdReview(draft, props.tourId ?? undefined)
   } catch (err) {
     submitError.value =
       err instanceof Error
@@ -702,18 +703,18 @@ onBeforeUnmount(revokeImageUrl)
           >
             {{
               receipt.action === 'CreatedTravelerAndDocument'
-                ? '已建立新旅客與第一個身分證版本。'
+                ? '已建立這位團員的第一筆身分證資料。'
                 : receipt.action === 'CreatedDocumentVersion'
-                  ? '已找到既有旅客並建立新的身分證版本。'
+                  ? '已更新這位團員的身分證版本。'
                   : '已更新同一張身分證，沒有重複建立版本。'
             }}
           </strong>
           <span v-else>
-            確認後會送到後端再次驗證身分證字號格式與檢查碼，再進入旅客／證件版本流程。
+            確認後會送到後端再次驗證身分證字號格式與檢查碼，並寫入目前團別。
           </span>
 
           <small v-if="receipt">
-            此旅客目前有
+            此團員目前有
             {{ receipt.travelerDocumentVersionCount }}
             個證件版本；資料已寫入 PostgreSQL 持久化儲存。
           </small>
