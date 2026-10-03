@@ -1161,10 +1161,10 @@ async function run() {
             }}
             此旅客目前有
             {{ reviewApiReceipt.travelerDocumentVersionCount }}
-            個證件版本。現在使用測試用記憶體儲存，後端重啟後資料會清空。
+            個證件版本。資料已寫入 PostgreSQL 持久化儲存。
           </small>
           <small v-else>
-            按下確認後會送到後端做第二層格式驗證；目前尚未進資料庫。
+            按下確認後會送到後端做第二層格式驗證，通過後寫入 PostgreSQL。
           </small>
         </div>
 
