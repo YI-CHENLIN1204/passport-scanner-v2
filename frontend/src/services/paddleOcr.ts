@@ -1393,10 +1393,83 @@ async function predictOne(
   return best
 }
 
+async function predictPassportWithDistanceFallback(
+  instance: PaddleInstance,
+  image: File,
+  initializationMs: number,
+  onFallback?: () => void,
+) {
+  const totalStartedAt = performance.now()
+
+  let best = await predictOne(
+    instance,
+    image,
+    initializationMs,
+    onFallback,
+  )
+
+  let accumulatedPredictMs = best.predictMs
+
+  const fullTooWeak =
+    best.detectedItems === 0 ||
+    (
+      best.line2Validation?.requiredValid !== true &&
+      !best.structureComplete &&
+      (
+        (best.recognizedCount ?? 0) < 5 ||
+        (best.averageScore ?? 0) < 0.55
+      )
+    )
+
+  if (fullTooWeak) {
+    const crops =
+      await createDistanceOcrCrops(image)
+
+    for (const crop of crops) {
+      onFallback?.()
+
+      const candidate = await predictOne(
+        instance,
+        crop.file,
+        0,
+        onFallback,
+      )
+
+      accumulatedPredictMs +=
+        candidate.predictMs
+
+      candidate.distanceCropUsed = true
+      candidate.distanceCropLabel =
+        crop.label
+
+      if (
+        passportOrientationQuality(candidate) >
+        passportOrientationQuality(best)
+      ) {
+        best = candidate
+      }
+
+      if (
+        candidate.structureComplete &&
+        candidate.line2Validation?.requiredValid === true
+      ) {
+        break
+      }
+    }
+  }
+
+  best.predictMs = accumulatedPredictMs
+  best.totalMs =
+    performance.now() - totalStartedAt
+
+  return best
+}
+
 function passportOrientationQuality(
   result: PaddleBaselineResult,
 ) {
   return (
+    (result.uprightSemanticScore ?? 0.5) * 2200 +
     (result.textHorizontalScore ?? 0.5) * 1200 +
     resultQuality(result) +
     (result.chineseName ? 100 : 0)
@@ -1437,7 +1510,7 @@ async function recognizePassportOrientedWithInstance(
     const rotated =
       await rotateImageFile(image, rotation)
 
-    const result = await predictOne(
+    const result = await predictPassportWithDistanceFallback(
       instance,
       rotated,
       attempts.length === 0
@@ -1476,7 +1549,8 @@ async function recognizePassportOrientedWithInstance(
   const originalStrong =
     original.structureComplete &&
     original.line1Valid &&
-    original.line2Validation?.requiredValid === true
+    original.line2Validation?.requiredValid === true &&
+    (original.uprightSemanticScore ?? 0.5) >= 0.6
 
   if (!originalStrong) {
     await runRotation(90, 0.32)
@@ -1491,7 +1565,8 @@ async function recognizePassportOrientedWithInstance(
     const currentStrong =
       currentBest.result.structureComplete &&
       currentBest.result.line1Valid &&
-      currentBest.result.line2Validation?.requiredValid === true
+      currentBest.result.line2Validation?.requiredValid === true &&
+      (currentBest.result.uprightSemanticScore ?? 0.5) >= 0.6
 
     if (!currentStrong) {
       await runRotation(180, 0.66)
@@ -1533,11 +1608,12 @@ async function recognizePassportOrientedWithInstance(
       -skew,
     )
 
-    const deskewedResult = await predictOne(
-      instance,
-      deskewed,
-      0,
-    )
+    const deskewedResult =
+      await predictPassportWithDistanceFallback(
+        instance,
+        deskewed,
+        0,
+      )
 
     deskewedResult.rotationDegrees =
       normalizeRotation(best.rotation - skew)
@@ -2641,6 +2717,10 @@ function buildTaiwanCompatriotPermitResult(
             : null,
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
+    uprightSemanticScore:
+      estimatePermitUprightScore(prediction),
+    distanceCropUsed: false,
+    distanceCropLabel: null,
     rotationDegrees: 0,
     orientationAttempts: 1,
     orientedImage: new File([], 'placeholder.png', {
@@ -2719,6 +2799,7 @@ function permitResultQuality(
   result: TaiwanCompatriotPermitOcrResult,
 ) {
   return (
+    result.uprightSemanticScore * 900 +
     result.textHorizontalScore * 320 +
     (result.parsedMrz?.validation.requiredValid ? 1000 : 0) +
     (result.mrzUsed ? 100 : 0) +
@@ -2876,22 +2957,84 @@ async function predictPermit(
   initializationMs: number,
   totalStartedAt: number,
 ) {
-  const startedAt = performance.now()
-  const [prediction] = await instance.predict(image)
-  const predictMs = performance.now() - startedAt
+  let accumulatedPredictMs = 0
 
-  const result = buildTaiwanCompatriotPermitResult(
-    prediction,
-    initializationMs,
-    predictMs,
-    performance.now() - totalStartedAt,
-  )
+  const predict = async (candidate: File | Blob) => {
+    const startedAt = performance.now()
+    const [prediction] =
+      await instance.predict(candidate)
 
-  result.orientedImage = image
+    accumulatedPredictMs +=
+      performance.now() - startedAt
+
+    return prediction
+  }
+
+  const fullPrediction = await predict(image)
+
+  let bestPrediction = fullPrediction
+  let best =
+    buildTaiwanCompatriotPermitResult(
+      fullPrediction,
+      initializationMs,
+      accumulatedPredictMs,
+      performance.now() - totalStartedAt,
+    )
+
+  const fullTooWeak =
+    best.detectedItems === 0 ||
+    (
+      best.parsedMrz?.validation.requiredValid !== true &&
+      best.extractedFieldCount < 3
+    )
+
+  if (fullTooWeak) {
+    const crops =
+      await createDistanceOcrCrops(image)
+
+    for (const crop of crops) {
+      const cropPrediction =
+        await predict(crop.file)
+
+      const candidate =
+        buildTaiwanCompatriotPermitResult(
+          cropPrediction,
+          initializationMs,
+          accumulatedPredictMs,
+          performance.now() - totalStartedAt,
+        )
+
+      candidate.distanceCropUsed = true
+      candidate.distanceCropLabel =
+        crop.label
+
+      if (
+        permitResultQuality(candidate) >
+        permitResultQuality(best)
+      ) {
+        best = candidate
+        bestPrediction = cropPrediction
+      }
+
+      if (
+        candidate.parsedMrz?.validation.requiredValid === true ||
+        candidate.extractedFieldCount >= 4
+      ) {
+        break
+      }
+    }
+  }
+
+  best.predictMs = accumulatedPredictMs
+  best.totalMs =
+    performance.now() - totalStartedAt
+
+  // OCR may use an enlarged crop; review still shows the full rotated photo.
+  best.orientedImage = image
 
   return {
-    prediction,
-    result,
+    prediction: bestPrediction,
+    result: best,
   }
 }
 
@@ -3148,12 +3291,15 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   const original = await tryRotation(0, 0.16)
 
   const strongEnough =
-    original.parsedMrz?.validation.requiredValid === true ||
     (
-      original.extractedFieldCount >= 4 &&
-      Boolean(original.chineseName) &&
-      Boolean(original.permitNumber)
-    )
+      original.parsedMrz?.validation.requiredValid === true ||
+      (
+        original.extractedFieldCount >= 4 &&
+        Boolean(original.chineseName) &&
+        Boolean(original.permitNumber)
+      )
+    ) &&
+    original.uprightSemanticScore >= 0.6
 
   if (!strongEnough) {
     await tryRotation(90, 0.34)
@@ -3718,6 +3864,8 @@ function buildTaiwanNationalIdResult(
     ),
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
+    uprightSemanticScore:
+      estimateTaiwanIdUprightScore(prediction),
     distanceCropUsed: false,
     distanceCropLabel: null,
   }
@@ -3727,6 +3875,7 @@ function taiwanIdResultQuality(
   result: TaiwanNationalIdOcrResult,
 ) {
   return (
+    result.uprightSemanticScore * 1100 +
     result.textHorizontalScore * 420 +
     (result.idChecksumValid ? 1000 : 0) +
     (result.chineseName ? 16 : 0) +
@@ -3978,7 +4127,8 @@ export async function recognizeTaiwanNationalIdWithPaddle(
     original.idChecksumValid &&
     Boolean(original.chineseName) &&
     Boolean(original.birthDate) &&
-    original.textHorizontalScore >= 0.78
+    original.textHorizontalScore >= 0.78 &&
+    original.uprightSemanticScore >= 0.6
 
   if (!strongEnough) {
     await tryRotation(90, 0.34)
@@ -3995,7 +4145,8 @@ export async function recognizeTaiwanNationalIdWithPaddle(
       currentBest.result.idChecksumValid &&
       Boolean(currentBest.result.chineseName) &&
       Boolean(currentBest.result.birthDate) &&
-      currentBest.result.textHorizontalScore >= 0.78
+      currentBest.result.textHorizontalScore >= 0.78 &&
+      currentBest.result.uprightSemanticScore >= 0.6
 
     if (!currentStrong) {
       await tryRotation(180, 0.66)
