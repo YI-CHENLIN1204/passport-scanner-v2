@@ -567,10 +567,6 @@ const paddleModelBaseUrl =
   import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
   '/paddle-models'
 
-const paddleModelMirrorBaseUrl =
-  import.meta.env.VITE_PADDLE_MODEL_MIRROR_BASE_URL?.replace(/\/$/, '') ??
-  '/paddle-model-mirror'
-
 interface PaddleModelSource {
   label: string
   detectionUrl: string
@@ -584,13 +580,6 @@ const paddleModelSources: PaddleModelSource[] = [
       `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar`,
     recognitionUrl:
       `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar`,
-  },
-  {
-    label: 'mirror',
-    detectionUrl:
-      `${paddleModelMirrorBaseUrl}/PP-OCRv5_mobile_det_onnx_infer.tar`,
-    recognitionUrl:
-      `${paddleModelMirrorBaseUrl}/PP-OCRv5_mobile_rec_onnx_infer.tar`,
   },
 ]
 
@@ -713,7 +702,7 @@ async function getPaddle() {
 
   if (isInvalidModelArchive(lastError)) {
     throw new Error(
-      'PaddleOCR 模型檔格式異常；官方來源與備援來源都無法載入。請重新整理頁面後再試。',
+      'PaddleOCR 模型檔格式異常。若目前使用 Docker，請確認 frontend Nginx 已代理 /paddle-models/，再重新整理頁面重試。',
     )
   }
 
