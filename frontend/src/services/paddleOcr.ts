@@ -37,6 +37,7 @@ interface PaddleItemGeometry {
   maxY: number
   centerY: number
   height: number
+  points: Array<[number, number]>
 }
 
 export interface PaddleBaselineResult {
@@ -127,6 +128,7 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
       maxY: 0,
       centerY: 0,
       height: 0,
+      points: [],
     }
   }
 
@@ -145,6 +147,7 @@ function toGeometry(item: PaddleItemLike): PaddleItemGeometry | null {
     maxY,
     centerY: (minY + maxY) / 2,
     height: Math.max(1, maxY - minY),
+    points,
   }
 }
 
@@ -1245,6 +1248,540 @@ async function createBottomCrop(
   })
 }
 
+type DocumentQuad = {
+  topLeft: [number, number]
+  topRight: [number, number]
+  bottomRight: [number, number]
+  bottomLeft: [number, number]
+}
+
+function distanceBetween(
+  a: [number, number],
+  b: [number, number],
+) {
+  return Math.hypot(
+    b[0] - a[0],
+    b[1] - a[1],
+  )
+}
+
+function polygonArea(
+  points: Array<[number, number]>,
+) {
+  let sum = 0
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]
+    const next =
+      points[(index + 1) % points.length]
+
+    sum +=
+      current[0] * next[1] -
+      next[0] * current[1]
+  }
+
+  return Math.abs(sum) / 2
+}
+
+function estimateDocumentQuad(
+  prediction: unknown,
+  imageWidth: number,
+  imageHeight: number,
+) {
+  const points = predictionItems(prediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null &&
+        item.points.length >= 4 &&
+        item.height > 0,
+    )
+    .flatMap((item) => item.points)
+
+  if (points.length < 12) {
+    return null
+  }
+
+  const topLeft = [...points].sort(
+    (a, b) =>
+      a[0] + a[1] -
+      (b[0] + b[1]),
+  )[0]
+
+  const topRight = [...points].sort(
+    (a, b) =>
+      (b[0] - b[1]) -
+      (a[0] - a[1]),
+  )[0]
+
+  const bottomRight = [...points].sort(
+    (a, b) =>
+      b[0] + b[1] -
+      (a[0] + a[1]),
+  )[0]
+
+  const bottomLeft = [...points].sort(
+    (a, b) =>
+      (a[0] - a[1]) -
+      (b[0] - b[1]),
+  )[0]
+
+  const raw: DocumentQuad = {
+    topLeft,
+    topRight,
+    bottomRight,
+    bottomLeft,
+  }
+
+  const rawArea = polygonArea([
+    raw.topLeft,
+    raw.topRight,
+    raw.bottomRight,
+    raw.bottomLeft,
+  ])
+
+  if (
+    rawArea <
+    imageWidth * imageHeight * 0.008
+  ) {
+    return null
+  }
+
+  const center: [number, number] = [
+    (
+      topLeft[0] +
+      topRight[0] +
+      bottomRight[0] +
+      bottomLeft[0]
+    ) / 4,
+    (
+      topLeft[1] +
+      topRight[1] +
+      bottomRight[1] +
+      bottomLeft[1]
+    ) / 4,
+  ]
+
+  // OCR polygons describe the printed content, not the physical edge.
+  // Expand them around their common centre so the final warp includes the
+  // full card/page instead of only the text footprint.
+  const expandX = 1.34
+  const expandY = 1.72
+
+  const expand = (
+    point: [number, number],
+  ): [number, number] => [
+    Math.max(
+      0,
+      Math.min(
+        imageWidth - 1,
+        center[0] +
+          (point[0] - center[0]) *
+            expandX,
+      ),
+    ),
+    Math.max(
+      0,
+      Math.min(
+        imageHeight - 1,
+        center[1] +
+          (point[1] - center[1]) *
+            expandY,
+      ),
+    ),
+  ]
+
+  const quad: DocumentQuad = {
+    topLeft: expand(topLeft),
+    topRight: expand(topRight),
+    bottomRight: expand(bottomRight),
+    bottomLeft: expand(bottomLeft),
+  }
+
+  const topWidth =
+    distanceBetween(
+      quad.topLeft,
+      quad.topRight,
+    )
+  const bottomWidth =
+    distanceBetween(
+      quad.bottomLeft,
+      quad.bottomRight,
+    )
+  const leftHeight =
+    distanceBetween(
+      quad.topLeft,
+      quad.bottomLeft,
+    )
+  const rightHeight =
+    distanceBetween(
+      quad.topRight,
+      quad.bottomRight,
+    )
+
+  if (
+    Math.min(
+      topWidth,
+      bottomWidth,
+      leftHeight,
+      rightHeight,
+    ) < 30
+  ) {
+    return null
+  }
+
+  return quad
+}
+
+function perspectiveSeverity(
+  quad: DocumentQuad,
+) {
+  const top =
+    distanceBetween(
+      quad.topLeft,
+      quad.topRight,
+    )
+  const bottom =
+    distanceBetween(
+      quad.bottomLeft,
+      quad.bottomRight,
+    )
+  const left =
+    distanceBetween(
+      quad.topLeft,
+      quad.bottomLeft,
+    )
+  const right =
+    distanceBetween(
+      quad.topRight,
+      quad.bottomRight,
+    )
+
+  const widthRatio =
+    Math.max(top, bottom) /
+    Math.max(1, Math.min(top, bottom))
+
+  const heightRatio =
+    Math.max(left, right) /
+    Math.max(1, Math.min(left, right))
+
+  return Math.max(
+    widthRatio - 1,
+    heightRatio - 1,
+  )
+}
+
+function solveLinearSystem(
+  matrix: number[][],
+  vector: number[],
+) {
+  const size = vector.length
+  const augmented = matrix.map(
+    (row, index) => [
+      ...row,
+      vector[index],
+    ],
+  )
+
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column
+
+    for (
+      let row = column + 1;
+      row < size;
+      row += 1
+    ) {
+      if (
+        Math.abs(
+          augmented[row][column],
+        ) >
+        Math.abs(
+          augmented[pivot][column],
+        )
+      ) {
+        pivot = row
+      }
+    }
+
+    if (
+      Math.abs(
+        augmented[pivot][column],
+      ) < 1e-9
+    ) {
+      return null
+    }
+
+    ;[
+      augmented[column],
+      augmented[pivot],
+    ] = [
+      augmented[pivot],
+      augmented[column],
+    ]
+
+    const pivotValue =
+      augmented[column][column]
+
+    for (
+      let index = column;
+      index <= size;
+      index += 1
+    ) {
+      augmented[column][index] /=
+        pivotValue
+    }
+
+    for (
+      let row = 0;
+      row < size;
+      row += 1
+    ) {
+      if (row === column) continue
+
+      const factor =
+        augmented[row][column]
+
+      for (
+        let index = column;
+        index <= size;
+        index += 1
+      ) {
+        augmented[row][index] -=
+          factor *
+          augmented[column][index]
+      }
+    }
+  }
+
+  return augmented.map(
+    (row) => row[size],
+  )
+}
+
+function homographyFromRectangleToQuad(
+  width: number,
+  height: number,
+  quad: DocumentQuad,
+) {
+  const source = [
+    quad.topLeft,
+    quad.topRight,
+    quad.bottomRight,
+    quad.bottomLeft,
+  ]
+
+  const target: Array<[number, number]> = [
+    [0, 0],
+    [width - 1, 0],
+    [width - 1, height - 1],
+    [0, height - 1],
+  ]
+
+  const matrix: number[][] = []
+  const vector: number[] = []
+
+  for (let index = 0; index < 4; index += 1) {
+    const [x, y] = target[index]
+    const [u, v] = source[index]
+
+    matrix.push([
+      x,
+      y,
+      1,
+      0,
+      0,
+      0,
+      -u * x,
+      -u * y,
+    ])
+    vector.push(u)
+
+    matrix.push([
+      0,
+      0,
+      0,
+      x,
+      y,
+      1,
+      -v * x,
+      -v * y,
+    ])
+    vector.push(v)
+  }
+
+  const solved =
+    solveLinearSystem(
+      matrix,
+      vector,
+    )
+
+  return solved
+}
+
+async function warpPerspectiveToDocument(
+  image: File,
+  quad: DocumentQuad,
+  targetAspectRatio: number,
+) {
+  const bitmap =
+    await createImageBitmap(image)
+
+  const outputWidth = 1000
+  const outputHeight = Math.max(
+    1,
+    Math.round(
+      outputWidth / targetAspectRatio,
+    ),
+  )
+
+  const homography =
+    homographyFromRectangleToQuad(
+      outputWidth,
+      outputHeight,
+      quad,
+    )
+
+  if (!homography) {
+    bitmap.close()
+    return null
+  }
+
+  const sourceCanvas =
+    document.createElement('canvas')
+  sourceCanvas.width = bitmap.width
+  sourceCanvas.height = bitmap.height
+
+  const sourceContext =
+    sourceCanvas.getContext(
+      '2d',
+      { willReadFrequently: true },
+    )
+
+  if (!sourceContext) {
+    bitmap.close()
+    return null
+  }
+
+  sourceContext.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const source =
+    sourceContext.getImageData(
+      0,
+      0,
+      sourceCanvas.width,
+      sourceCanvas.height,
+    )
+
+  const outputCanvas =
+    document.createElement('canvas')
+  outputCanvas.width = outputWidth
+  outputCanvas.height = outputHeight
+
+  const outputContext =
+    outputCanvas.getContext('2d')
+
+  if (!outputContext) return null
+
+  const output =
+    outputContext.createImageData(
+      outputWidth,
+      outputHeight,
+    )
+
+  const [
+    h0,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    h7,
+  ] = homography
+
+  for (
+    let y = 0;
+    y < outputHeight;
+    y += 1
+  ) {
+    for (
+      let x = 0;
+      x < outputWidth;
+      x += 1
+    ) {
+      const denominator =
+        h6 * x + h7 * y + 1
+
+      if (
+        Math.abs(denominator) < 1e-8
+      ) {
+        continue
+      }
+
+      const sourceX =
+        (h0 * x + h1 * y + h2) /
+        denominator
+      const sourceY =
+        (h3 * x + h4 * y + h5) /
+        denominator
+
+      const sx = Math.round(sourceX)
+      const sy = Math.round(sourceY)
+
+      if (
+        sx < 0 ||
+        sy < 0 ||
+        sx >= source.width ||
+        sy >= source.height
+      ) {
+        continue
+      }
+
+      const sourceIndex =
+        (sy * source.width + sx) * 4
+      const outputIndex =
+        (y * outputWidth + x) * 4
+
+      output.data[outputIndex] =
+        source.data[sourceIndex]
+      output.data[outputIndex + 1] =
+        source.data[sourceIndex + 1]
+      output.data[outputIndex + 2] =
+        source.data[sourceIndex + 2]
+      output.data[outputIndex + 3] =
+        255
+    }
+  }
+
+  outputContext.putImageData(
+    output,
+    0,
+    0,
+  )
+
+  const blob = await new Promise<Blob>(
+    (resolve, reject) => {
+      outputCanvas.toBlob((value) => {
+        if (value) resolve(value)
+        else {
+          reject(
+            new Error(
+              '無法產生透視校正證件圖。',
+            ),
+          )
+        }
+      }, 'image/png')
+    },
+  )
+
+  return new File(
+    [blob],
+    'document-perspective-corrected.png',
+    { type: 'image/png' },
+  )
+}
+
 function clampReviewCrop(
   centerX: number,
   centerY: number,
@@ -1360,6 +1897,29 @@ async function createStraightenedReviewImage(
       targetAspectRatio,
     )
     bitmap.close()
+
+    const quad =
+      estimateDocumentQuad(
+        prediction,
+        bitmap.width,
+        bitmap.height,
+      )
+
+    if (
+      quad &&
+      perspectiveSeverity(quad) >= 0.035
+    ) {
+      const corrected =
+        await warpPerspectiveToDocument(
+          candidate,
+          quad,
+          targetAspectRatio,
+        )
+
+      if (corrected) {
+        return corrected
+      }
+    }
 
     if (!crop) return null
 
