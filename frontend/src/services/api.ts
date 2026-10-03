@@ -33,6 +33,13 @@ interface ValidationProblemDetails {
   errors?: Record<string, string[]>
 }
 
+function withTourId(path: string, tourId?: string) {
+  if (!tourId) return path
+
+  const separator = path.includes('?') ? '&' : '?'
+  return `${path}${separator}tourId=${encodeURIComponent(tourId)}`
+}
+
 function flattenValidationProblem(problem: ValidationProblemDetails) {
   const messages = Object.values(problem.errors ?? {}).flat()
   return messages.length
@@ -95,9 +102,13 @@ interface ApiConflict {
 
 export async function savePassportReview(
   draft: PassportReviewDraft,
+  tourId?: string,
 ): Promise<PassportReviewSaveResponse> {
   const response = await fetch(
-    `${apiBaseUrl}/api/passport-reviews`,
+    withTourId(
+      `${apiBaseUrl}/api/passport-reviews`,
+      tourId,
+    ),
     {
       method: 'POST',
       headers: {
@@ -171,9 +182,13 @@ export interface TaiwanCompatriotPermitReviewSaveResponse {
 
 export async function saveTaiwanCompatriotPermitReview(
   draft: TaiwanCompatriotPermitReviewDraft,
+  tourId?: string,
 ): Promise<TaiwanCompatriotPermitReviewSaveResponse> {
   const response = await fetch(
-    `${apiBaseUrl}/api/taiwan-compatriot-permit-reviews`,
+    withTourId(
+      `${apiBaseUrl}/api/taiwan-compatriot-permit-reviews`,
+      tourId,
+    ),
     {
       method: 'POST',
       headers: {
@@ -318,9 +333,13 @@ export interface TaiwanNationalIdReviewSaveResponse {
 
 export async function saveTaiwanNationalIdReview(
   draft: TaiwanNationalIdReviewDraft,
+  tourId?: string,
 ): Promise<TaiwanNationalIdReviewSaveResponse> {
   const response = await fetch(
-    `${apiBaseUrl}/api/taiwan-national-id-reviews`,
+    withTourId(
+      `${apiBaseUrl}/api/taiwan-national-id-reviews`,
+      tourId,
+    ),
     {
       method: 'POST',
       headers: {
@@ -358,4 +377,146 @@ export async function saveTaiwanNationalIdReview(
   }
 
   return response.json() as Promise<TaiwanNationalIdReviewSaveResponse>
+}
+
+
+export interface TourSummaryResponse {
+  tourId: string
+  tourName: string
+  departureDate: string
+  returnDate: string
+  expectedMemberCount: number | null
+  reviewedMemberCount: number
+  documentCount: number
+  updatedAt: string
+}
+
+export interface TourMemberDocumentResponse {
+  documentVersionId: string
+  documentType: string
+  documentNumber: string
+  expiryDate: string | null
+  isCurrent: boolean
+  verifiedAt: string
+}
+
+export interface TourMemberResponse {
+  tourMemberId: string
+  travelerId: string
+  nameZh: string
+  nameEn: string
+  birthDate: string
+  gender: string
+  nationality: string | null
+  documents: TourMemberDocumentResponse[]
+}
+
+export interface TourDetailResponse {
+  tour: TourSummaryResponse
+  members: TourMemberResponse[]
+}
+
+export interface CreateTourRequest {
+  tourName: string
+  departureDate: string
+  returnDate: string
+  expectedMemberCount: number | null
+}
+
+export async function listTours(query = '') {
+  const params = new URLSearchParams()
+  if (query.trim()) params.set('query', query.trim())
+
+  const suffix = params.toString()
+    ? `?${params.toString()}`
+    : ''
+
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours${suffix}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Tour list failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<TourSummaryResponse[]>
+}
+
+export async function createTour(
+  request: CreateTourRequest,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message = `Create tour failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status message when response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<TourSummaryResponse>
+}
+
+export async function getTourDetail(tourId: string) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}`,
+  )
+
+  if (response.status === 404) return null
+
+  if (!response.ok) {
+    throw new Error(
+      `Tour detail failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<TourDetailResponse>
+}
+
+export async function downloadTourCsv(
+  tourId: string,
+  filename: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}/export.csv`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Tour export failed: ${response.status}`,
+    )
+  }
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
