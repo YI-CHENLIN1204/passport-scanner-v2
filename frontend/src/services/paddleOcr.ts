@@ -1245,6 +1245,159 @@ async function createBottomCrop(
   })
 }
 
+function clampReviewCrop(
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  imageWidth: number,
+  imageHeight: number,
+) {
+  let cropWidth = Math.min(width, imageWidth)
+  let cropHeight = Math.min(height, imageHeight)
+
+  let x = centerX - cropWidth / 2
+  let y = centerY - cropHeight / 2
+
+  x = Math.max(
+    0,
+    Math.min(imageWidth - cropWidth, x),
+  )
+  y = Math.max(
+    0,
+    Math.min(imageHeight - cropHeight, y),
+  )
+
+  return {
+    x,
+    y,
+    width: cropWidth,
+    height: cropHeight,
+  }
+}
+
+function reviewCropFromPrediction(
+  prediction: unknown,
+  imageWidth: number,
+  imageHeight: number,
+  targetAspectRatio: number,
+) {
+  const geometries = predictionItems(prediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null &&
+        item.width > 4 &&
+        item.height > 4,
+    )
+
+  if (geometries.length < 2) {
+    return null
+  }
+
+  const minX = Math.min(
+    ...geometries.map((item) => item.minX),
+  )
+  const maxX = Math.max(
+    ...geometries.map((item) => item.maxX),
+  )
+  const minY = Math.min(
+    ...geometries.map((item) => item.minY),
+  )
+  const maxY = Math.max(
+    ...geometries.map((item) => item.maxY),
+  )
+
+  const textWidth = Math.max(1, maxX - minX)
+  const textHeight = Math.max(1, maxY - minY)
+
+  // Text rarely reaches the physical card/page edges. Add generous margins,
+  // then normalize toward the expected document aspect ratio.
+  let width = textWidth * 1.42
+  let height = textHeight * 1.9
+
+  if (width / height < targetAspectRatio) {
+    width = height * targetAspectRatio
+  } else {
+    height = width / targetAspectRatio
+  }
+
+  // A crop that is still most of the original photo is not useful.
+  // Keep it, but cap it enough to remove obviously irrelevant background.
+  width = Math.min(width, imageWidth * 0.94)
+  height = Math.min(height, imageHeight * 0.94)
+
+  const centerX = (minX + maxX) / 2
+  const centerY = (minY + maxY) / 2
+
+  return clampReviewCrop(
+    centerX,
+    centerY,
+    width,
+    height,
+    imageWidth,
+    imageHeight,
+  )
+}
+
+async function createStraightenedReviewImage(
+  instance: PaddleInstance,
+  image: File,
+  targetAspectRatio: number,
+) {
+  const tryCandidate = async (
+    candidate: File,
+  ) => {
+    const [prediction] =
+      await instance.predict(candidate)
+
+    const bitmap =
+      await createImageBitmap(candidate)
+    const crop = reviewCropFromPrediction(
+      prediction,
+      bitmap.width,
+      bitmap.height,
+      targetAspectRatio,
+    )
+    bitmap.close()
+
+    if (!crop) return null
+
+    const blob = await createPixelCrop(
+      candidate,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      1100,
+    )
+
+    return new File(
+      [blob],
+      'document-review.png',
+      { type: 'image/png' },
+    )
+  }
+
+  const full = await tryCandidate(image)
+  if (full) return full
+
+  // Distant photos can be too sparse for full-frame text detection.
+  // Reuse the same centered enlargements used by OCR, then crop around
+  // the text boxes inside that enlarged view.
+  const crops =
+    await createDistanceOcrCrops(image)
+
+  for (const crop of crops) {
+    const review =
+      await tryCandidate(crop.file)
+
+    if (review) return review
+  }
+
+  return image
+}
+
 function resultQuality(result: PaddleBaselineResult) {
   return (
     (result.line2Validation?.requiredValid ? 10000 : 0) +
@@ -1651,7 +1804,12 @@ async function recognizePassportOrientedWithInstance(
   // even when the pre-deskew OCR result scored slightly better.
   best.result.rotationDegrees =
     reviewRotation
-  best.result.orientedImage = reviewImage
+  best.result.orientedImage =
+    await createStraightenedReviewImage(
+      instance,
+      reviewImage,
+      1.42,
+    )
 
   onProgress?.({
     stage: 'completed',
@@ -3436,7 +3594,11 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   best.result.rotationDegrees =
     reviewRotation
   best.result.orientedImage =
-    reviewImage
+    await createStraightenedReviewImage(
+      instance,
+      reviewImage,
+      1.586,
+    )
 
   onProgress?.({
     stage: 'completed',
@@ -4273,7 +4435,11 @@ export async function recognizeTaiwanNationalIdWithPaddle(
   best.result.rotationDegrees =
     reviewRotation
   best.result.orientedImage =
-    reviewImage
+    await createStraightenedReviewImage(
+      instance,
+      reviewImage,
+      1.586,
+    )
 
   onProgress?.({
     stage: 'completed',
