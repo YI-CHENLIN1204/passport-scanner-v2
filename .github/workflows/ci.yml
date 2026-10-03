@@ -81,10 +81,110 @@ jobs:
 
       - name: Verify database schema exists
         run: |
-          docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions') ORDER BY table_name;" > /tmp/tables.txt
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions','tours','tour_members') ORDER BY table_name;" > /tmp/tables.txt
           cat /tmp/tables.txt
-          grep -q '^document_versions$' /tmp/tables.txt
-          grep -q '^travelers$' /tmp/tables.txt
+          grep -q '^document_versions
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","expectedMemberCount":12}' \
+            > /tmp/tour.json
+
+          cat /tmp/tour.json
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^tour_members
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^tours
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^travelers
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
 
       - name: Restart backend and verify API reconnects
         run: |
