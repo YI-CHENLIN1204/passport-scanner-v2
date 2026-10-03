@@ -2436,6 +2436,117 @@ function reviewCropFromPrediction(
   )
 }
 
+async function makeEdgeWhitePaddingTransparent(
+  image: File,
+) {
+  const bitmap = await createImageBitmap(image)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+
+  const context = canvas.getContext(
+    '2d',
+    { willReadFrequently: true },
+  )
+
+  if (!context) {
+    bitmap.close()
+    return image
+  }
+
+  context.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const frame = context.getImageData(
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  )
+
+  const { data } = frame
+  const width = canvas.width
+  const height = canvas.height
+  const visited = new Uint8Array(width * height)
+  const queue: number[] = []
+
+  const isPaddingWhite = (index: number) => {
+    const offset = index * 4
+
+    return (
+      data[offset] >= 248 &&
+      data[offset + 1] >= 248 &&
+      data[offset + 2] >= 248 &&
+      data[offset + 3] >= 250
+    )
+  }
+
+  const enqueue = (index: number) => {
+    if (
+      index < 0 ||
+      index >= width * height ||
+      visited[index] ||
+      !isPaddingWhite(index)
+    ) {
+      return
+    }
+
+    visited[index] = 1
+    queue.push(index)
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    enqueue(x)
+    enqueue((height - 1) * width + x)
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    enqueue(y * width)
+    enqueue(y * width + width - 1)
+  }
+
+  for (
+    let cursor = 0;
+    cursor < queue.length;
+    cursor += 1
+  ) {
+    const index = queue[cursor]
+    const x = index % width
+    const y = Math.floor(index / width)
+
+    const offset = index * 4
+    data[offset + 3] = 0
+
+    if (x > 0) enqueue(index - 1)
+    if (x + 1 < width) enqueue(index + 1)
+    if (y > 0) enqueue(index - width)
+    if (y + 1 < height) enqueue(index + width)
+  }
+
+  context.putImageData(frame, 0, 0)
+
+  const blob = await new Promise<Blob>(
+    (resolve, reject) => {
+      canvas.toBlob((value) => {
+        if (value) resolve(value)
+        else {
+          reject(
+            new Error(
+              '無法產生覆核透明邊界圖片。',
+            ),
+          )
+        }
+      }, 'image/png')
+    },
+  )
+
+  return new File(
+    [blob],
+    'document-review-clean.png',
+    { type: 'image/png' },
+  )
+}
+
 async function createStraightenedReviewImage(
   instance: PaddleInstance,
   image: File,
@@ -2486,7 +2597,9 @@ async function createStraightenedReviewImage(
         )
 
       if (corrected) {
-        return corrected
+        return await makeEdgeWhitePaddingTransparent(
+          corrected,
+        )
       }
     }
 
@@ -2504,10 +2617,12 @@ async function createStraightenedReviewImage(
       1100,
     )
 
-    return new File(
-      [blob],
-      'document-review.png',
-      { type: 'image/png' },
+    return await makeEdgeWhitePaddingTransparent(
+      new File(
+        [blob],
+        'document-review.png',
+        { type: 'image/png' },
+      ),
     )
   }
 
@@ -4860,6 +4975,12 @@ const taiwanIdFixedChineseLabels = [
   '发证日期',
   '發證地點',
   '发证地点',
+  '性別',
+  '性别',
+  '性別男',
+  '性別女',
+  '性别男',
+  '性别女',
   '父',
   '母',
   '配偶',
@@ -4870,14 +4991,77 @@ const taiwanIdFixedChineseLabels = [
 function extractTaiwanIdChineseName(
   value: string,
 ) {
-  let cleaned = value
-    .replace(/姓名/gu, '')
-    .replace(/Name/giu, '')
+  const normalized = value
     .replace(/\s+/g, '')
     .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
 
+  const nameLabelMatch =
+    normalized.match(/(?:姓名|NAME)/iu)
+
+  if (nameLabelMatch?.index !== undefined) {
+    let afterLabel = normalized.slice(
+      nameLabelMatch.index +
+        nameLabelMatch[0].length,
+    )
+
+    const stopLabels = [
+      '中華民國',
+      '中华民国',
+      '國民身分證',
+      '国民身份证',
+      '身分證',
+      '身份证',
+      '出生日期',
+      '出生年月日',
+      '出生',
+      '性別',
+      '性别',
+      '男',
+      '女',
+      '統一編號',
+      '统一编号',
+      '發證日期',
+      '发证日期',
+      '發證地點',
+      '发证地点',
+      '役別',
+      '役别',
+    ]
+
+    let stopIndex = afterLabel.length
+
+    for (const label of stopLabels) {
+      const index = afterLabel.indexOf(label)
+
+      if (
+        index >= 0 &&
+        index < stopIndex
+      ) {
+        stopIndex = index
+      }
+    }
+
+    afterLabel = afterLabel.slice(
+      0,
+      stopIndex,
+    )
+
+    const labelledCandidate =
+      afterLabel.match(
+        /^[\p{Script=Han}·‧]{2,8}/u,
+      )?.[0] ?? null
+
+    if (labelledCandidate) {
+      return labelledCandidate
+    }
+  }
+
+  const cleaned = normalized
+    .replace(/姓名/gu, '')
+    .replace(/Name/giu, '')
+
   const candidates =
-    cleaned.match(/[\p{Script=Han}·‧]{2,12}/gu) ?? []
+    cleaned.match(/[\p{Script=Han}·‧]{2,8}/gu) ?? []
 
   return (
     candidates
@@ -4889,6 +5073,14 @@ function extractTaiwanIdChineseName(
               candidate === label ||
               candidate.includes(label) ||
               label.includes(candidate),
+          )
+        ) {
+          return false
+        }
+
+        if (
+          /^(?:性別|性别|男|女)/.test(
+            candidate,
           )
         ) {
           return false
