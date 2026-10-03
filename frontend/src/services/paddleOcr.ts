@@ -801,8 +801,6 @@ function buildBaselineResult(
       estimateTextSkewDegrees(prediction),
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
-    distanceCropUsed: false,
-    distanceCropLabel: null,
   }
 }
 
@@ -1513,8 +1511,6 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNameConsensus: number
   chineseNameConfidence: number | null
   textHorizontalScore: number
-  distanceCropUsed: boolean
-  distanceCropLabel: string | null
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -3121,6 +3117,8 @@ export interface TaiwanNationalIdOcrResult {
   orientationAttempts: number
   orientedImage: File
   textHorizontalScore: number
+  distanceCropUsed: boolean
+  distanceCropLabel: string | null
 }
 
 export interface TaiwanNationalIdOcrProgress {
@@ -3528,6 +3526,8 @@ function buildTaiwanNationalIdResult(
     ),
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
+    distanceCropUsed: false,
+    distanceCropLabel: null,
   }
 }
 
