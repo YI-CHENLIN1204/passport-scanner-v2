@@ -395,3 +395,32 @@ V2 的旅客主檔與證件版本不再使用 `InMemoryTravelerStore` 作為實�
 `ITravelerStore` 保留作為資料層 abstraction，讓未來若切換到外部 PostgreSQL／Supabase PostgreSQL 時，不需要重寫前端或 review API。
 
 本機 Compose 預設密碼只用於開發；正式部署必須由環境變數或 secrets 注入。
+
+
+### D-035：V2 目前產品邊界是「團別證件掃描與匯出」
+
+目前階段不開發旅客客戶端，也不做 CRM 串接。
+
+V2 正式主流程：
+
+1. 旅行社員工建立或選擇團別。
+2. 進入該團後上傳／掃描旅客證件。
+3. 護照、台胞證、台灣身分證在瀏覽器端 OCR。
+4. 人工覆核後，證件資料掛到目前團別的團員。
+5. 團別頁查看目前已建檔團員與各自已完成的證件種類。
+6. 完成後以按鈕整團匯出。
+
+這個階段的成功標準是「一團一團處理證件並能輸出」，不是建立跨團 CRM 客戶 360 主檔。
+
+資料庫底層仍可保留 traveler/document version abstraction 以避免重寫既有 OCR review pipeline，但它不是目前產品 UI，也不代表已進入 CRM 階段。
+
+目前新增：
+
+- `tours`
+- `tour_members`
+- `GET /api/tours`
+- `POST /api/tours`
+- `GET /api/tours/{id}`
+- `GET /api/tours/{id}/export.csv`
+
+三種證件覆核儲存都可帶 `tourId`，成功後自動把該旅客掛入目前團別。
