@@ -21,6 +21,7 @@ import type {
 
 const props = defineProps<{
   file: File | null
+  tourId?: string | null
 }>()
 
 const running = ref(false)
@@ -334,7 +335,7 @@ async function save() {
 
   try {
     receipt.value =
-      await saveTaiwanCompatriotPermitReview(draft)
+      await saveTaiwanCompatriotPermitReview(draft, props.tourId ?? undefined)
   } catch (err) {
     submitError.value =
       err instanceof Error
@@ -738,18 +739,18 @@ onBeforeUnmount(revokeImageUrl)
           <strong v-if="receipt" class="success">
             {{
               receipt.action === 'CreatedTravelerAndDocument'
-                ? '已建立新旅客與第一個台胞證版本。'
+                ? '已建立這位團員的第一筆台胞證資料。'
                 : receipt.action === 'CreatedDocumentVersion'
-                  ? '已找到既有旅客並建立新的台胞證版本。'
+                  ? '已更新這位團員的台胞證版本。'
                   : '已更新同一張台胞證，沒有重複建立版本。'
             }}
           </strong>
           <span v-else>
-            確認後會送到後端驗證並進入目前的測試用旅客／證件版本儲存。
+            確認後會送到後端驗證並寫入目前團別的證件資料。
           </span>
 
           <small v-if="receipt">
-            此旅客目前有
+            此團員目前有
             {{ receipt.travelerDocumentVersionCount }}
             個證件版本。資料已寫入 PostgreSQL 持久化儲存。
           </small>
