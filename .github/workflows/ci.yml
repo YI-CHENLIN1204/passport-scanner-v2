@@ -50,3 +50,60 @@ jobs:
 
       - name: Build
         run: npm run build
+
+
+  docker-smoke:
+    name: PostgreSQL Docker smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start database/backend
+        run: docker compose up -d --build database backend
+
+      - name: Wait for API
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs backend database
+          exit 1
+
+      - name: Verify PostgreSQL persistence status
+        run: |
+          curl --fail --silent http://localhost:5080/api/document-store/status | tee /tmp/store-status.json
+          grep -q '"persistence":"postgresql"' /tmp/store-status.json
+
+      - name: Verify database schema exists
+        run: |
+          docker compose exec -T database             psql -U passport_scanner -d passport_scanner             -c '\\dt travelers' | grep -q travelers
+
+          docker compose exec -T database             psql -U passport_scanner -d passport_scanner             -c '\\dt document_versions' | grep -q document_versions
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
