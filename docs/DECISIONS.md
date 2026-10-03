@@ -377,3 +377,21 @@ V2 目前仍是內部人員上傳既有照片，因此不能假設旅客已依�
 - 相機預覽階段即時提示拍攝品質，例如：再靠近一點、稍微退後、證件未完整入框、請轉正、光線不足、反光過強、畫面模糊。
 - 品質達標後才建議拍攝／自動觸發拍攝。
 - 後端／OCR 的遠距與旋轉 fallback 仍保留作最後一道容錯，不取代前端即時引導。
+
+
+### D-034：V2 正式資料層切換 PostgreSQL
+
+V2 的旅客主檔與證件版本不再使用 `InMemoryTravelerStore` 作為實際保存位置。
+
+正式資料層：
+
+- ASP.NET Core + Entity Framework Core。
+- Npgsql PostgreSQL provider。
+- Docker Compose 內建 PostgreSQL 16 service。
+- `travelers` 保存旅客主檔。
+- `document_versions` 保存護照、台胞證與台灣身分證歷史版本。
+- PostgreSQL 使用 named volume `passport_scanner_postgres`，一般 container 重啟或 rebuild 不刪資料。
+
+`ITravelerStore` 保留作為資料層 abstraction，讓未來若切換到外部 PostgreSQL／Supabase PostgreSQL 時，不需要重寫前端或 review API。
+
+本機 Compose 預設密碼只用於開發；正式部署必須由環境變數或 secrets 注入。
