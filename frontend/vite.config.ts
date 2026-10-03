@@ -16,6 +16,17 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/paddle-models/, ''),
       },
+      '/paddle-model-mirror': {
+        target: 'https://huggingface.co',
+        changeOrigin: true,
+        secure: true,
+        followRedirects: true,
+        rewrite: (path) =>
+          path.replace(
+            /^\/paddle-model-mirror/,
+            '/LunarOilRig/paddleocr-onnx/resolve/main',
+          ),
+      },
     },
   },
 })
