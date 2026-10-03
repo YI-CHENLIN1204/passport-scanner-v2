@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Validation;
 using PassportScanner.Api.Persistence;
@@ -11,7 +12,15 @@ var frontendOrigin =
     builder.Configuration["FrontendOrigin"]
     ?? "http://localhost:5173";
 
-builder.Services.AddSingleton<ITravelerStore, InMemoryTravelerStore>();
+var databaseConnection =
+    builder.Configuration.GetConnectionString("PassportScanner")
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings:PassportScanner is required.");
+
+builder.Services.AddDbContext<PassportScannerDbContext>(options =>
+    options.UseNpgsql(databaseConnection));
+
+builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
 
 builder.Services.AddCors(options =>
 {
@@ -25,6 +34,14 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider
+        .GetRequiredService<PassportScannerDbContext>();
+
+    db.Database.EnsureCreated();
+}
 
 app.UseCors(frontendPolicy);
 
@@ -43,7 +60,7 @@ app.MapGet(
     (ITravelerStore store) =>
         Results.Ok(
             new DocumentStoreStatusResponse(
-                Persistence: "volatile-in-memory",
+                Persistence: "postgresql",
                 TravelerCount: store.TravelerCount,
                 DocumentVersionCount: store.DocumentVersionCount,
                 CheckedAt: DateTimeOffset.UtcNow)));
@@ -100,7 +117,7 @@ app.MapPost(
             return Results.Ok(
                 new PassportReviewSaveResponse(
                     Accepted: true,
-                    Persistence: "volatile-in-memory",
+                    Persistence: "postgresql",
                     Action: result.Action.ToString(),
                     TravelerId: result.TravelerId,
                     DocumentVersionId: result.DocumentVersionId,
@@ -125,7 +142,7 @@ app.MapGet(
     (ITravelerStore store) =>
         Results.Ok(
             new PassportStoreStatusResponse(
-                Persistence: "volatile-in-memory",
+                Persistence: "postgresql",
                 TravelerCount: store.TravelerCount,
                 DocumentVersionCount: store.DocumentVersionCount,
                 CheckedAt: DateTimeOffset.UtcNow)));
@@ -159,7 +176,7 @@ app.MapPost(
             return Results.Ok(
                 new TaiwanNationalIdReviewSaveResponse(
                     Accepted: true,
-                    Persistence: "volatile-in-memory",
+                    Persistence: "postgresql",
                     Action: result.Action.ToString(),
                     TravelerId: result.TravelerId,
                     DocumentVersionId: result.DocumentVersionId,
@@ -235,7 +252,7 @@ app.MapPost(
             return Results.Ok(
                 new TaiwanCompatriotPermitReviewSaveResponse(
                     Accepted: true,
-                    Persistence: "volatile-in-memory",
+                    Persistence: "postgresql",
                     Action: result.Action.ToString(),
                     TravelerId: result.TravelerId,
                     DocumentVersionId: result.DocumentVersionId,
