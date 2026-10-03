@@ -6,7 +6,6 @@ public sealed class TourRecord
     public required string TourName { get; set; }
     public required DateOnly DepartureDate { get; set; }
     public required DateOnly ReturnDate { get; set; }
-    public int? ExpectedMemberCount { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
