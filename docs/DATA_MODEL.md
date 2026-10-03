@@ -87,9 +87,9 @@ Tour / Product
 這部分屬訂單／金流管理，不應混入 OCR 模型本身。
 
 
-## V2 護照持久化規則（資料庫前可逆實作）
+## V2 正式旅客／證件持久化
 
-目前已先透過 `ITravelerStore` 建立資料層邊界。正式資料庫尚未選定時，開發環境使用 `InMemoryTravelerStore` 驗證完整版本邏輯；後端重啟後資料會清空，因此不能視為正式保存。
+資料層仍以 `ITravelerStore` 作為邊界，但正式實作已切換為 `PostgresTravelerStore` + Entity Framework Core + PostgreSQL。Docker Compose 使用 named volume 保存資料，因此 frontend／backend container 重建或重啟不會清空旅客資料。
 
 ### 旅客辨識／版本判斷
 
@@ -162,3 +162,40 @@ MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
 護照仍額外使用 issuing country 參與同一本護照判斷；台胞證使用其 8 位證件號碼判斷同一證件。
 
 旅客主檔 nationality 已允許 NULL，避免從台胞證本身推導並沒有必要保存的國籍值。
+
+
+### PostgreSQL 實體表
+
+#### travelers
+
+核心欄位：
+
+- traveler_id
+- name_zh
+- name_en
+- birth_date
+- gender
+- nationality
+- personal_id_type
+- personal_id_number
+- created_at
+- updated_at
+
+#### document_versions
+
+核心欄位：
+
+- document_version_id
+- traveler_id
+- document_type
+- name_zh_on_document
+- name_en_on_document
+- document_number
+- issuing_country
+- nationality
+- expiry_date
+- is_current
+- verified_at
+- created_at
+
+同一旅客可同時擁有護照、台胞證與台灣身分證；同一證件種類換發時，舊版本保留並將 `is_current` 設為 false。
