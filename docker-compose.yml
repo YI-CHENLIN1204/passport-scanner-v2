@@ -15,3 +15,30 @@ services:
       - "5080:8080"
     environment:
       - ASPNETCORE_URLS=http://+:8080
+      - FrontendOrigin=http://localhost:5173
+      - ConnectionStrings__PassportScanner=Host=database;Port=5432;Database=passport_scanner;Username=passport_scanner;Password=${PASSPORT_DB_PASSWORD:-passport-scanner-local}
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=passport_scanner
+      - POSTGRES_USER=passport_scanner
+      - POSTGRES_PASSWORD=${PASSPORT_DB_PASSWORD:-passport-scanner-local}
+    volumes:
+      - passport_scanner_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U passport_scanner -d passport_scanner"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  passport_scanner_postgres:
