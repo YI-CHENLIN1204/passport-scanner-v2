@@ -36,7 +36,6 @@ const form = ref({
   tourName: '',
   departureDate: '',
   returnDate: '',
-  expectedMemberCount: '',
 })
 
 const activeTourId = computed(
@@ -118,17 +117,12 @@ async function createNewTour() {
       tourName: form.value.tourName.trim(),
       departureDate: form.value.departureDate,
       returnDate: form.value.returnDate,
-      expectedMemberCount:
-        form.value.expectedMemberCount.trim()
-          ? Number(form.value.expectedMemberCount)
-          : null,
     })
 
     form.value = {
       tourName: '',
       departureDate: '',
       returnDate: '',
-      expectedMemberCount: '',
     }
 
     await loadTours()
@@ -165,11 +159,7 @@ function scanCurrentTour() {
 }
 
 function progressText(tour: TourSummaryResponse) {
-  if (tour.expectedMemberCount) {
-    return `${tour.reviewedMemberCount} / ${tour.expectedMemberCount} 人`
-  }
-
-  return `${tour.reviewedMemberCount} 人已建檔`
+  return `${tour.reviewedMemberCount} 人`
 }
 
 watch(
@@ -220,7 +210,7 @@ onMounted(async () => {
       <div class="create-tour-heading">
         <div>
           <strong>建立新團別</strong>
-          <span>目前只需要團名、出發日、回國日；預計人數可不填。</span>
+          <span>目前只需要團名、出發日與回國日。</span>
         </div>
       </div>
 
@@ -247,17 +237,6 @@ onMounted(async () => {
           <input
             v-model="form.returnDate"
             type="date"
-          />
-        </label>
-
-        <label>
-          <span>預計人數</span>
-          <input
-            v-model="form.expectedMemberCount"
-            type="number"
-            min="1"
-            max="500"
-            placeholder="可留空"
           />
         </label>
 
@@ -397,9 +376,6 @@ onMounted(async () => {
               <span>已建檔團員</span>
               <strong>
                 {{ detail.tour.reviewedMemberCount }}
-                <template v-if="detail.tour.expectedMemberCount">
-                  / {{ detail.tour.expectedMemberCount }}
-                </template>
               </strong>
             </div>
             <div>
@@ -520,7 +496,6 @@ onMounted(async () => {
     minmax(220px, 1.5fr)
     minmax(150px, .8fr)
     minmax(150px, .8fr)
-    minmax(120px, .6fr)
     auto;
   gap: 12px;
   align-items: end;
