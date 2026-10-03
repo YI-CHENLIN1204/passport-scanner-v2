@@ -567,28 +567,90 @@ const paddleModelBaseUrl =
   import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
   '/paddle-models'
 
-const detectionModelUrl =
-  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar`
+const paddleModelMirrorBaseUrl =
+  import.meta.env.VITE_PADDLE_MODEL_MIRROR_BASE_URL?.replace(/\/$/, '') ??
+  '/paddle-model-mirror'
 
-const recognitionModelUrl =
-  `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar`
+interface PaddleModelSource {
+  label: string
+  detectionUrl: string
+  recognitionUrl: string
+}
 
-function createPaddlePromise() {
-  paddlePromise = PaddleOCR.create({
+const paddleModelSources: PaddleModelSource[] = [
+  {
+    label: 'official',
+    detectionUrl:
+      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar`,
+    recognitionUrl:
+      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar`,
+  },
+  {
+    label: 'mirror',
+    detectionUrl:
+      `${paddleModelMirrorBaseUrl}/PP-OCRv5_mobile_det_onnx_infer.tar`,
+    recognitionUrl:
+      `${paddleModelMirrorBaseUrl}/PP-OCRv5_mobile_rec_onnx_infer.tar`,
+  },
+]
+
+function createPaddleFromSource(
+  source: PaddleModelSource,
+) {
+  return PaddleOCR.create({
     lang: 'chinese_cht',
     ocrVersion: 'PP-OCRv5',
     textDetectionModelName: 'PP-OCRv5_mobile_det',
     textDetectionModelAsset: {
-      url: detectionModelUrl,
+      url: source.detectionUrl,
     },
     textRecognitionModelName: 'PP-OCRv5_mobile_rec',
     textRecognitionModelAsset: {
-      url: recognitionModelUrl,
+      url: source.recognitionUrl,
     },
     ortOptions: {
       backend: 'auto',
     },
   })
+}
+
+function isInvalidModelArchive(error: unknown) {
+  return (
+    error instanceof Error &&
+    /inference\.onnx|inference\.yml|tar archive|model_name/i.test(
+      error.message,
+    )
+  )
+}
+
+function createPaddlePromise() {
+  paddlePromise = (async () => {
+    let lastError: unknown = null
+
+    for (const source of paddleModelSources) {
+      try {
+        return await createPaddleFromSource(source)
+      } catch (error) {
+        lastError = error
+
+        if (
+          !isFetchFailure(error) &&
+          !isInvalidModelArchive(error)
+        ) {
+          throw error
+        }
+
+        console.warn(
+          `PaddleOCR model source "${source.label}" failed; trying the next source.`,
+          error,
+        )
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('PaddleOCR 模型初始化失敗。')
+  })()
     .then((instance) => {
       paddleInstance = instance
       return instance
@@ -646,6 +708,12 @@ async function getPaddle() {
   if (isFetchFailure(lastError)) {
     throw new Error(
       'PaddleOCR 模型／執行資源下載失敗。請確認網路後再按一次；系統已清除失敗的初始化狀態，可直接重試。',
+    )
+  }
+
+  if (isInvalidModelArchive(lastError)) {
+    throw new Error(
+      'PaddleOCR 模型檔格式異常；官方來源與備援來源都無法載入。請重新整理頁面後再試。',
     )
   }
 
