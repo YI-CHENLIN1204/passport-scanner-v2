@@ -568,7 +568,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 const paddleModelAssetVersion =
-  'ppocrv5-onnx-20261003-2'
+  'ppocrv5-onnx-20261003-canonical-3'
 
 interface PaddleModelSource {
   label: string
