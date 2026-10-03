@@ -99,16 +99,16 @@
 
 不把護照號碼、姓名等個資 echo 回前端。
 
-下一階段才會另外設計真正的 persistence endpoint 與 traveler / document version transaction。
+正式 persistence endpoint 已完成，validate endpoint 仍保留作只驗證不保存的用途。
 
 
-## 暫時持久化 API
+## 持久化 API
 
 `POST /api/passport-reviews`
 
 此 endpoint 會先執行和 validate endpoint 相同的後端驗證，再交給 `ITravelerStore`。
 
-目前實作為 `InMemoryTravelerStore`，只用來驗證：
+目前實作為 `PostgresTravelerStore`，並維持以下版本規則：
 
 - 新旅客建立。
 - 同一本護照重複掃描不重複建立版本。
