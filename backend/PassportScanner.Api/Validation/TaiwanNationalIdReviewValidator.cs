@@ -214,12 +214,12 @@ public static partial class TaiwanNationalIdReviewValidator
             : char.ToLowerInvariant(value[0]) + value[1..];
 
     [GeneratedRegex(
-        @"^[p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$",
+        @"^[\p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$",
         RegexOptions.CultureInvariant)]
     private static partial Regex ChineseNameRegex();
 
     [GeneratedRegex(
-        @"^[A-Z][12]d{8}$",
+        @"^[A-Z][12]\d{8}$",
         RegexOptions.CultureInvariant)]
     private static partial Regex NationalIdRegex();
 }
