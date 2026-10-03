@@ -25,7 +25,8 @@ public sealed class PostgresTourStore(
         return tours
             .OrderByDescending(item => item.DepartureDate)
             .ThenByDescending(item => item.CreatedAt)
-            .Select(item => ToSummary(item))
+            .ToList()
+            .Select(ToSummary)
             .ToList();
     }
 
