@@ -1283,6 +1283,479 @@ function polygonArea(
   return Math.abs(sum) / 2
 }
 
+function lineIntersection(
+  first:
+    | { axis: 'horizontal'; slope: number; intercept: number }
+    | { axis: 'vertical'; slope: number; intercept: number },
+  second:
+    | { axis: 'horizontal'; slope: number; intercept: number }
+    | { axis: 'vertical'; slope: number; intercept: number },
+): [number, number] | null {
+  if (first.axis === second.axis) return null
+
+  const horizontal =
+    first.axis === 'horizontal'
+      ? first
+      : second as {
+          axis: 'horizontal'
+          slope: number
+          intercept: number
+        }
+
+  const vertical =
+    first.axis === 'vertical'
+      ? first
+      : second as {
+          axis: 'vertical'
+          slope: number
+          intercept: number
+        }
+
+  // y = mh*x + bh
+  // x = mv*y + bv
+  const denominator =
+    1 - vertical.slope * horizontal.slope
+
+  if (Math.abs(denominator) < 1e-6) {
+    return null
+  }
+
+  const x =
+    (
+      vertical.slope * horizontal.intercept +
+      vertical.intercept
+    ) / denominator
+
+  const y =
+    horizontal.slope * x +
+    horizontal.intercept
+
+  return [x, y]
+}
+
+function scoreHorizontalEdgeLine(
+  gradient: Float32Array,
+  width: number,
+  height: number,
+  xStart: number,
+  xEnd: number,
+  slope: number,
+  intercept: number,
+) {
+  let score = 0
+  let samples = 0
+  let strong = 0
+
+  const start = Math.max(1, Math.floor(xStart))
+  const end = Math.min(width - 2, Math.ceil(xEnd))
+
+  for (let x = start; x <= end; x += 2) {
+    const y = Math.round(slope * x + intercept)
+    if (y < 2 || y >= height - 2) continue
+
+    let local = 0
+    for (let offset = -2; offset <= 2; offset += 1) {
+      local = Math.max(
+        local,
+        gradient[(y + offset) * width + x],
+      )
+    }
+
+    score += local
+    if (local >= 70) strong += 1
+    samples += 1
+  }
+
+  if (!samples) return 0
+
+  const continuity = strong / samples
+  return score / samples * (0.55 + continuity * 0.9)
+}
+
+function scoreVerticalEdgeLine(
+  gradient: Float32Array,
+  width: number,
+  height: number,
+  yStart: number,
+  yEnd: number,
+  slope: number,
+  intercept: number,
+) {
+  let score = 0
+  let samples = 0
+  let strong = 0
+
+  const start = Math.max(1, Math.floor(yStart))
+  const end = Math.min(height - 2, Math.ceil(yEnd))
+
+  for (let y = start; y <= end; y += 2) {
+    const x = Math.round(slope * y + intercept)
+    if (x < 2 || x >= width - 2) continue
+
+    let local = 0
+    for (let offset = -2; offset <= 2; offset += 1) {
+      local = Math.max(
+        local,
+        gradient[y * width + x + offset],
+      )
+    }
+
+    score += local
+    if (local >= 70) strong += 1
+    samples += 1
+  }
+
+  if (!samples) return 0
+
+  const continuity = strong / samples
+  return score / samples * (0.55 + continuity * 0.9)
+}
+
+async function detectDocumentQuadFromImageEdges(
+  image: File,
+  prediction: unknown,
+  targetAspectRatio: number,
+): Promise<DocumentQuad | null> {
+  const bitmap = await createImageBitmap(image)
+  const originalWidth = bitmap.width
+  const originalHeight = bitmap.height
+
+  const seed = reviewCropFromPrediction(
+    prediction,
+    originalWidth,
+    originalHeight,
+    targetAspectRatio,
+  )
+
+  if (!seed) {
+    bitmap.close()
+    return null
+  }
+
+  const maxDimension = 720
+  const scale = Math.min(
+    1,
+    maxDimension /
+      Math.max(originalWidth, originalHeight),
+  )
+
+  const width = Math.max(
+    1,
+    Math.round(originalWidth * scale),
+  )
+  const height = Math.max(
+    1,
+    Math.round(originalHeight * scale),
+  )
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+
+  const context = canvas.getContext(
+    '2d',
+    { willReadFrequently: true },
+  )
+
+  if (!context) {
+    bitmap.close()
+    return null
+  }
+
+  context.drawImage(
+    bitmap,
+    0,
+    0,
+    width,
+    height,
+  )
+  bitmap.close()
+
+  const data = context.getImageData(
+    0,
+    0,
+    width,
+    height,
+  ).data
+
+  const gray = new Float32Array(width * height)
+
+  for (let index = 0; index < width * height; index += 1) {
+    const offset = index * 4
+    gray[index] =
+      data[offset] * 0.299 +
+      data[offset + 1] * 0.587 +
+      data[offset + 2] * 0.114
+  }
+
+  const gradient = new Float32Array(width * height)
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const topLeft = gray[(y - 1) * width + x - 1]
+      const top = gray[(y - 1) * width + x]
+      const topRight = gray[(y - 1) * width + x + 1]
+      const left = gray[y * width + x - 1]
+      const right = gray[y * width + x + 1]
+      const bottomLeft = gray[(y + 1) * width + x - 1]
+      const bottom = gray[(y + 1) * width + x]
+      const bottomRight = gray[(y + 1) * width + x + 1]
+
+      const gx =
+        -topLeft + topRight -
+        2 * left + 2 * right -
+        bottomLeft + bottomRight
+
+      const gy =
+        -topLeft - 2 * top - topRight +
+        bottomLeft + 2 * bottom + bottomRight
+
+      gradient[y * width + x] =
+        Math.min(
+          255,
+          Math.hypot(gx, gy) / 4,
+        )
+    }
+  }
+
+  const seedX = seed.x * scale
+  const seedY = seed.y * scale
+  const seedWidth = seed.width * scale
+  const seedHeight = seed.height * scale
+
+  const xStart = Math.max(
+    0,
+    seedX - seedWidth * 0.12,
+  )
+  const xEnd = Math.min(
+    width - 1,
+    seedX + seedWidth * 1.12,
+  )
+  const yStart = Math.max(
+    0,
+    seedY - seedHeight * 0.15,
+  )
+  const yEnd = Math.min(
+    height - 1,
+    seedY + seedHeight * 1.15,
+  )
+
+  const findHorizontal = (
+    expectedY: number,
+  ) => {
+    let best:
+      | {
+          axis: 'horizontal'
+          slope: number
+          intercept: number
+          score: number
+        }
+      | null = null
+
+    const search = Math.max(
+      10,
+      seedHeight * 0.2,
+    )
+
+    for (
+      let slope = -0.24;
+      slope <= 0.2401;
+      slope += 0.03
+    ) {
+      for (
+        let anchorY = expectedY - search;
+        anchorY <= expectedY + search;
+        anchorY += 2
+      ) {
+        const intercept =
+          anchorY -
+          slope * (seedX + seedWidth / 2)
+
+        const score =
+          scoreHorizontalEdgeLine(
+            gradient,
+            width,
+            height,
+            xStart,
+            xEnd,
+            slope,
+            intercept,
+          )
+
+        if (!best || score > best.score) {
+          best = {
+            axis: 'horizontal',
+            slope,
+            intercept,
+            score,
+          }
+        }
+      }
+    }
+
+    return best
+  }
+
+  const findVertical = (
+    expectedX: number,
+  ) => {
+    let best:
+      | {
+          axis: 'vertical'
+          slope: number
+          intercept: number
+          score: number
+        }
+      | null = null
+
+    const search = Math.max(
+      10,
+      seedWidth * 0.16,
+    )
+
+    for (
+      let slope = -0.24;
+      slope <= 0.2401;
+      slope += 0.03
+    ) {
+      for (
+        let anchorX = expectedX - search;
+        anchorX <= expectedX + search;
+        anchorX += 2
+      ) {
+        const intercept =
+          anchorX -
+          slope * (seedY + seedHeight / 2)
+
+        const score =
+          scoreVerticalEdgeLine(
+            gradient,
+            width,
+            height,
+            yStart,
+            yEnd,
+            slope,
+            intercept,
+          )
+
+        if (!best || score > best.score) {
+          best = {
+            axis: 'vertical',
+            slope,
+            intercept,
+            score,
+          }
+        }
+      }
+    }
+
+    return best
+  }
+
+  const top = findHorizontal(seedY)
+  const bottom = findHorizontal(
+    seedY + seedHeight,
+  )
+  const left = findVertical(seedX)
+  const right = findVertical(
+    seedX + seedWidth,
+  )
+
+  if (!top || !bottom || !left || !right) {
+    return null
+  }
+
+  const minimumEdgeScore = 22
+  if (
+    Math.min(
+      top.score,
+      bottom.score,
+      left.score,
+      right.score,
+    ) < minimumEdgeScore
+  ) {
+    return null
+  }
+
+  const tl = lineIntersection(top, left)
+  const tr = lineIntersection(top, right)
+  const br = lineIntersection(bottom, right)
+  const bl = lineIntersection(bottom, left)
+
+  if (!tl || !tr || !br || !bl) {
+    return null
+  }
+
+  const quadScaled: DocumentQuad = {
+    topLeft: tl,
+    topRight: tr,
+    bottomRight: br,
+    bottomLeft: bl,
+  }
+
+  const area = polygonArea([
+    tl,
+    tr,
+    br,
+    bl,
+  ])
+
+  const seedArea =
+    Math.max(1, seedWidth * seedHeight)
+
+  if (
+    area < seedArea * 0.42 ||
+    area > seedArea * 2.1
+  ) {
+    return null
+  }
+
+  const avgWidth =
+    (
+      distanceBetween(tl, tr) +
+      distanceBetween(bl, br)
+    ) / 2
+  const avgHeight =
+    (
+      distanceBetween(tl, bl) +
+      distanceBetween(tr, br)
+    ) / 2
+
+  const ratio =
+    avgWidth /
+    Math.max(1, avgHeight)
+
+  if (
+    ratio <
+      targetAspectRatio * 0.62 ||
+    ratio >
+      targetAspectRatio * 1.52
+  ) {
+    return null
+  }
+
+  const inverseScale = 1 / scale
+
+  return {
+    topLeft: [
+      quadScaled.topLeft[0] * inverseScale,
+      quadScaled.topLeft[1] * inverseScale,
+    ],
+    topRight: [
+      quadScaled.topRight[0] * inverseScale,
+      quadScaled.topRight[1] * inverseScale,
+    ],
+    bottomRight: [
+      quadScaled.bottomRight[0] * inverseScale,
+      quadScaled.bottomRight[1] * inverseScale,
+    ],
+    bottomLeft: [
+      quadScaled.bottomLeft[0] * inverseScale,
+      quadScaled.bottomLeft[1] * inverseScale,
+    ],
+  }
+}
+
 function estimateDocumentQuad(
   prediction: unknown,
   imageWidth: number,
@@ -1890,29 +2363,52 @@ async function createStraightenedReviewImage(
 
     const bitmap =
       await createImageBitmap(candidate)
+    const imageWidth = bitmap.width
+    const imageHeight = bitmap.height
+
     const crop = reviewCropFromPrediction(
       prediction,
-      bitmap.width,
-      bitmap.height,
+      imageWidth,
+      imageHeight,
       targetAspectRatio,
     )
     bitmap.close()
 
-    const quad =
+    const edgeQuad =
+      await detectDocumentQuadFromImageEdges(
+        candidate,
+        prediction,
+        targetAspectRatio,
+      )
+
+    if (edgeQuad) {
+      const corrected =
+        await warpPerspectiveToDocument(
+          candidate,
+          edgeQuad,
+          targetAspectRatio,
+        )
+
+      if (corrected) {
+        return corrected
+      }
+    }
+
+    const ocrQuad =
       estimateDocumentQuad(
         prediction,
-        bitmap.width,
-        bitmap.height,
+        imageWidth,
+        imageHeight,
       )
 
     if (
-      quad &&
-      perspectiveSeverity(quad) >= 0.035
+      ocrQuad &&
+      perspectiveSeverity(ocrQuad) >= 0.05
     ) {
       const corrected =
         await warpPerspectiveToDocument(
           candidate,
-          quad,
+          ocrQuad,
           targetAspectRatio,
         )
 
@@ -4339,14 +4835,10 @@ function chooseTaiwanIdChineseName(
   geometries: PaddleItemGeometry[],
   rows: string[],
 ) {
-  const anchored = findLabelAnchoredCandidate(
-    geometries,
-    ['姓名', 'Name'],
-    extractTaiwanIdChineseName,
-  )
-
-  if (anchored) return anchored
-
+  // Paddle may return one complete row such as "姓名林奕辰" while the
+  // geometry-based neighbour search sees only "奕辰". Prefer the explicit
+  // labelled row because it preserves the surname and is semantically
+  // stronger than proximity alone.
   for (let index = 0; index < rows.length; index += 1) {
     if (!/姓名|NAME/i.test(rows[index])) continue
 
@@ -4357,9 +4849,21 @@ function chooseTaiwanIdChineseName(
       return {
         value: sameRow,
         score: null,
-        rank: 2,
+        rank: 4,
       }
     }
+  }
+
+  const anchored = findLabelAnchoredCandidate(
+    geometries,
+    ['姓名', 'Name'],
+    extractTaiwanIdChineseName,
+  )
+
+  if (anchored) return anchored
+
+  for (let index = 0; index < rows.length; index += 1) {
+    if (!/姓名|NAME/i.test(rows[index])) continue
 
     const nextRow =
       rows[index + 1]
