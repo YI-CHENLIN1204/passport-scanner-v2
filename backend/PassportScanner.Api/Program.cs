@@ -50,13 +50,15 @@ using (var scope = app.Services.CreateScope())
             tour_name varchar(160) NOT NULL,
             departure_date date NOT NULL,
             return_date date NOT NULL,
-            expected_member_count integer NULL,
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS ix_tours_departure_date
             ON tours (departure_date);
+
+        ALTER TABLE tours
+            DROP COLUMN IF EXISTS expected_member_count;
 
         CREATE TABLE IF NOT EXISTS tour_members (
             tour_member_id uuid PRIMARY KEY,
