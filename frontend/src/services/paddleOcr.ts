@@ -801,6 +801,8 @@ function buildBaselineResult(
       estimateTextSkewDegrees(prediction),
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
+    distanceCropUsed: false,
+    distanceCropLabel: null,
   }
 }
 
@@ -1511,6 +1513,8 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNameConsensus: number
   chineseNameConfidence: number | null
   textHorizontalScore: number
+  distanceCropUsed: boolean
+  distanceCropLabel: string | null
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -3541,28 +3545,133 @@ function taiwanIdResultQuality(
   )
 }
 
+async function createCenteredOcrCrop(
+  image: File,
+  insetX: number,
+  insetY: number,
+  label: string,
+) {
+  const blob = await createRelativeCrop(
+    image,
+    insetX,
+    insetY,
+    1 - insetX * 2,
+    1 - insetY * 2,
+  )
+
+  return {
+    label,
+    file: new File(
+      [blob],
+      `ocr-${label}.png`,
+      { type: 'image/png' },
+    ),
+  }
+}
+
+async function createDistanceOcrCrops(
+  image: File,
+) {
+  return [
+    await createCenteredOcrCrop(
+      image,
+      0.08,
+      0.1,
+      'center-84',
+    ),
+    await createCenteredOcrCrop(
+      image,
+      0.14,
+      0.18,
+      'center-72',
+    ),
+  ]
+}
+
 async function predictTaiwanNationalId(
   instance: PaddleInstance,
   image: File,
   initializationMs: number,
   totalStartedAt: number,
 ) {
-  const startedAt = performance.now()
-  const [prediction] = await instance.predict(image)
-  const predictMs = performance.now() - startedAt
+  let accumulatedPredictMs = 0
 
-  const result = buildTaiwanNationalIdResult(
-    prediction,
+  const predict = async (candidate: File | Blob) => {
+    const startedAt = performance.now()
+    const [prediction] =
+      await instance.predict(candidate)
+
+    accumulatedPredictMs +=
+      performance.now() - startedAt
+
+    return prediction
+  }
+
+  const fullPrediction = await predict(image)
+
+  let bestPrediction = fullPrediction
+  let best = buildTaiwanNationalIdResult(
+    fullPrediction,
     initializationMs,
-    predictMs,
+    accumulatedPredictMs,
     performance.now() - totalStartedAt,
   )
 
-  result.orientedImage = image
+  const fullTooWeak =
+    best.detectedItems === 0 ||
+    (
+      !best.idChecksumValid &&
+      !best.chineseName &&
+      !best.birthDate
+    )
+
+  if (fullTooWeak) {
+    const crops =
+      await createDistanceOcrCrops(image)
+
+    for (const crop of crops) {
+      const cropPrediction =
+        await predict(crop.file)
+
+      const candidate =
+        buildTaiwanNationalIdResult(
+          cropPrediction,
+          initializationMs,
+          accumulatedPredictMs,
+          performance.now() - totalStartedAt,
+        )
+
+      candidate.distanceCropUsed = true
+      candidate.distanceCropLabel =
+        crop.label
+
+      if (
+        taiwanIdResultQuality(candidate) >
+        taiwanIdResultQuality(best)
+      ) {
+        best = candidate
+        bestPrediction = cropPrediction
+      }
+
+      // A checksum-valid national ID is strong enough evidence that
+      // the enlarged crop has found the document. Avoid another costly pass.
+      if (candidate.idChecksumValid) {
+        break
+      }
+    }
+  }
+
+  best.predictMs = accumulatedPredictMs
+  best.totalMs =
+    performance.now() - totalStartedAt
+
+  // OCR may use an enlarged crop, but the human-review image must remain
+  // the full rotated document photo.
+  best.orientedImage = image
 
   return {
-    prediction,
-    result,
+    prediction: bestPrediction,
+    result: best,
   }
 }
 
@@ -3953,6 +4062,46 @@ function classifyDocumentFromItems(
   }
 }
 
+async function classifyDocumentImage(
+  instance: PaddleInstance,
+  image: File,
+) {
+  const [prediction] =
+    await instance.predict(image)
+
+  let result = classifyDocumentFromItems(
+    predictionItems(prediction),
+  )
+
+  if (result.type !== 'unknown') {
+    return result
+  }
+
+  const crops =
+    await createDistanceOcrCrops(image)
+
+  for (const crop of crops) {
+    const [cropPrediction] =
+      await instance.predict(crop.file)
+
+    result = classifyDocumentFromItems(
+      predictionItems(cropPrediction),
+    )
+
+    if (result.type !== 'unknown') {
+      return {
+        ...result,
+        evidence: [
+          ...result.evidence,
+          '遠距照片已自動放大證件區域',
+        ],
+      }
+    }
+  }
+
+  return result
+}
+
 export async function detectDocumentTypeWithPaddle(
   image: File,
 ): Promise<DocumentTypeDetectionResult> {
@@ -3969,12 +4118,11 @@ export async function detectDocumentTypeWithPaddle(
             rotation,
           )
 
-    const [prediction] =
-      await instance.predict(candidate)
-
-    const result = classifyDocumentFromItems(
-      predictionItems(prediction),
-    )
+    const result =
+      await classifyDocumentImage(
+        instance,
+        candidate,
+      )
 
     if (
       result.type !== 'unknown' &&
