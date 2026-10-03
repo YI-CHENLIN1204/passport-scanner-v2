@@ -116,20 +116,12 @@ public sealed class PostgresTourStore(
             throw new ArgumentException("回國日不可早於出發日。");
         }
 
-        if (
-            request.ExpectedMemberCount is < 1 or > 500)
-        {
-            throw new ArgumentException(
-                "預計人數若有填寫，必須介於 1～500。");
-        }
-
         var tour = new TourRecord
         {
             TourId = Guid.NewGuid(),
             TourName = name,
             DepartureDate = request.DepartureDate,
             ReturnDate = request.ReturnDate,
-            ExpectedMemberCount = request.ExpectedMemberCount,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -242,7 +234,6 @@ public sealed class PostgresTourStore(
             tour.TourName,
             tour.DepartureDate,
             tour.ReturnDate,
-            tour.ExpectedMemberCount,
             memberCount,
             documentCount,
             tour.UpdatedAt);
