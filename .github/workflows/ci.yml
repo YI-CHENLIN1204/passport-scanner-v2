@@ -51,7 +51,6 @@ jobs:
       - name: Build
         run: npm run build
 
-
   docker-smoke:
     name: PostgreSQL Docker smoke
     runs-on: ubuntu-latest
@@ -71,80 +70,31 @@ jobs:
             fi
             sleep 2
           done
-
           docker compose logs backend database
           exit 1
 
       - name: Verify PostgreSQL persistence status
         run: |
-          curl --fail --silent http://localhost:5080/api/document-store/status | tee /tmp/store-status.json
+          curl --fail --silent http://localhost:5080/api/document-store/status > /tmp/store-status.json
+          cat /tmp/store-status.json
           grep -q '"persistence":"postgresql"' /tmp/store-status.json
 
       - name: Verify database schema exists
         run: |
-          docker compose exec -T database \
-            psql -U passport_scanner -d passport_scanner -Atc \
-            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions') ORDER BY table_name;" \
-            | tee /tmp/tables.txt
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions') ORDER BY table_name;" > /tmp/tables.txt
+          cat /tmp/tables.txt
+          grep -q '^document_versions$' /tmp/tables.txt
+          grep -q '^travelers$' /tmp/tables.txt
 
-          grep -q '^document_versions
       - name: Restart backend and verify API reconnects
         run: |
           docker compose restart backend
-
           for i in {1..30}; do
             if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
               exit 0
             fi
             sleep 2
           done
-
-          docker compose logs backend database
-          exit 1
-
-      - name: Show logs on failure
-        if: failure()
-        run: docker compose logs backend database
-
-      - name: Stop smoke stack
-        if: always()
-        run: docker compose down -v
- /tmp/tables.txt
-          grep -q '^travelers
-      - name: Restart backend and verify API reconnects
-        run: |
-          docker compose restart backend
-
-          for i in {1..30}; do
-            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-
-          docker compose logs backend database
-          exit 1
-
-      - name: Show logs on failure
-        if: failure()
-        run: docker compose logs backend database
-
-      - name: Stop smoke stack
-        if: always()
-        run: docker compose down -v
- /tmp/tables.txt
-
-      - name: Restart backend and verify API reconnects
-        run: |
-          docker compose restart backend
-
-          for i in {1..30}; do
-            if curl --fail --silent http://localhost:5080/api/document-store/status > /dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-
           docker compose logs backend database
           exit 1
 
