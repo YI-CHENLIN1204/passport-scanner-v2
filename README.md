@@ -26,8 +26,8 @@ V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI �
 - TD3 MRZ 解析後以 check digit 驗證護照號碼、出生日期、有效期限與 composite。
 - 辨識完成後直接進入可編輯的人工覆核卡。
 - 人工覆核日期顯示為 YYYY-MM-DD。
-- 按下確認後會建立 PassportReviewDraft，送到 ASP.NET Core 後端再次驗證，並寫入目前的可替換 InMemoryTravelerStore。
-- InMemoryTravelerStore 只用來驗證 traveler_master / document_versions 版本邏輯，後端重啟後資料會清空；正式資料庫尚未綁定。
+- 按下確認後會建立 typed review payload，送到 ASP.NET Core 後端再次驗證，再寫入 PostgreSQL。
+- Docker Compose 會啟動獨立 PostgreSQL service，旅客主檔與證件版本保存在 named volume；重啟 frontend／backend 不會清空資料。
 - Tesseract Baseline A 與泛化測試工具保留在開發診斷區，不進旅行社員工主要流程。
 
 ## 文件
@@ -135,3 +135,23 @@ InMemoryTravelerStore（目前可逆測試實作）
 - 前端與 ASP.NET Core 後端都獨立計算身分證字號檢查碼。
 - OCR 抓不到的欄位允許人工補填；全部人工覆核後才可儲存。
 - 身分證沒有到期日，因此 document_versions 的 expiry_date 對此證件為 NULL。
+
+
+## PostgreSQL 持久化
+
+目前正式資料層已從開發用記憶體儲存切換為 PostgreSQL。
+
+Docker Compose 會建立三個服務：
+
+- `frontend`：Vue + Nginx。
+- `backend`：ASP.NET Core API。
+- `database`：PostgreSQL 16。
+
+資料主要分為：
+
+- `travelers`：旅客主檔。
+- `document_versions`：護照、台胞證、台灣身分證的歷史版本。
+
+PostgreSQL 使用 named volume `passport_scanner_postgres`。一般的 `docker compose down` 不會刪除資料；只有明確執行 `docker compose down -v` 或手動刪除 volume 才會移除資料。
+
+本機開發密碼可透過環境變數 `PASSPORT_DB_PASSWORD` 覆寫。Compose 內的預設密碼只供本機開發使用，不應直接用於正式公開環境。
