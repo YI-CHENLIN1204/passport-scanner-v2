@@ -751,7 +751,7 @@ onBeforeUnmount(revokeImageUrl)
           <small v-if="receipt">
             此旅客目前有
             {{ receipt.travelerDocumentVersionCount }}
-            個證件版本。後端重啟後測試資料仍會清空。
+            個證件版本。資料已寫入 PostgreSQL 持久化儲存。
           </small>
         </div>
 
