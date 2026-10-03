@@ -10,6 +10,8 @@ public sealed class PassportScannerDbContext(
     public DbSet<TravelerRecord> Travelers => Set<TravelerRecord>();
     public DbSet<DocumentVersionRecord> DocumentVersions =>
         Set<DocumentVersionRecord>();
+    public DbSet<TourRecord> Tours => Set<TourRecord>();
+    public DbSet<TourMemberRecord> TourMembers => Set<TourMemberRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -145,6 +147,79 @@ public sealed class PassportScannerDbContext(
             .HasDatabaseName("ix_document_versions_traveler_current");
 
         document.HasOne<TravelerRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.TravelerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var tour = modelBuilder.Entity<TourRecord>();
+
+        tour.ToTable("tours");
+        tour.HasKey(item => item.TourId);
+
+        tour.Property(item => item.TourId)
+            .HasColumnName("tour_id");
+
+        tour.Property(item => item.TourName)
+            .HasColumnName("tour_name")
+            .HasMaxLength(160)
+            .IsRequired();
+
+        tour.Property(item => item.DepartureDate)
+            .HasColumnName("departure_date")
+            .IsRequired();
+
+        tour.Property(item => item.ReturnDate)
+            .HasColumnName("return_date")
+            .IsRequired();
+
+        tour.Property(item => item.ExpectedMemberCount)
+            .HasColumnName("expected_member_count");
+
+        tour.Property(item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        tour.Property(item => item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        tour.HasIndex(item => item.DepartureDate)
+            .HasDatabaseName("ix_tours_departure_date");
+
+        var member = modelBuilder.Entity<TourMemberRecord>();
+
+        member.ToTable("tour_members");
+        member.HasKey(item => item.TourMemberId);
+
+        member.Property(item => item.TourMemberId)
+            .HasColumnName("tour_member_id");
+
+        member.Property(item => item.TourId)
+            .HasColumnName("tour_id")
+            .IsRequired();
+
+        member.Property(item => item.TravelerId)
+            .HasColumnName("traveler_id")
+            .IsRequired();
+
+        member.Property(item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        member.HasIndex(item => new
+            {
+                item.TourId,
+                item.TravelerId
+            })
+            .IsUnique()
+            .HasDatabaseName("ux_tour_members_tour_traveler");
+
+        member.HasOne<TourRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.TourId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        member.HasOne<TravelerRecord>()
             .WithMany()
             .HasForeignKey(item => item.TravelerId)
             .OnDelete(DeleteBehavior.Cascade);
