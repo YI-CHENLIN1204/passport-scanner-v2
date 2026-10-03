@@ -79,7 +79,7 @@ export type PassportReviewSaveAction =
 
 export interface PassportReviewSaveResponse {
   accepted: boolean
-  persistence: 'volatile-in-memory'
+  persistence: 'postgresql'
   action: PassportReviewSaveAction
   travelerId: string
   documentVersionId: string
@@ -137,7 +137,7 @@ export async function savePassportReview(
 }
 
 export interface PassportStoreStatusResponse {
-  persistence: 'volatile-in-memory'
+  persistence: 'postgresql'
   travelerCount: number
   documentVersionCount: number
   checkedAt: string
@@ -160,7 +160,7 @@ export async function getPassportStoreStatus() {
 
 export interface TaiwanCompatriotPermitReviewSaveResponse {
   accepted: boolean
-  persistence: 'volatile-in-memory'
+  persistence: 'postgresql'
   action: PassportReviewSaveAction
   travelerId: string
   documentVersionId: string
@@ -245,7 +245,7 @@ export interface TravelerDetailResponse {
 }
 
 export interface DocumentStoreStatusResponse {
-  persistence: 'volatile-in-memory'
+  persistence: 'postgresql'
   travelerCount: number
   documentVersionCount: number
   checkedAt: string
@@ -307,7 +307,7 @@ export async function getTravelerDetail(
 
 export interface TaiwanNationalIdReviewSaveResponse {
   accepted: boolean
-  persistence: 'volatile-in-memory'
+  persistence: 'postgresql'
   action: PassportReviewSaveAction
   travelerId: string
   documentVersionId: string
