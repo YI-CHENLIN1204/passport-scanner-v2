@@ -567,6 +567,9 @@ const paddleModelBaseUrl =
   import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
   '/paddle-models'
 
+const paddleModelAssetVersion =
+  'ppocrv5-onnx-20261003-2'
+
 interface PaddleModelSource {
   label: string
   detectionUrl: string
@@ -577,9 +580,9 @@ const paddleModelSources: PaddleModelSource[] = [
   {
     label: 'official',
     detectionUrl:
-      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar`,
+      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar?v=${paddleModelAssetVersion}`,
     recognitionUrl:
-      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar`,
+      `${paddleModelBaseUrl}/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_onnx_infer.tar?v=${paddleModelAssetVersion}`,
   },
 ]
 
