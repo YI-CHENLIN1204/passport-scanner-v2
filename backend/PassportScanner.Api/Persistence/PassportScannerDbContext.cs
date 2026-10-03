@@ -172,9 +172,6 @@ public sealed class PassportScannerDbContext(
             .HasColumnName("return_date")
             .IsRequired();
 
-        tour.Property(item => item.ExpectedMemberCount)
-            .HasColumnName("expected_member_count");
-
         tour.Property(item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
