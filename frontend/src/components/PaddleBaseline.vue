@@ -18,6 +18,7 @@ import {
 
 const props = defineProps<{
   file: File | null
+  tourId?: string | null
 }>()
 
 const running = ref(false)
@@ -523,7 +524,7 @@ async function confirmReview() {
   reviewApiReceipt.value = null
 
   try {
-    const receipt = await savePassportReview(draft)
+    const receipt = await savePassportReview(draft, props.tourId ?? undefined)
 
     confirmedDraft.value = draft
     reviewedAt.value = timestamp
@@ -1154,12 +1155,12 @@ async function run() {
           <small v-if="reviewApiReceipt">
             {{
               reviewApiReceipt.action === 'CreatedTravelerAndDocument'
-                ? '已建立新旅客與第一個護照版本。'
+                ? '已建立這位團員的第一筆護照資料。'
                 : reviewApiReceipt.action === 'CreatedDocumentVersion'
-                  ? '已找到既有旅客並建立新的護照版本。'
+                  ? '已更新這位團員的護照版本。'
                   : '已找到同一本護照，更新本次覆核資訊，沒有重複建立版本。'
             }}
-            此旅客目前有
+            此團員目前有
             {{ reviewApiReceipt.travelerDocumentVersionCount }}
             個證件版本。資料已寫入 PostgreSQL 持久化儲存。
           </small>
