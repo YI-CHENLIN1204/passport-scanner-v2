@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getHealth, type HealthResponse } from './services/api'
+import {
+  getHealth,
+  type HealthResponse,
+  type TourSummaryResponse,
+} from './services/api'
 import PaddleBaseline from './components/PaddleBaseline.vue'
 import TaiwanCompatriotPermitBaseline from './components/TaiwanCompatriotPermitBaseline.vue'
 import TaiwanNationalIdBaseline from './components/TaiwanNationalIdBaseline.vue'
-import TravelerPanel from './components/TravelerPanel.vue'
+import TourPanel from './components/TourPanel.vue'
 import {
   detectDocumentTypeWithPaddle,
   type DetectedDocumentType,
@@ -33,7 +37,8 @@ interface BatchTestResult {
 }
 
 const health = ref<HealthResponse | null>(null)
-const activeView = ref<'scan' | 'travelers'>('scan')
+const activeView = ref<'tours' | 'scan'>('tours')
+const selectedTour = ref<TourSummaryResponse | null>(null)
 const error = ref('')
 const loading = ref(true)
 
@@ -419,6 +424,21 @@ async function runPassportOcr() {
   }
 }
 
+function selectTour(tour: TourSummaryResponse) {
+  selectedTour.value = tour
+}
+
+function scanTour(tour: TourSummaryResponse) {
+  selectedTour.value = tour
+  clearPreview()
+  activeView.value = 'scan'
+}
+
+function showTours() {
+  clearPreview()
+  activeView.value = 'tours'
+}
+
 onMounted(checkApi)
 
 onBeforeUnmount(() => {
@@ -433,7 +453,7 @@ onBeforeUnmount(() => {
       <p class="eyebrow">Internal Tool · V2</p>
       <h1>證件掃描系統</h1>
       <p class="subtitle">
-        瀏覽器端證件辨識、人工覆核與後續旅客資料流程。
+        以團別為單位進行證件辨識、人工覆核與整團匯出。
       </p>
     </section>
 
@@ -460,24 +480,68 @@ onBeforeUnmount(() => {
     <nav class="workspace-nav" aria-label="主要功能">
       <button
         type="button"
-        :class="{ active: activeView === 'scan' }"
-        @click="activeView = 'scan'"
+        :class="{ active: activeView === 'tours' }"
+        @click="showTours"
       >
-        證件掃描
+        團別管理
       </button>
       <button
         type="button"
-        :class="{ active: activeView === 'travelers' }"
-        @click="activeView = 'travelers'"
+        :class="{ active: activeView === 'scan' }"
+        :disabled="!selectedTour"
+        @click="selectedTour && (activeView = 'scan')"
       >
-        旅客資料
+        證件掃描
       </button>
     </nav>
 
-    <TravelerPanel v-if="activeView === 'travelers'" />
+    <TourPanel
+      v-if="activeView === 'tours'"
+      :selected-tour-id="selectedTour?.tourId ?? null"
+      @select-tour="selectTour"
+      @scan-tour="scanTour"
+    />
 
     <section
-      v-if="activeView === 'scan'"
+      v-if="activeView === 'scan' && selectedTour"
+      class="status-card tour-context-card"
+    >
+      <div>
+        <p class="label">目前團別</p>
+        <p class="status">
+          {{ selectedTour.tourName }}
+          · {{ selectedTour.departureDate }}
+          → {{ selectedTour.returnDate }}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="secondary-button"
+        @click="showTours"
+      >
+        返回團別
+      </button>
+    </section>
+
+    <section
+      v-else-if="activeView === 'scan'"
+      class="status-card"
+    >
+      <div>
+        <p class="label">尚未選擇團別</p>
+        <p class="status">
+          請先回到「團別管理」建立或選擇一個團，再開始掃描。
+        </p>
+      </div>
+
+      <button type="button" @click="showTours">
+        選擇團別
+      </button>
+    </section>
+
+    <section
+      v-if="activeView === 'scan' && selectedTour"
       class="scanner-card"
     >
       <div class="section-heading">
@@ -638,6 +702,7 @@ onBeforeUnmount(() => {
         documentType === 'passport'
       "
       :file="selectedFile"
+      :tour-id="selectedTour?.tourId ?? null"
     />
 
     <TaiwanCompatriotPermitBaseline
@@ -646,6 +711,7 @@ onBeforeUnmount(() => {
         documentType === 'taiwan-compatriot-permit'
       "
       :file="selectedFile"
+      :tour-id="selectedTour?.tourId ?? null"
     />
 
     <TaiwanNationalIdBaseline
@@ -654,10 +720,11 @@ onBeforeUnmount(() => {
         documentType === 'tw-id'
       "
       :file="selectedFile"
+      :tour-id="selectedTour?.tourId ?? null"
     />
 
     <details
-      v-if="activeView === 'scan'"
+      v-if="activeView === 'scan' && selectedTour"
       class="dev-lab"
     >
       <summary>
