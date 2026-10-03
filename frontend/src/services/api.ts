@@ -385,7 +385,6 @@ export interface TourSummaryResponse {
   tourName: string
   departureDate: string
   returnDate: string
-  expectedMemberCount: number | null
   reviewedMemberCount: number
   documentCount: number
   updatedAt: string
@@ -420,7 +419,6 @@ export interface CreateTourRequest {
   tourName: string
   departureDate: string
   returnDate: string
-  expectedMemberCount: number | null
 }
 
 export async function listTours(query = '') {
