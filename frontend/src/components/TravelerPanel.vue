@@ -107,10 +107,10 @@ onMounted(refresh)
       </button>
     </div>
 
-    <div class="volatile-notice">
-      <strong>目前仍是開發用暫存。</strong>
+    <div class="persistent-notice">
+      <strong>旅客資料已改為 PostgreSQL 持久化。</strong>
       <span>
-        資料已經走完整後端旅客／證件版本流程，但仍存於記憶體；後端重啟後會清空。
+        Docker 會把旅客主檔與證件版本寫入獨立資料庫 volume；重啟 frontend／backend 不會清空資料。
       </span>
     </div>
 
@@ -125,7 +125,7 @@ onMounted(refresh)
       </article>
       <article>
         <span>目前儲存模式</span>
-        <strong>開發暫存</strong>
+        <strong>PostgreSQL</strong>
       </article>
     </div>
 
@@ -352,15 +352,15 @@ button:disabled {
   opacity: 0.55;
 }
 
-.volatile-notice {
+.persistent-notice {
   display: flex;
   gap: 10px;
   margin-top: 18px;
-  border: 1px solid #fed7aa;
+  border: 1px solid #b7e4c7;
   border-radius: 12px;
   padding: 12px 14px;
-  background: #fff7ed;
-  color: #9a3412;
+  background: #f0fdf4;
+  color: #166534;
   line-height: 1.5;
 }
 
@@ -604,7 +604,7 @@ dd {
 
 @media (max-width: 820px) {
   .workspace-heading,
-  .volatile-notice {
+  .persistent-notice {
     flex-direction: column;
   }
 
