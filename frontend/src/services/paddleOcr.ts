@@ -1665,7 +1665,7 @@ async function detectDocumentQuadFromImageEdges(
     return null
   }
 
-  const minimumEdgeScore = 22
+  const minimumEdgeScore = 34
   if (
     Math.min(
       top.score,
@@ -1704,8 +1704,8 @@ async function detectDocumentQuadFromImageEdges(
     Math.max(1, seedWidth * seedHeight)
 
   if (
-    area < seedArea * 0.42 ||
-    area > seedArea * 2.1
+    area < seedArea * 0.68 ||
+    area > seedArea * 1.62
   ) {
     return null
   }
@@ -1727,9 +1727,42 @@ async function detectDocumentQuadFromImageEdges(
 
   if (
     ratio <
-      targetAspectRatio * 0.62 ||
+      targetAspectRatio * 0.74 ||
     ratio >
-      targetAspectRatio * 1.52
+      targetAspectRatio * 1.34
+  ) {
+    return null
+  }
+
+  const widthSkew =
+    Math.max(
+      distanceBetween(tl, tr),
+      distanceBetween(bl, br),
+    ) /
+    Math.max(
+      1,
+      Math.min(
+        distanceBetween(tl, tr),
+        distanceBetween(bl, br),
+      ),
+    )
+
+  const heightSkew =
+    Math.max(
+      distanceBetween(tl, bl),
+      distanceBetween(tr, br),
+    ) /
+    Math.max(
+      1,
+      Math.min(
+        distanceBetween(tl, bl),
+        distanceBetween(tr, br),
+      ),
+    )
+
+  if (
+    widthSkew > 1.48 ||
+    heightSkew > 1.48
   ) {
     return null
   }
@@ -2381,7 +2414,10 @@ async function createStraightenedReviewImage(
         targetAspectRatio,
       )
 
-    if (edgeQuad) {
+    if (
+      edgeQuad &&
+      perspectiveSeverity(edgeQuad) >= 0.055
+    ) {
       const corrected =
         await warpPerspectiveToDocument(
           candidate,
@@ -4956,21 +4992,41 @@ function extractTaiwanIdBirthDateFromRows(
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
 
-    if (!/出生日期|出生/.test(row)) continue
+    if (!/出生日期|出生年月日|出生/.test(row)) {
+      continue
+    }
 
-    const sameRow = extractTaiwanIdDatesFromText(row)[0]
-    if (sameRow) return sameRow
+    const nearbyRows = [
+      rows[index - 1],
+      row,
+      rows[index + 1],
+    ].filter(
+      (value): value is string =>
+        typeof value === 'string',
+    )
 
-    const nextRow = rows[index + 1]
-      ? extractTaiwanIdDatesFromText(rows[index + 1])[0]
-      : null
+    const nearbyDates = [
+      ...new Set(
+        nearbyRows.flatMap(
+          extractTaiwanIdDatesFromText,
+        ),
+      ),
+    ].sort()
 
-    if (nextRow) return nextRow
+    if (nearbyDates.length) {
+      // Taiwan ID OCR frequently merges "出生年月日" and "發證日期"
+      // into one visual row. The birth date must be earlier than the
+      // issuance date, so the earliest nearby valid date is the safe
+      // semantic choice.
+      return nearbyDates[0]
+    }
   }
 
-  const allDates = rows
-    .flatMap(extractTaiwanIdDatesFromText)
-    .sort()
+  const allDates = [
+    ...new Set(
+      rows.flatMap(extractTaiwanIdDatesFromText),
+    ),
+  ].sort()
 
   return allDates[0] ?? null
 }
