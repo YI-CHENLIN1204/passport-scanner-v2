@@ -65,6 +65,9 @@ export interface PaddleBaselineResult {
   orientationAttempts?: number
   detectedSkewDegrees?: number
   textHorizontalScore?: number
+  uprightSemanticScore?: number
+  distanceCropUsed?: boolean
+  distanceCropLabel?: string | null
   orientedImage?: File
 }
 
@@ -714,6 +717,187 @@ async function getPaddle() {
     : new Error('PaddleOCR 初始化失敗。')
 }
 
+function geometryFirstMatching(
+  prediction: unknown,
+  predicate: (text: string) => boolean,
+) {
+  return predictionItems(prediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null && item.height > 0,
+    )
+    .filter((item) => predicate(item.text))
+    .sort((a, b) => a.centerY - b.centerY)[0] ?? null
+}
+
+function semanticOrderScore(
+  pairs: Array<
+    [
+      PaddleItemGeometry | null,
+      PaddleItemGeometry | null,
+    ]
+  >,
+) {
+  const available = pairs.filter(
+    (
+      pair,
+    ): pair is [
+      PaddleItemGeometry,
+      PaddleItemGeometry,
+    ] => pair[0] !== null && pair[1] !== null,
+  )
+
+  if (!available.length) return 0.5
+
+  const passed = available.filter(
+    ([upper, lower]) =>
+      upper.centerY < lower.centerY,
+  ).length
+
+  return passed / available.length
+}
+
+function estimatePassportUprightScore(
+  prediction: unknown,
+) {
+  const title = geometryFirstMatching(
+    prediction,
+    (text) =>
+      /PASSPORT|護照|护照/i.test(text),
+  )
+
+  const mrzLine1 = geometryFirstMatching(
+    prediction,
+    (text) => {
+      const normalized =
+        normalizeMrzCandidate(text)
+
+      return (
+        normalized.startsWith('P') &&
+        normalized.length >= 30
+      )
+    },
+  )
+
+  const mrzLine2 = geometryFirstMatching(
+    prediction,
+    (text) => {
+      const normalized =
+        normalizeMrzCandidate(text)
+
+      return (
+        !normalized.startsWith('P') &&
+        normalized.length >= 30 &&
+        /\d/.test(normalized)
+      )
+    },
+  )
+
+  return semanticOrderScore([
+    [title, mrzLine1],
+    [title, mrzLine2],
+    [mrzLine1, mrzLine2],
+  ])
+}
+
+function estimatePermitUprightScore(
+  prediction: unknown,
+) {
+  const title = geometryFirstMatching(
+    prediction,
+    (text) =>
+      /台[灣湾]居民[來来]往大[陸陆]通行[證证]|TAIWAN\s*RESIDENT/i.test(
+        text.replace(/\s+/g, ''),
+      ),
+  )
+
+  const birth = geometryFirstMatching(
+    prediction,
+    (text) => /出生|DOB|DATEOFBIRTH/i.test(text),
+  )
+
+  const expiry = geometryFirstMatching(
+    prediction,
+    (text) => /有效|EXPIRY|VALIDUNTIL/i.test(text),
+  )
+
+  const number = geometryFirstMatching(
+    prediction,
+    (text) =>
+      Boolean(extractPermitNumberFromText(text)),
+  )
+
+  const mrz = geometryFirstMatching(
+    prediction,
+    (text) =>
+      /<{3,}/.test(text) &&
+      text.replace(/\s+/g, '').length >= 20,
+  )
+
+  if (mrz) {
+    const geometries = predictionItems(prediction)
+      .map(toGeometry)
+      .filter(
+        (item): item is PaddleItemGeometry =>
+          item !== null && item.height > 0,
+      )
+
+    const medianY = geometries.length
+      ? [...geometries]
+          .sort((a, b) => a.centerY - b.centerY)[
+            Math.floor(geometries.length / 2)
+          ].centerY
+      : mrz.centerY
+
+    return mrz.centerY >= medianY
+      ? 1
+      : 0
+  }
+
+  return semanticOrderScore([
+    [title, birth],
+    [title, expiry],
+    [title, number],
+  ])
+}
+
+function estimateTaiwanIdUprightScore(
+  prediction: unknown,
+) {
+  const title = geometryFirstMatching(
+    prediction,
+    (text) =>
+      /中華民國.*身分證|中華民國.*身分证|國民身分證|国民身份证/.test(
+        text.replace(/\s+/g, ''),
+      ),
+  )
+
+  const name = geometryFirstMatching(
+    prediction,
+    (text) => /姓名/.test(text),
+  )
+
+  const birth = geometryFirstMatching(
+    prediction,
+    (text) => /出生|年月日/.test(text),
+  )
+
+  const idNumber = geometryFirstMatching(
+    prediction,
+    (text) =>
+      Boolean(extractTaiwanNationalIdFromText(text)),
+  )
+
+  return semanticOrderScore([
+    [title, name],
+    [title, birth],
+    [title, idNumber],
+    [name, birth],
+    [birth, idNumber],
+  ])
+}
+
 function buildBaselineResult(
   prediction: unknown,
   initializationMs: number,
@@ -801,6 +985,10 @@ function buildBaselineResult(
       estimateTextSkewDegrees(prediction),
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
+    uprightSemanticScore:
+      estimatePassportUprightScore(prediction),
+    distanceCropUsed: false,
+    distanceCropLabel: null,
   }
 }
 
@@ -1511,6 +1699,9 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNameConsensus: number
   chineseNameConfidence: number | null
   textHorizontalScore: number
+  uprightSemanticScore: number
+  distanceCropUsed: boolean
+  distanceCropLabel: string | null
 }
 
 export interface TaiwanCompatriotPermitOcrProgress {
@@ -3117,6 +3308,7 @@ export interface TaiwanNationalIdOcrResult {
   orientationAttempts: number
   orientedImage: File
   textHorizontalScore: number
+  uprightSemanticScore: number
   distanceCropUsed: boolean
   distanceCropLabel: string | null
 }
