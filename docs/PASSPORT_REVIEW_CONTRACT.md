@@ -118,7 +118,7 @@
 
 成功回應不 echo 個資，只回傳內部 ID、action、版本數與 warning。
 
-目前 persistence 值為 `volatile-in-memory`，**後端重啟後全部清空**。這不是正式資料保存。
+目前 persistence 值為 `postgresql`。通過後端驗證後會寫入 PostgreSQL；一般 frontend／backend 重啟不會清空資料。
 
 `GET /api/passport-reviews/store-status` 只回傳旅客數與證件版本數，不回傳姓名、護照號碼等敏感資料。
 
