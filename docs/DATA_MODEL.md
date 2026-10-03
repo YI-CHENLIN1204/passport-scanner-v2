@@ -117,7 +117,7 @@ Tour / Product
 - traveler_master 與 document_versions 的建立／切換 current 應在同一 transaction 中完成。
 - 重複旅客合併不可只靠模糊姓名自動執行。
 
-正式資料庫選定後，以這些業務規則替換 `InMemoryTravelerStore`，不改前端 `PassportReviewDraft` contract。
+這些業務規則已由 `PostgresTravelerStore` 實作；前端 review contract 不因資料庫切換而改變。
 
 
 ## 中文姓名與護照 VIZ
@@ -149,8 +149,9 @@ MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
 
 - `PASSPORT`
 - `TAIWAN_COMPATRIOT_PERMIT`
+- `TAIWAN_NATIONAL_ID`
 
-兩種證件共用 traveler matching / document versioning：
+三種證件共用 traveler matching / document versioning：
 
 1. 先以同類證件的 document number 尋找既有版本。
 2. 同一本證件再次覆核時更新既有版本，不重複新增。
