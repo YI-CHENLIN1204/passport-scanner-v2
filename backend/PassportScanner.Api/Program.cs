@@ -21,6 +21,7 @@ builder.Services.AddDbContext<PassportScannerDbContext>(options =>
     options.UseNpgsql(databaseConnection));
 
 builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
+builder.Services.AddScoped<ITourStore, PostgresTourStore>();
 
 builder.Services.AddCors(options =>
 {
@@ -41,6 +42,36 @@ using (var scope = app.Services.CreateScope())
         .GetRequiredService<PassportScannerDbContext>();
 
     db.Database.EnsureCreated();
+
+    db.Database.ExecuteSqlRaw(
+        """
+        CREATE TABLE IF NOT EXISTS tours (
+            tour_id uuid PRIMARY KEY,
+            tour_name varchar(160) NOT NULL,
+            departure_date date NOT NULL,
+            return_date date NOT NULL,
+            expected_member_count integer NULL,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_tours_departure_date
+            ON tours (departure_date);
+
+        CREATE TABLE IF NOT EXISTS tour_members (
+            tour_member_id uuid PRIMARY KEY,
+            tour_id uuid NOT NULL
+                REFERENCES tours(tour_id)
+                ON DELETE CASCADE,
+            traveler_id uuid NOT NULL
+                REFERENCES travelers(traveler_id)
+                ON DELETE CASCADE,
+            created_at timestamptz NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_tour_members_tour_traveler
+            ON tour_members (tour_id, traveler_id);
+        """);
 }
 
 app.UseCors(frontendPolicy);
@@ -54,6 +85,58 @@ app.MapGet("/api/health", () =>
         service = "passport-scanner-api",
         timestamp = DateTimeOffset.UtcNow
     }));
+
+app.MapGet(
+    "/api/tours",
+    (string? query, ITourStore store) =>
+        Results.Ok(store.ListTours(query)));
+
+app.MapGet(
+    "/api/tours/{tourId:guid}",
+    (Guid tourId, ITourStore store) =>
+    {
+        var tour = store.GetTour(tourId);
+        return tour is null
+            ? Results.NotFound()
+            : Results.Ok(tour);
+    });
+
+app.MapPost(
+    "/api/tours",
+    (CreateTourRequest request, ITourStore store) =>
+    {
+        try
+        {
+            return Results.Created(
+                "/api/tours",
+                store.CreateTour(
+                    request,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapGet(
+    "/api/tours/{tourId:guid}/export.csv",
+    (Guid tourId, ITourStore store) =>
+    {
+        try
+        {
+            var bytes = store.ExportCsv(tourId);
+            return Results.File(
+                bytes,
+                "text/csv; charset=utf-8",
+                $"tour-{tourId:N}.csv");
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
+    });
 
 app.MapGet(
     "/api/document-store/status",
@@ -93,7 +176,11 @@ app.MapGet(
 
 app.MapPost(
     "/api/passport-reviews",
-    (PassportReviewRequest request, ITravelerStore store) =>
+    (
+        PassportReviewRequest request,
+        Guid? tourId,
+        ITravelerStore store,
+        ITourStore tourStore) =>
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var errors = PassportReviewValidator.Validate(request, today);
@@ -113,6 +200,17 @@ app.MapPost(
             var result = store.SaveDocumentReview(
                 PassportReviewMapper.ToDocumentInput(request),
                 savedAt);
+
+            if (
+                tourId.HasValue &&
+                !tourStore.EnsureMember(
+                    tourId.Value,
+                    result.TravelerId,
+                    savedAt))
+            {
+                return Results.NotFound(
+                    new { message = "找不到指定團別。" });
+            }
 
             return Results.Ok(
                 new PassportReviewSaveResponse(
@@ -149,7 +247,11 @@ app.MapGet(
 
 app.MapPost(
     "/api/taiwan-national-id-reviews",
-    (TaiwanNationalIdReviewRequest request, ITravelerStore store) =>
+    (
+        TaiwanNationalIdReviewRequest request,
+        Guid? tourId,
+        ITravelerStore store,
+        ITourStore tourStore) =>
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var errors = TaiwanNationalIdReviewValidator.Validate(
@@ -172,6 +274,17 @@ app.MapPost(
             var result = store.SaveDocumentReview(
                 TaiwanNationalIdReviewMapper.ToDocumentInput(request),
                 savedAt);
+
+            if (
+                tourId.HasValue &&
+                !tourStore.EnsureMember(
+                    tourId.Value,
+                    result.TravelerId,
+                    savedAt))
+            {
+                return Results.NotFound(
+                    new { message = "找不到指定團別。" });
+            }
 
             return Results.Ok(
                 new TaiwanNationalIdReviewSaveResponse(
@@ -223,7 +336,11 @@ app.MapPost(
 
 app.MapPost(
     "/api/taiwan-compatriot-permit-reviews",
-    (TaiwanCompatriotPermitReviewRequest request, ITravelerStore store) =>
+    (
+        TaiwanCompatriotPermitReviewRequest request,
+        Guid? tourId,
+        ITravelerStore store,
+        ITourStore tourStore) =>
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var errors = TaiwanCompatriotPermitReviewValidator.Validate(
@@ -248,6 +365,17 @@ app.MapPost(
             var result = store.SaveDocumentReview(
                 TaiwanCompatriotPermitReviewMapper.ToDocumentInput(request),
                 savedAt);
+
+            if (
+                tourId.HasValue &&
+                !tourStore.EnsureMember(
+                    tourId.Value,
+                    result.TravelerId,
+                    savedAt))
+            {
+                return Results.NotFound(
+                    new { message = "找不到指定團別。" });
+            }
 
             return Results.Ok(
                 new TaiwanCompatriotPermitReviewSaveResponse(
