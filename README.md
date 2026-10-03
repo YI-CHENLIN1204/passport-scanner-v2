@@ -78,9 +78,9 @@ ASP.NET Core 後端驗證
   ↓
 ITravelerStore
   ↓
-InMemoryTravelerStore（目前可逆測試實作）
-  ├─ traveler_master 概念資料
-  └─ document_versions 概念資料
+PostgresTravelerStore
+  ├─ travelers
+  └─ document_versions
 ```
 
 目前版本已能驗證：
@@ -91,7 +91,7 @@ InMemoryTravelerStore（目前可逆測試實作）
 - 舊護照重新掃描：不會自動變回 current。
 - 多位完全相同候選：後端拒絕自動合併。
 
-正式資料庫選定後只替換 `ITravelerStore` 實作，不改 OCR / 覆核 contract。
+正式 PostgreSQL 已接入；OCR / 覆核 contract 維持不變。
 
 
 ## 目前台胞證流程
@@ -122,7 +122,7 @@ InMemoryTravelerStore（目前可逆測試實作）
 - 查看護照／台胞證／台灣身分證歷史版本。
 - 查看目前使用中的證件版本。
 
-目前 persistence 仍為 InMemoryTravelerStore；後端重啟後測試資料會清空。正式持久化 adapter 尚未啟用。
+目前 persistence 為 PostgreSQL；旅客主檔與證件版本保存在 Docker named volume，backend 重啟後資料仍保留。
 
 
 ## 目前台灣身分證流程
