@@ -1287,8 +1287,8 @@ function reviewCropFromPrediction(
     .filter(
       (item): item is PaddleItemGeometry =>
         item !== null &&
-        item.width > 4 &&
-        item.height > 4,
+        item.maxX - item.minX > 4 &&
+        item.maxY - item.minY > 4,
     )
 
   if (geometries.length < 2) {
