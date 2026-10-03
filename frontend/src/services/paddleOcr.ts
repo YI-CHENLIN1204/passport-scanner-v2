@@ -1580,10 +1580,29 @@ async function recognizePassportOrientedWithInstance(
   )[0]
 
   const skew = best.result.detectedSkewDegrees ?? 0
-  const needsDeskew =
+  const reviewNeedsDeskew =
     Math.abs(skew) >= 2.5 &&
-    Math.abs(skew) <= 20 &&
-    (
+    Math.abs(skew) <= 40
+
+  let reviewImage = best.image
+  let reviewRotation = best.rotation
+
+  if (reviewNeedsDeskew) {
+    onProgress?.({
+      stage: 'deskew',
+      progress: 0.84,
+      message:
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在產生轉正覆核圖…`,
+    })
+
+    reviewImage = await rotateImageFile(
+      best.image,
+      -skew,
+    )
+    reviewRotation =
+      normalizeRotation(best.rotation - skew)
+
+    const shouldRetryOcr =
       best.result.line2Validation?.requiredValid !== true ||
       !best.result.line1Valid ||
       (
@@ -1593,42 +1612,31 @@ async function recognizePassportOrientedWithInstance(
         ) &&
         !best.result.chineseName
       )
-    )
 
-  if (needsDeskew) {
-    onProgress?.({
-      stage: 'deskew',
-      progress: 0.84,
-      message:
-        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正護照…`,
-    })
+    if (shouldRetryOcr) {
+      const deskewedResult =
+        await predictPassportWithDistanceFallback(
+          instance,
+          reviewImage,
+          0,
+        )
 
-    const deskewed = await rotateImageFile(
-      best.image,
-      -skew,
-    )
+      deskewedResult.rotationDegrees =
+        reviewRotation
+      deskewedResult.orientationAttempts =
+        attempts.length + 1
+      deskewedResult.orientedImage =
+        reviewImage
 
-    const deskewedResult =
-      await predictPassportWithDistanceFallback(
-        instance,
-        deskewed,
-        0,
-      )
-
-    deskewedResult.rotationDegrees =
-      normalizeRotation(best.rotation - skew)
-    deskewedResult.orientationAttempts =
-      attempts.length + 1
-    deskewedResult.orientedImage = deskewed
-
-    if (
-      passportOrientationQuality(deskewedResult) >=
-      passportOrientationQuality(best.result)
-    ) {
-      best = {
-        rotation: deskewedResult.rotationDegrees,
-        image: deskewed,
-        result: deskewedResult,
+      if (
+        passportOrientationQuality(deskewedResult) >=
+        passportOrientationQuality(best.result)
+      ) {
+        best = {
+          rotation: reviewRotation,
+          image: reviewImage,
+          result: deskewedResult,
+        }
       }
     }
   }
@@ -1638,7 +1646,12 @@ async function recognizePassportOrientedWithInstance(
       best.result.orientationAttempts ?? 1,
       attempts.length,
     )
-  best.result.orientedImage = best.image
+
+  // Human review must always use the visually straightened full photo,
+  // even when the pre-deskew OCR result scored slightly better.
+  best.result.rotationDegrees =
+    reviewRotation
+  best.result.orientedImage = reviewImage
 
   onProgress?.({
     stage: 'completed',
@@ -2932,7 +2945,7 @@ function estimateTextSkewDegrees(
       if (angle > 45) angle -= 90
       if (angle < -45) angle += 90
 
-      return Math.abs(angle) <= 20
+      return Math.abs(angle) <= 40
         ? [angle]
         : []
     })
@@ -3333,27 +3346,33 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   const skew =
     estimateTextSkewDegrees(best.prediction)
 
-  if (Math.abs(skew) >= 2.5 && Math.abs(skew) <= 20) {
+  let reviewImage = best.image
+  let reviewRotation = best.rotation
+
+  if (Math.abs(skew) >= 2.5 && Math.abs(skew) <= 40) {
     onProgress?.({
       stage: 'deskew',
       progress: 0.78,
       message:
-        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正…`,
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在產生轉正覆核圖…`,
     })
 
-    const deskewed = await rotateImageFile(
+    reviewImage = await rotateImageFile(
       best.image,
       -skew,
     )
+    reviewRotation =
+      normalizeRotation(best.rotation - skew)
+
     const deskewPrediction = await predictPermit(
       instance,
-      deskewed,
+      reviewImage,
       0,
       totalStartedAt,
     )
 
     deskewPrediction.result.rotationDegrees =
-      normalizeRotation(best.rotation - skew)
+      reviewRotation
     deskewPrediction.result.orientationAttempts =
       attempts.length + 1
 
@@ -3362,9 +3381,8 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       permitResultQuality(best.result)
     ) {
       best = {
-        rotation:
-          deskewPrediction.result.rotationDegrees,
-        image: deskewed,
+        rotation: reviewRotation,
+        image: reviewImage,
         prediction: deskewPrediction.prediction,
         result: deskewPrediction.result,
       }
@@ -3415,6 +3433,10 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     )
   best.result.totalMs =
     performance.now() - totalStartedAt
+  best.result.rotationDegrees =
+    reviewRotation
+  best.result.orientedImage =
+    reviewImage
 
   onProgress?.({
     stage: 'completed',
@@ -4163,35 +4185,40 @@ export async function recognizeTaiwanNationalIdWithPaddle(
   const skew =
     estimateTextSkewDegrees(best.prediction)
 
+  let reviewImage = best.image
+  let reviewRotation = best.rotation
+
   if (
     Math.abs(skew) >= 2.5 &&
-    Math.abs(skew) <= 20
+    Math.abs(skew) <= 40
   ) {
     onProgress?.({
       stage: 'deskew',
       progress: 0.8,
       message:
-        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在校正身分證…`,
+        `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在產生轉正覆核圖…`,
     })
 
-    const deskewed =
+    reviewImage =
       await rotateImageFile(
         best.image,
         -skew,
+      )
+    reviewRotation =
+      normalizeRotation(
+        best.rotation - skew,
       )
 
     const predicted =
       await predictTaiwanNationalId(
         instance,
-        deskewed,
+        reviewImage,
         0,
         totalStartedAt,
       )
 
     predicted.result.rotationDegrees =
-      normalizeRotation(
-        best.rotation - skew,
-      )
+      reviewRotation
     predicted.result.orientationAttempts =
       attempts.length + 1
 
@@ -4200,9 +4227,8 @@ export async function recognizeTaiwanNationalIdWithPaddle(
       taiwanIdResultQuality(best.result)
     ) {
       best = {
-        rotation:
-          predicted.result.rotationDegrees,
-        image: deskewed,
+        rotation: reviewRotation,
+        image: reviewImage,
         prediction: predicted.prediction,
         result: predicted.result,
       }
@@ -4241,7 +4267,13 @@ export async function recognizeTaiwanNationalIdWithPaddle(
     )
   best.result.totalMs =
     performance.now() - totalStartedAt
-  best.result.orientedImage = best.image
+
+  // Keep the OCR fields from the strongest pass, but always show the
+  // fully straightened full-size photo to the reviewer.
+  best.result.rotationDegrees =
+    reviewRotation
+  best.result.orientedImage =
+    reviewImage
 
   onProgress?.({
     stage: 'completed',
