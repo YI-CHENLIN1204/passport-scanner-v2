@@ -1939,6 +1939,59 @@ function estimateDocumentQuad(
   return quad
 }
 
+function expandDocumentQuad(
+  quad: DocumentQuad,
+  imageWidth: number,
+  imageHeight: number,
+  factor = 1.035,
+): DocumentQuad {
+  const points = [
+    quad.topLeft,
+    quad.topRight,
+    quad.bottomRight,
+    quad.bottomLeft,
+  ]
+
+  const center: [number, number] = [
+    points.reduce(
+      (sum, point) => sum + point[0],
+      0,
+    ) / points.length,
+    points.reduce(
+      (sum, point) => sum + point[1],
+      0,
+    ) / points.length,
+  ]
+
+  const expand = (
+    point: [number, number],
+  ): [number, number] => [
+    Math.max(
+      0,
+      Math.min(
+        imageWidth - 1,
+        center[0] +
+          (point[0] - center[0]) * factor,
+      ),
+    ),
+    Math.max(
+      0,
+      Math.min(
+        imageHeight - 1,
+        center[1] +
+          (point[1] - center[1]) * factor,
+      ),
+    ),
+  ]
+
+  return {
+    topLeft: expand(quad.topLeft),
+    topRight: expand(quad.topRight),
+    bottomRight: expand(quad.bottomRight),
+    bottomLeft: expand(quad.bottomLeft),
+  }
+}
+
 function perspectiveSeverity(
   quad: DocumentQuad,
 ) {
@@ -2356,8 +2409,8 @@ function reviewCropFromPrediction(
 
   // Text rarely reaches the physical card/page edges. Add generous margins,
   // then normalize toward the expected document aspect ratio.
-  let width = textWidth * 1.42
-  let height = textHeight * 1.9
+  let width = textWidth * 1.72
+  let height = textHeight * 2.28
 
   if (width / height < targetAspectRatio) {
     width = height * targetAspectRatio
@@ -2367,8 +2420,8 @@ function reviewCropFromPrediction(
 
   // A crop that is still most of the original photo is not useful.
   // Keep it, but cap it enough to remove obviously irrelevant background.
-  width = Math.min(width, imageWidth * 0.94)
-  height = Math.min(height, imageHeight * 0.94)
+  width = Math.min(width, imageWidth * 0.98)
+  height = Math.min(height, imageHeight * 0.98)
 
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
@@ -2418,33 +2471,17 @@ async function createStraightenedReviewImage(
       edgeQuad &&
       perspectiveSeverity(edgeQuad) >= 0.055
     ) {
-      const corrected =
-        await warpPerspectiveToDocument(
-          candidate,
+      const safeQuad =
+        expandDocumentQuad(
           edgeQuad,
-          targetAspectRatio,
+          imageWidth,
+          imageHeight,
         )
 
-      if (corrected) {
-        return corrected
-      }
-    }
-
-    const ocrQuad =
-      estimateDocumentQuad(
-        prediction,
-        imageWidth,
-        imageHeight,
-      )
-
-    if (
-      ocrQuad &&
-      perspectiveSeverity(ocrQuad) >= 0.05
-    ) {
       const corrected =
         await warpPerspectiveToDocument(
           candidate,
-          ocrQuad,
+          safeQuad,
           targetAspectRatio,
         )
 
@@ -2453,6 +2490,9 @@ async function createStraightenedReviewImage(
       }
     }
 
+    // Never infer a perspective warp from OCR text bounds alone. At large
+    // camera tilt it is safer to show a slightly wider crop with background
+    // than to cut off part of the credential.
     if (!crop) return null
 
     const blob = await createPixelCrop(
