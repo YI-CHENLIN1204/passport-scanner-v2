@@ -179,10 +179,10 @@ public static partial class TaiwanCompatriotPermitReviewValidator
             : char.ToLowerInvariant(value[0]) + value[1..];
 
     [GeneratedRegex(
-        @"^[p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$",
+        @"^[\p{IsCJKUnifiedIdeographs}·‧ ]{2,20}$",
         RegexOptions.CultureInvariant)]
     private static partial Regex ChineseNameRegex();
 
-    [GeneratedRegex(@"^d{8}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\d{8}$", RegexOptions.CultureInvariant)]
     private static partial Regex PermitNumberRegex();
 }
