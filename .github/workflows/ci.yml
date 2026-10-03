@@ -92,7 +92,7 @@ jobs:
         run: |
           curl --fail --silent -X POST http://localhost:5080/api/tours \
             -H 'Content-Type: application/json' \
-            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","expectedMemberCount":12}' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12"}' \
             > /tmp/tour.json
 
           cat /tmp/tour.json
