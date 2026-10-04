@@ -92,11 +92,12 @@ jobs:
         run: |
           curl --fail --silent -X POST http://localhost:5080/api/tours \
             -H 'Content-Type: application/json' \
-            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12"}' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
             > /tmp/tour.json
 
           cat /tmp/tour.json
           grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
 
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
 
