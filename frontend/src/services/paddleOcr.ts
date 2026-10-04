@@ -4794,7 +4794,10 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     }
   }
 
-  if (!best.result.chineseName && !best.result.mrzUsed) {
+  // MRZ can be usable for permit number / birth date / sex while
+  // its encoded Chinese-name segment is still unreadable. In that case
+  // mrzUsed is true, but we must still retry the visual name area.
+  if (!best.result.chineseName) {
     onProgress?.({
       stage: 'name-retry',
       progress: 0.9,
