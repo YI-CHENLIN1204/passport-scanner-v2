@@ -3,13 +3,15 @@ namespace PassportScanner.Api.Contracts;
 public sealed record CreateTourRequest(
     string TourName,
     DateOnly DepartureDate,
-    DateOnly ReturnDate);
+    DateOnly ReturnDate,
+    IReadOnlyList<string>? RequiredDocumentTypes);
 
 public sealed record TourSummaryResponse(
     Guid TourId,
     string TourName,
     DateOnly DepartureDate,
     DateOnly ReturnDate,
+    IReadOnlyList<string> RequiredDocumentTypes,
     int ReviewedMemberCount,
     int DocumentCount,
     DateTimeOffset UpdatedAt);
