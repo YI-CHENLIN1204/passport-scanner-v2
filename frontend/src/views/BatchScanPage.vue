@@ -165,6 +165,93 @@ function mrzExpiryDateToIso(value: string) {
   return formatIsoDate(year, month, day)
 }
 
+async function prepareReviewImage(file: File) {
+  const bitmap = await createImageBitmap(file)
+  const maxSide = 3200
+  const longestSide = Math.max(
+    bitmap.width,
+    bitmap.height,
+  )
+
+  if (
+    /^image\/jpe?g$/i.test(file.type) &&
+    file.size <= 5 * 1024 * 1024 &&
+    longestSide <= maxSide
+  ) {
+    bitmap.close()
+    return file
+  }
+
+  const scale = Math.min(
+    1,
+    maxSide / Math.max(1, longestSide),
+  )
+  const width = Math.max(
+    1,
+    Math.round(bitmap.width * scale),
+  )
+  const height = Math.max(
+    1,
+    Math.round(bitmap.height * scale),
+  )
+
+  const canvas =
+    document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    bitmap.close()
+    throw new Error(
+      '無法建立人工覆核圖片。',
+    )
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, width, height)
+  context.drawImage(
+    bitmap,
+    0,
+    0,
+    width,
+    height,
+  )
+  bitmap.close()
+
+  const blob = await new Promise<Blob>(
+    (resolve, reject) => {
+      canvas.toBlob(
+        value => {
+          if (value) {
+            resolve(value)
+          } else {
+            reject(
+              new Error(
+                '無法壓縮人工覆核圖片。',
+              ),
+            )
+          }
+        },
+        'image/jpeg',
+        0.9,
+      )
+    },
+  )
+
+  const baseName = file.name.replace(
+    /\.[^.]+$/,
+    '',
+  )
+
+  return new File(
+    [blob],
+    `${baseName}-review.jpg`,
+    { type: 'image/jpeg' },
+  )
+}
+
 function fileToBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -343,8 +430,12 @@ async function buildPassportItem(
   )
 
   const parsed = result.parsedMrz
-  const reviewImage = result.orientedImage ?? file
-  const imageBase64 = await fileToBase64(reviewImage)
+  const orientedImage =
+    result.orientedImage ?? file
+  const reviewImage =
+    await prepareReviewImage(orientedImage)
+  const imageBase64 =
+    await fileToBase64(reviewImage)
 
   return {
     originalFileName: file.name,
@@ -391,8 +482,12 @@ async function buildPermitItem(
       },
     )
 
-  const reviewImage = result.orientedImage ?? file
-  const imageBase64 = await fileToBase64(reviewImage)
+  const orientedImage =
+    result.orientedImage ?? file
+  const reviewImage =
+    await prepareReviewImage(orientedImage)
+  const imageBase64 =
+    await fileToBase64(reviewImage)
 
   return {
     originalFileName: file.name,
@@ -430,8 +525,12 @@ async function buildNationalIdItem(
       },
     )
 
-  const reviewImage = result.orientedImage ?? file
-  const imageBase64 = await fileToBase64(reviewImage)
+  const orientedImage =
+    result.orientedImage ?? file
+  const reviewImage =
+    await prepareReviewImage(orientedImage)
+  const imageBase64 =
+    await fileToBase64(reviewImage)
 
   return {
     originalFileName: file.name,
