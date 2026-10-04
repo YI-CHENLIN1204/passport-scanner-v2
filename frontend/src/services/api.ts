@@ -638,13 +638,17 @@ export async function addScanItem(
   )
 
   if (!response.ok) {
-    let message = `Add scan item failed: ${response.status}`
+    let message =
+      response.status === 413
+        ? '覆核圖片資料過大，伺服器拒絕接收。請重新整理到最新版後再試；若仍發生，請改用較小的原始圖片。'
+        : `Add scan item failed: ${response.status}`
 
     try {
       const body = (await response.json()) as { message?: string }
       message = body.message ?? message
     } catch {
-      // Keep the status-only message.
+      // Keep the friendly status-specific message when the response
+      // is not JSON (for example an Nginx 413 HTML response).
     }
 
     throw new Error(message)
