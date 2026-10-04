@@ -388,6 +388,9 @@ export interface TourSummaryResponse {
   requiredDocumentTypes: string[]
   reviewedMemberCount: number
   documentCount: number
+  memberCount: number
+  receivedDocumentCount: number
+  pendingReviewCount: number
   updatedAt: string
 }
 
