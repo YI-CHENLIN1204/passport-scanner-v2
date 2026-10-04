@@ -11,6 +11,7 @@ import {
   getTourDetail,
   listTours,
   type TourDetailResponse,
+  type TourMemberResponse,
   type TourSummaryResponse,
 } from '../services/api'
 
@@ -158,8 +159,21 @@ function scanCurrentTour() {
   emit('scanTour', detail.value.tour)
 }
 
-function progressText(tour: TourSummaryResponse) {
-  return `${tour.reviewedMemberCount} 人`
+function hasDocument(
+  member: TourMemberResponse,
+  type: string,
+) {
+  return member.documents.some(
+    document =>
+      document.documentType === type &&
+      document.isCurrent,
+  )
+}
+
+function memberStatus(member: TourMemberResponse) {
+  return member.documents.length > 0
+    ? '已覆核'
+    : '待補證件'
 }
 
 watch(
@@ -312,17 +326,28 @@ onMounted(async () => {
           }"
           @click="openTour(tour)"
         >
-          <span class="tour-list-title">
-            {{ tour.tourName }}
+          <span class="tour-list-heading">
+            <span class="tour-list-title">
+              {{ tour.tourName }}
+            </span>
+            <span class="tour-enter-hint">
+              進入團別
+            </span>
           </span>
 
           <span class="tour-list-date">
             {{ tour.departureDate }} → {{ tour.returnDate }}
           </span>
 
-          <span class="tour-list-meta">
-            {{ progressText(tour) }}
-            · {{ tour.documentCount }} 份證件
+          <span class="tour-list-metrics">
+            <span>
+              <strong>{{ tour.reviewedMemberCount }}</strong>
+              人
+            </span>
+            <span>
+              <strong>{{ tour.documentCount }}</strong>
+              份證件
+            </span>
           </span>
         </button>
       </section>
@@ -366,20 +391,20 @@ onMounted(async () => {
                 type="button"
                 @click="scanCurrentTour"
               >
-                進入證件掃描
+                新增／掃描證件
               </button>
             </div>
           </header>
 
           <div class="tour-stats">
             <div>
-              <span>已建檔團員</span>
+              <span>目前團員</span>
               <strong>
                 {{ detail.tour.reviewedMemberCount }}
               </strong>
             </div>
             <div>
-              <span>目前證件數</span>
+              <span>目前證件</span>
               <strong>{{ detail.tour.documentCount }}</strong>
             </div>
           </div>
@@ -393,38 +418,97 @@ onMounted(async () => {
 
           <div
             v-else
-            class="tour-members"
+            class="tour-members-table-wrap"
           >
-            <article
-              v-for="member in detail.members"
-              :key="member.tourMemberId"
-              class="tour-member-row"
-            >
-              <div class="member-main">
-                <strong>
-                  {{ member.nameZh || member.nameEn || '未命名旅客' }}
-                </strong>
-                <span v-if="member.nameEn">
-                  {{ member.nameEn }}
-                </span>
-                <small>
-                  {{ member.birthDate }}
-                  <template v-if="member.nationality">
-                    · {{ member.nationality }}
-                  </template>
-                </small>
-              </div>
-
-              <div class="member-documents">
-                <span
-                  v-for="document in member.documents"
-                  :key="document.documentVersionId"
-                  class="document-chip"
+            <table class="tour-members-table">
+              <thead>
+                <tr>
+                  <th>姓名</th>
+                  <th>護照</th>
+                  <th>台胞證</th>
+                  <th>身分證</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="member in detail.members"
+                  :key="member.tourMemberId"
                 >
-                  {{ documentLabel(document.documentType) }}
-                </span>
-              </div>
-            </article>
+                  <td>
+                    <div class="member-name">
+                      <strong>
+                        {{ member.nameZh || member.nameEn || '未命名旅客' }}
+                      </strong>
+                      <span
+                        v-if="
+                          member.nameEn &&
+                          member.nameEn !== member.nameZh
+                        "
+                      >
+                        {{ member.nameEn }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="document-status-cell">
+                    <span
+                      :class="{
+                        complete: hasDocument(member, 'PASSPORT'),
+                      }"
+                    >
+                      {{
+                        hasDocument(member, 'PASSPORT')
+                          ? '✓'
+                          : '—'
+                      }}
+                    </span>
+                  </td>
+                  <td class="document-status-cell">
+                    <span
+                      :class="{
+                        complete: hasDocument(
+                          member,
+                          'TAIWAN_COMPATRIOT_PERMIT',
+                        ),
+                      }"
+                    >
+                      {{
+                        hasDocument(
+                          member,
+                          'TAIWAN_COMPATRIOT_PERMIT',
+                        )
+                          ? '✓'
+                          : '—'
+                      }}
+                    </span>
+                  </td>
+                  <td class="document-status-cell">
+                    <span
+                      :class="{
+                        complete: hasDocument(
+                          member,
+                          'TAIWAN_NATIONAL_ID',
+                        ),
+                      }"
+                    >
+                      {{
+                        hasDocument(
+                          member,
+                          'TAIWAN_NATIONAL_ID',
+                        )
+                          ? '✓'
+                          : '—'
+                      }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="member-status">
+                      {{ memberStatus(member) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </template>
       </section>
@@ -595,14 +679,47 @@ button.secondary {
   box-shadow: inset 3px 0 #111c33;
 }
 
+.tour-list-heading {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .tour-list-title {
   font-weight: 700;
   color: #111c33;
 }
 
-.tour-list-date,
-.tour-list-meta {
+.tour-enter-hint {
+  flex: 0 0 auto;
+  color: #52647f;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.tour-list-date {
   color: #66738a;
+  font-size: 13px;
+}
+
+.tour-list-metrics {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.tour-list-metrics > span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f4f9;
+  color: #66738a;
+  font-size: 12px;
+}
+
+.tour-list-metrics strong {
+  color: #273753;
   font-size: 13px;
 }
 
@@ -649,41 +766,73 @@ button.secondary {
   font-size: 22px;
 }
 
-.tour-members {
-  display: grid;
+.tour-members-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e1e7f0;
+  border-radius: 12px;
 }
 
-.tour-member-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 2px;
+.tour-members-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.tour-members-table th,
+.tour-members-table td {
+  padding: 13px 14px;
   border-bottom: 1px solid #edf1f6;
+  text-align: left;
+  vertical-align: middle;
 }
 
-.member-main {
+.tour-members-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.tour-members-table th {
+  background: #f8faff;
+  color: #65728b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-name {
   display: grid;
   gap: 3px;
 }
 
-.member-main strong {
+.member-name strong {
   color: #111c33;
 }
 
-.member-main span,
-.member-main small {
-  color: #6d7890;
+.member-name span {
+  color: #748098;
+  font-size: 12px;
 }
 
-.member-documents {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
+.document-status-cell {
+  width: 88px;
 }
 
-.document-chip {
+.document-status-cell span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #f1f4f8;
+  color: #94a0b3;
+  font-weight: 800;
+}
+
+.document-status-cell span.complete {
+  background: #eaf8ef;
+  color: #247a46;
+}
+
+.member-status {
+  display: inline-flex;
   padding: 5px 9px;
   border-radius: 999px;
   background: #eef3ff;
@@ -721,8 +870,7 @@ button.secondary {
     grid-template-columns: 1fr;
   }
 
-  .tour-detail-header,
-  .tour-member-row {
+  .tour-detail-header {
     flex-direction: column;
   }
 
@@ -734,8 +882,5 @@ button.secondary {
     flex: 1;
   }
 
-  .member-documents {
-    justify-content: flex-start;
-  }
 }
 </style>
