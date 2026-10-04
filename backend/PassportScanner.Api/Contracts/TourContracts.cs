@@ -14,6 +14,9 @@ public sealed record TourSummaryResponse(
     IReadOnlyList<string> RequiredDocumentTypes,
     int ReviewedMemberCount,
     int DocumentCount,
+    int MemberCount,
+    int ReceivedDocumentCount,
+    int PendingReviewCount,
     DateTimeOffset UpdatedAt);
 
 public sealed record TourMemberDocumentResponse(
