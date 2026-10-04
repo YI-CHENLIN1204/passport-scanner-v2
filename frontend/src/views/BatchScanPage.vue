@@ -506,6 +506,29 @@ async function buildPassportItem(
       predictMs: result.predictMs,
       totalMs: result.totalMs,
       fallbackUsed: result.fallbackUsed,
+      originalFields: {
+        nameZh: result.chineseName ?? '',
+        nameEn: parsed
+          ? [parsed.surname, parsed.givenNames]
+              .filter(Boolean)
+              .join(', ')
+          : '',
+        birthDate: parsed
+          ? mrzBirthDateToIso(parsed.birthDate)
+          : null,
+        gender: parsed?.sex ?? '',
+        nationality:
+          parsed?.nationality ?? null,
+        documentNumber:
+          parsed?.documentNumber ?? '',
+        issuingCountry:
+          parsed?.issuingState ?? null,
+        expiryDate: parsed
+          ? mrzExpiryDateToIso(
+              parsed.expiryDate,
+            )
+          : null,
+      },
     }),
   }
 }
@@ -568,6 +591,19 @@ async function buildPermitItem(
         result.extractedFieldCount,
       chineseNamePasses:
         result.chineseNamePasses,
+      originalFields: {
+        nameZh: result.chineseName,
+        nameEn: '',
+        birthDate:
+          result.birthDate || null,
+        gender: result.sex,
+        nationality: null,
+        documentNumber:
+          result.permitNumber,
+        issuingCountry: null,
+        expiryDate:
+          result.expiryDate || null,
+      },
     }),
   }
 }
@@ -628,6 +664,18 @@ async function buildNationalIdItem(
       totalMs: result.totalMs,
       extractedFieldCount:
         result.extractedFieldCount,
+      originalFields: {
+        nameZh: result.chineseName,
+        nameEn: '',
+        birthDate:
+          result.birthDate || null,
+        gender: result.sex,
+        nationality: 'TWN',
+        documentNumber:
+          result.nationalId,
+        issuingCountry: 'TWN',
+        expiryDate: null,
+      },
     }),
   }
 }
