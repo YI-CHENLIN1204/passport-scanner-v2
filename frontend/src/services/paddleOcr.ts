@@ -2552,12 +2552,15 @@ async function createStraightenedReviewImage(
   instance: PaddleInstance,
   image: File,
   targetAspectRatio: number,
+  existingPrediction?: unknown,
 ) {
   const tryCandidate = async (
     candidate: File,
+    predictionHint?: unknown,
   ) => {
-    const [prediction] =
-      await instance.predict(candidate)
+    const prediction =
+      predictionHint ??
+      (await instance.predict(candidate))[0]
 
     const bitmap =
       await createImageBitmap(candidate)
@@ -2627,7 +2630,10 @@ async function createStraightenedReviewImage(
     )
   }
 
-  const full = await tryCandidate(image)
+  const full = await tryCandidate(
+    image,
+    existingPrediction,
+  )
   if (full) return full
 
   // Distant photos can be too sparse for full-frame text detection.
@@ -3119,6 +3125,9 @@ async function recognizePassportOrientedWithInstance(
           instance,
           reviewImage,
           1.42,
+          reviewImage === best.image
+            ? best.prediction
+            : undefined,
         )
       : reviewImage
 
@@ -4912,6 +4921,9 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       instance,
       reviewImage,
       1.586,
+      reviewImage === best.image
+        ? best.prediction
+        : undefined,
     )
 
   onProgress?.({
@@ -5858,6 +5870,9 @@ export async function recognizeTaiwanNationalIdWithPaddle(
       instance,
       reviewImage,
       1.586,
+      reviewImage === best.image
+        ? best.prediction
+        : undefined,
     )
 
   onProgress?.({
