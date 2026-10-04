@@ -15,6 +15,6 @@ public sealed class TourMemberRecord
 {
     public required Guid TourMemberId { get; init; }
     public required Guid TourId { get; init; }
-    public required Guid TravelerId { get; init; }
+    public required Guid TravelerId { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
 }
