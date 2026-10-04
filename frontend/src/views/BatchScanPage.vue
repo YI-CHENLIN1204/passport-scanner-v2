@@ -185,6 +185,135 @@ function mrzExpiryDateToIso(value: string) {
   return formatIsoDate(year, month, day)
 }
 
+interface PreparedOcrInput {
+  file: File
+  resized: boolean
+  originalWidth: number
+  originalHeight: number
+  workingWidth: number
+  workingHeight: number
+}
+
+async function prepareOcrInput(
+  file: File,
+): Promise<PreparedOcrInput> {
+  const bitmap = await createImageBitmap(file)
+  const originalWidth = bitmap.width
+  const originalHeight = bitmap.height
+  const longestSide = Math.max(
+    originalWidth,
+    originalHeight,
+  )
+  const pixels =
+    originalWidth * originalHeight
+
+  // Large phone photos cost much more to process while the document text
+  // remains easily readable at roughly 2.4K on the longest side. Keep small
+  // images untouched so we do not throw away useful detail.
+  const maxSide = 2400
+  const maxPixels = 4_500_000
+  const sideScale =
+    maxSide / Math.max(1, longestSide)
+  const pixelScale = Math.sqrt(
+    maxPixels / Math.max(1, pixels),
+  )
+  const scale = Math.min(
+    1,
+    sideScale,
+    pixelScale,
+  )
+
+  if (scale >= 0.98) {
+    bitmap.close()
+
+    return {
+      file,
+      resized: false,
+      originalWidth,
+      originalHeight,
+      workingWidth: originalWidth,
+      workingHeight: originalHeight,
+    }
+  }
+
+  const workingWidth = Math.max(
+    1,
+    Math.round(originalWidth * scale),
+  )
+  const workingHeight = Math.max(
+    1,
+    Math.round(originalHeight * scale),
+  )
+
+  const canvas =
+    document.createElement('canvas')
+  canvas.width = workingWidth
+  canvas.height = workingHeight
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    bitmap.close()
+    throw new Error(
+      '無法建立 OCR 工作圖片。',
+    )
+  }
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(
+    0,
+    0,
+    workingWidth,
+    workingHeight,
+  )
+  context.drawImage(
+    bitmap,
+    0,
+    0,
+    workingWidth,
+    workingHeight,
+  )
+  bitmap.close()
+
+  const blob = await new Promise<Blob>(
+    (resolve, reject) => {
+      canvas.toBlob(
+        value => {
+          if (value) {
+            resolve(value)
+          } else {
+            reject(
+              new Error(
+                '無法建立 OCR 工作圖片。',
+              ),
+            )
+          }
+        },
+        'image/jpeg',
+        0.92,
+      )
+    },
+  )
+
+  const baseName = file.name.replace(
+    /\.[^.]+$/,
+    '',
+  )
+
+  return {
+    file: new File(
+      [blob],
+      `${baseName}-ocr.jpg`,
+      { type: 'image/jpeg' },
+    ),
+    resized: true,
+    originalWidth,
+    originalHeight,
+    workingWidth,
+    workingHeight,
+  }
+}
+
 async function prepareReviewImage(file: File) {
   const bitmap = await createImageBitmap(file)
   const maxSide = 3200
@@ -448,8 +577,10 @@ async function verifyDocumentTypeOnlyWhenNeeded(
 }
 
 async function buildPassportItem(
-  file: File,
+  sourceFile: File,
+  prepared: PreparedOcrInput,
 ): Promise<CreateScanItemRequest> {
+  const file = prepared.file
   const result = await recognizePassportWithPaddle(
     file,
     progress => {
@@ -472,7 +603,7 @@ async function buildPassportItem(
     await fileToBase64(reviewImage)
 
   return {
-    originalFileName: file.name,
+    originalFileName: sourceFile.name,
     imageContentType:
       reviewImage.type ||
       file.type ||
@@ -507,6 +638,17 @@ async function buildPassportItem(
       predictMs: result.predictMs,
       totalMs: result.totalMs,
       fallbackUsed: result.fallbackUsed,
+      ocrInput: {
+        resized: prepared.resized,
+        originalWidth:
+          prepared.originalWidth,
+        originalHeight:
+          prepared.originalHeight,
+        workingWidth:
+          prepared.workingWidth,
+        workingHeight:
+          prepared.workingHeight,
+      },
       originalFields: {
         nameZh: result.chineseName ?? '',
         nameEn: parsed
@@ -535,8 +677,10 @@ async function buildPassportItem(
 }
 
 async function buildPermitItem(
-  file: File,
+  sourceFile: File,
+  prepared: PreparedOcrInput,
 ): Promise<CreateScanItemRequest> {
+  const file = prepared.file
   const result =
     await recognizeTaiwanCompatriotPermitWithPaddle(
       file,
@@ -563,7 +707,7 @@ async function buildPermitItem(
     await fileToBase64(reviewImage)
 
   return {
-    originalFileName: file.name,
+    originalFileName: sourceFile.name,
     imageContentType:
       reviewImage.type ||
       file.type ||
@@ -592,6 +736,17 @@ async function buildPermitItem(
         result.extractedFieldCount,
       chineseNamePasses:
         result.chineseNamePasses,
+      ocrInput: {
+        resized: prepared.resized,
+        originalWidth:
+          prepared.originalWidth,
+        originalHeight:
+          prepared.originalHeight,
+        workingWidth:
+          prepared.workingWidth,
+        workingHeight:
+          prepared.workingHeight,
+      },
       originalFields: {
         nameZh: result.chineseName,
         nameEn: '',
@@ -610,8 +765,10 @@ async function buildPermitItem(
 }
 
 async function buildNationalIdItem(
-  file: File,
+  sourceFile: File,
+  prepared: PreparedOcrInput,
 ): Promise<CreateScanItemRequest> {
+  const file = prepared.file
   const result =
     await recognizeTaiwanNationalIdWithPaddle(
       file,
@@ -638,7 +795,7 @@ async function buildNationalIdItem(
     await fileToBase64(reviewImage)
 
   return {
-    originalFileName: file.name,
+    originalFileName: sourceFile.name,
     imageContentType:
       reviewImage.type ||
       file.type ||
@@ -665,6 +822,17 @@ async function buildNationalIdItem(
       totalMs: result.totalMs,
       extractedFieldCount:
         result.extractedFieldCount,
+      ocrInput: {
+        resized: prepared.resized,
+        originalWidth:
+          prepared.originalWidth,
+        originalHeight:
+          prepared.originalHeight,
+        workingWidth:
+          prepared.workingWidth,
+        workingHeight:
+          prepared.workingHeight,
+      },
       originalFields: {
         nameZh: result.chineseName,
         nameEn: '',
@@ -682,19 +850,37 @@ async function buildNationalIdItem(
 }
 
 async function buildScanItem(file: File) {
+  progressMessage.value =
+    `正在準備「${file.name}」的 OCR 工作圖片…`
+
+  const prepared =
+    await prepareOcrInput(file)
+
   if (documentType.value === 'PASSPORT') {
-    return buildPassportItem(file)
+    return buildPassportItem(
+      file,
+      prepared,
+    )
   }
 
   if (
     documentType.value ===
     'TAIWAN_COMPATRIOT_PERMIT'
   ) {
-    return buildPermitItem(file)
+    return buildPermitItem(
+      file,
+      prepared,
+    )
   }
 
-  if (documentType.value === 'TAIWAN_NATIONAL_ID') {
-    return buildNationalIdItem(file)
+  if (
+    documentType.value ===
+    'TAIWAN_NATIONAL_ID'
+  ) {
+    return buildNationalIdItem(
+      file,
+      prepared,
+    )
   }
 
   throw new Error('尚未選擇證件類型。')
