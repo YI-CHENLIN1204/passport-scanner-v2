@@ -278,20 +278,107 @@ public sealed class PostgresTourStore(
     }
     private TourSummaryResponse ToSummary(TourRecord tour)
     {
-        var memberCount = db.TourMembers.Count(
-            item => item.TourId == tour.TourId);
-
-        var travelerIds = db.TourMembers
+        var memberships = db.TourMembers
+            .AsNoTracking()
             .Where(item => item.TourId == tour.TourId)
-            .Select(item => item.TravelerId);
+            .ToList();
+
+        var travelerIds = memberships
+            .Select(item => item.TravelerId)
+            .Distinct()
+            .ToList();
+
+        var travelers = db.Travelers
+            .AsNoTracking()
+            .Where(item => travelerIds.Contains(item.TravelerId))
+            .ToList();
 
         var requiredDocumentTypes = tour.RequiredDocumentTypes;
 
-        var documentCount = db.DocumentVersions.Count(
-            item =>
+        var formalDocuments = db.DocumentVersions
+            .AsNoTracking()
+            .Where(item =>
                 travelerIds.Contains(item.TravelerId) &&
                 item.IsCurrent &&
-                requiredDocumentTypes.Contains(item.DocumentType));
+                requiredDocumentTypes.Contains(item.DocumentType))
+            .ToList();
+
+        var drafts = db.TourPersonDrafts
+            .AsNoTracking()
+            .Where(item => item.TourId == tour.TourId)
+            .ToList();
+
+        var draftIds = drafts
+            .Select(item => item.DraftPersonId)
+            .ToList();
+
+        var stagedItems = db.ScanItems
+            .AsNoTracking()
+            .Where(item => draftIds.Contains(item.DraftPersonId))
+            .ToList();
+
+        var personKeys = new HashSet<string>(
+            StringComparer.Ordinal);
+
+        var travelerKeys = travelers.ToDictionary(
+            item => item.TravelerId,
+            item => IdentityKey(
+                item.NameZh,
+                item.BirthDate,
+                item.Gender,
+                item.TravelerId));
+
+        foreach (var key in travelerKeys.Values)
+        {
+            personKeys.Add(key);
+        }
+
+        var draftKeys = drafts.ToDictionary(
+            item => item.DraftPersonId,
+            item => item.BirthDate.HasValue
+                ? IdentityKey(
+                    item.NameZh,
+                    item.BirthDate.Value,
+                    item.Gender,
+                    item.DraftPersonId)
+                : $"DRAFT:{item.DraftPersonId:N}");
+
+        foreach (var key in draftKeys.Values)
+        {
+            personKeys.Add(key);
+        }
+
+        var receivedDocuments = new HashSet<string>(
+            StringComparer.Ordinal);
+
+        foreach (var document in formalDocuments)
+        {
+            if (!travelerKeys.TryGetValue(
+                document.TravelerId,
+                out var personKey))
+            {
+                continue;
+            }
+
+            receivedDocuments.Add(
+                $"{personKey}|{document.DocumentType}");
+        }
+
+        foreach (var item in stagedItems)
+        {
+            if (!draftKeys.TryGetValue(
+                item.DraftPersonId,
+                out var personKey))
+            {
+                continue;
+            }
+
+            receivedDocuments.Add(
+                $"{personKey}|{item.DocumentType}");
+        }
+
+        var pendingReviewCount = stagedItems.Count(
+            item => item.ReviewStatus == "PENDING");
 
         return new TourSummaryResponse(
             tour.TourId,
@@ -299,8 +386,40 @@ public sealed class PostgresTourStore(
             tour.DepartureDate,
             tour.ReturnDate,
             tour.RequiredDocumentTypes,
-            memberCount,
-            documentCount,
+            memberships.Count,
+            formalDocuments.Count,
+            personKeys.Count,
+            receivedDocuments.Count,
+            pendingReviewCount,
             tour.UpdatedAt);
     }
+
+    private static string IdentityKey(
+        string nameZh,
+        DateOnly birthDate,
+        string gender,
+        Guid fallbackId)
+    {
+        var normalizedName = string.Concat(
+            nameZh.Trim().Where(
+                character => !char.IsWhiteSpace(character)));
+        var normalizedGender =
+            gender.Trim().ToUpperInvariant();
+
+        if (
+            string.IsNullOrWhiteSpace(normalizedName) ||
+            string.IsNullOrWhiteSpace(normalizedGender))
+        {
+            return $"ROW:{fallbackId:N}";
+        }
+
+        return string.Join(
+            "|",
+            normalizedName,
+            birthDate.ToString(
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture),
+            normalizedGender);
+    }
+
 }
