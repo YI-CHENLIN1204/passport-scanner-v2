@@ -2904,6 +2904,7 @@ async function recognizePassportOrientedWithInstance(
   const runRotation = async (
     rotation: number,
     progress: number,
+    fullRecovery = true,
   ) => {
     onProgress?.({
       stage: 'orientation',
@@ -2921,20 +2922,30 @@ async function recognizePassportOrientedWithInstance(
     const rotated =
       await rotateImageFile(image, rotation)
 
-    const result = await predictPassportWithDistanceFallback(
-      instance,
-      rotated,
-      attempts.length === 0
-        ? initializationMs
-        : 0,
-      () => {
-        onProgress?.({
-          stage: 'fallback',
-          progress: Math.min(0.82, progress + 0.06),
-          message: '正在加強辨識護照底部 MRZ…',
-        })
-      },
-    )
+    const result = fullRecovery
+      ? await predictPassportWithDistanceFallback(
+          instance,
+          rotated,
+          attempts.length === 0
+            ? initializationMs
+            : 0,
+          () => {
+            onProgress?.({
+              stage: 'fallback',
+              progress: Math.min(
+                0.82,
+                progress + 0.06,
+              ),
+              message:
+                '正在加強辨識護照底部 MRZ…',
+            })
+          },
+        )
+      : await predictOne(
+          instance,
+          rotated,
+          0,
+        )
 
     result.rotationDegrees = rotation
     result.orientationAttempts = attempts.length + 1
@@ -2955,32 +2966,41 @@ async function recognizePassportOrientedWithInstance(
     message: '正在準備 PaddleOCR…',
   })
 
-  const original = await runRotation(0, 0.14)
+  const isStrongPassport = (
+    result: PaddleBaselineResult,
+  ) =>
+    result.structureComplete &&
+    result.line1Valid &&
+    result.line2Validation?.requiredValid === true &&
+    (result.uprightSemanticScore ?? 0.5) >= 0.6
 
-  const originalStrong =
-    original.structureComplete &&
-    original.line1Valid &&
-    original.line2Validation?.requiredValid === true &&
-    (original.uprightSemanticScore ?? 0.5) >= 0.6
+  const original = await runRotation(
+    0,
+    0.14,
+    true,
+  )
 
-  if (!originalStrong) {
-    await runRotation(90, 0.32)
-    await runRotation(-90, 0.5)
+  if (!isStrongPassport(original)) {
+    const plus90 = await runRotation(
+      90,
+      0.32,
+      false,
+    )
 
-    let currentBest = [...attempts].sort(
-      (a, b) =>
-        passportOrientationQuality(b.result) -
-        passportOrientationQuality(a.result),
-    )[0]
+    if (!isStrongPassport(plus90)) {
+      const minus90 = await runRotation(
+        -90,
+        0.5,
+        false,
+      )
 
-    const currentStrong =
-      currentBest.result.structureComplete &&
-      currentBest.result.line1Valid &&
-      currentBest.result.line2Validation?.requiredValid === true &&
-      (currentBest.result.uprightSemanticScore ?? 0.5) >= 0.6
-
-    if (!currentStrong) {
-      await runRotation(180, 0.66)
+      if (!isStrongPassport(minus90)) {
+        await runRotation(
+          180,
+          0.66,
+          false,
+        )
+      }
     }
   }
 
@@ -2989,6 +3009,47 @@ async function recognizePassportOrientedWithInstance(
       passportOrientationQuality(b.result) -
       passportOrientationQuality(a.result),
   )[0]
+
+  // Orientation probes deliberately skip the expensive distance-recovery
+  // path. Once the best cardinal direction is known, permit one full
+  // recovery pass only for that selected direction.
+  if (
+    best.rotation !== 0 &&
+    !isStrongPassport(best.result)
+  ) {
+    const recovered =
+      await predictPassportWithDistanceFallback(
+        instance,
+        best.image,
+        0,
+        () => {
+          onProgress?.({
+            stage: 'fallback',
+            progress: 0.76,
+            message:
+              '方向已確認，正在對最佳方向加強辨識一次…',
+          })
+        },
+      )
+
+    recovered.rotationDegrees =
+      best.rotation
+    recovered.orientationAttempts =
+      attempts.length
+    recovered.orientedImage =
+      best.image
+
+    if (
+      passportOrientationQuality(recovered) >=
+      passportOrientationQuality(best.result)
+    ) {
+      best = {
+        rotation: best.rotation,
+        image: best.image,
+        result: recovered,
+      }
+    }
+  }
 
   const skew = best.result.detectedSkewDegrees ?? 0
   const reviewNeedsDeskew =
@@ -4794,24 +4855,48 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     ) &&
     original.uprightSemanticScore >= 0.6
 
-  if (!strongEnough) {
-    await tryRotation(90, 0.34)
-    await tryRotation(-90, 0.52)
-
-    const currentBest = [...attempts].sort(
-      (a, b) =>
-        permitResultQuality(b.result) -
-        permitResultQuality(a.result),
-    )[0]
-
-    if (
+  const isStrongPermit = (
+    result: TaiwanCompatriotPermitOcrResult,
+  ) =>
+    (
+      result.parsedMrz?.validation.requiredValid === true ||
       (
-        currentBest.result.parsedMrz?.validation.requiredValid !== true &&
-        currentBest.result.extractedFieldCount < 4
-      ) ||
-      !currentBest.result.chineseName
-    ) {
-      await tryRotation(180, 0.66)
+        result.extractedFieldCount >= 4 &&
+        Boolean(result.chineseName) &&
+        Boolean(result.permitNumber)
+      )
+    ) &&
+    result.uprightSemanticScore >= 0.6
+
+  if (!strongEnough) {
+    const plus90 = await tryRotation(
+      90,
+      0.34,
+    )
+
+    if (!isStrongPermit(plus90)) {
+      const minus90 = await tryRotation(
+        -90,
+        0.52,
+      )
+
+      if (!isStrongPermit(minus90)) {
+        const currentBest = [...attempts].sort(
+          (a, b) =>
+            permitResultQuality(b.result) -
+            permitResultQuality(a.result),
+        )[0]
+
+        if (
+          (
+            currentBest.result.parsedMrz?.validation.requiredValid !== true &&
+            currentBest.result.extractedFieldCount < 4
+          ) ||
+          !currentBest.result.chineseName
+        ) {
+          await tryRotation(180, 0.66)
+        }
+      }
     }
   }
 
@@ -5747,26 +5832,30 @@ export async function recognizeTaiwanNationalIdWithPaddle(
     original.textHorizontalScore >= 0.78 &&
     original.uprightSemanticScore >= 0.6
 
+  const isStrongNationalId = (
+    result: TaiwanNationalIdOcrResult,
+  ) =>
+    result.idChecksumValid &&
+    Boolean(result.chineseName) &&
+    Boolean(result.birthDate) &&
+    result.textHorizontalScore >= 0.78 &&
+    result.uprightSemanticScore >= 0.6
+
   if (!strongEnough) {
-    await tryRotation(90, 0.34)
-    await tryRotation(-90, 0.52)
+    const plus90 = await tryRotation(
+      90,
+      0.34,
+    )
 
-    const currentBest = [...attempts]
-      .sort(
-        (a, b) =>
-          taiwanIdResultQuality(b.result) -
-          taiwanIdResultQuality(a.result),
-      )[0]
+    if (!isStrongNationalId(plus90)) {
+      const minus90 = await tryRotation(
+        -90,
+        0.52,
+      )
 
-    const currentStrong =
-      currentBest.result.idChecksumValid &&
-      Boolean(currentBest.result.chineseName) &&
-      Boolean(currentBest.result.birthDate) &&
-      currentBest.result.textHorizontalScore >= 0.78 &&
-      currentBest.result.uprightSemanticScore >= 0.6
-
-    if (!currentStrong) {
-      await tryRotation(180, 0.66)
+      if (!isStrongNationalId(minus90)) {
+        await tryRotation(180, 0.66)
+      }
     }
   }
 
