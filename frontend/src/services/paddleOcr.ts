@@ -6,6 +6,7 @@ import {
   parseTd3Mrz,
   repairTd3Line2,
   validateTd3Line2,
+  recognizePassport as recognizePassportWithTesseract,
   type MrzRepairInfo,
   type MrzValidation,
   type ParsedMrz,
@@ -3041,22 +3042,85 @@ async function recognizePassportOrientedWithInstance(
     }
   }
 
+  if (!best.result.parsedMrz) {
+    onProgress?.({
+      stage: 'fallback',
+      progress: 0.91,
+      message:
+        'PaddleOCR 尚未取得完整 MRZ，正在使用第二套 MRZ 辨識重試…',
+    })
+
+    try {
+      const tesseract =
+        await recognizePassportWithTesseract(
+          reviewImage,
+          (progress) => {
+            onProgress?.({
+              stage: 'fallback',
+              progress:
+                0.91 +
+                Math.max(
+                  0,
+                  Math.min(1, progress.progress),
+                ) *
+                  0.06,
+              message:
+                '正在加強辨識護照底部 MRZ…',
+            })
+          },
+        )
+
+      if (tesseract.parsedMrz) {
+        best.result.mrzLine1 =
+          tesseract.mrzLine1
+        best.result.mrzLine2 =
+          tesseract.mrzLine2
+        best.result.line1Valid =
+          isPlausibleTd3Line1(
+            tesseract.mrzLine1,
+          )
+        best.result.line2Validation =
+          tesseract.line2Validation
+        best.result.mrzRepair =
+          tesseract.mrzRepair
+        best.result.parsedMrz =
+          tesseract.parsedMrz
+        best.result.structureComplete =
+          Boolean(tesseract.mrzLine1) &&
+          Boolean(tesseract.mrzLine2) &&
+          tesseract.mrzLine2?.length === 44
+        best.result.fallbackUsed = true
+        best.result.fallbackCropRatio =
+          tesseract.selectedCropRatio
+      }
+    } catch {
+      // Keep the Paddle result and leave the item pending for human review.
+      // A fallback failure must never discard the already-produced scan.
+    }
+  }
+
   best.result.orientationAttempts =
     Math.max(
       best.result.orientationAttempts ?? 1,
       attempts.length,
     )
 
-  // Human review must always use the visually straightened full photo,
-  // even when the pre-deskew OCR result scored slightly better.
+  // When OCR is weak, text bounds are not trustworthy enough to crop the
+  // passport page. Preserve the full oriented photo so human review never
+  // loses the fields that OCR failed to detect. Only create a tightened,
+  // straightened review image after a complete passport structure exists.
   best.result.rotationDegrees =
     reviewRotation
+
   best.result.orientedImage =
-    await createStraightenedReviewImage(
-      instance,
-      reviewImage,
-      1.42,
-    )
+    best.result.parsedMrz &&
+    best.result.structureComplete
+      ? await createStraightenedReviewImage(
+          instance,
+          reviewImage,
+          1.42,
+        )
+      : reviewImage
 
   onProgress?.({
     stage: 'completed',
