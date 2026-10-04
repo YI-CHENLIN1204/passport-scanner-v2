@@ -520,3 +520,181 @@ export async function downloadTourCsv(
     URL.revokeObjectURL(url)
   }
 }
+
+
+export interface ScanBatchResponse {
+  scanBatchId: string
+  tourId: string
+  documentType: string
+  status: string
+  itemCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateScanItemRequest {
+  originalFileName: string
+  imageContentType: string
+  imageBase64: string
+  nameZh: string
+  nameEn: string
+  birthDate: string | null
+  gender: string
+  nationality: string | null
+  documentNumber: string
+  issuingCountry: string | null
+  expiryDate: string | null
+  ocrPayloadJson: string
+}
+
+export interface ScanItemResponse {
+  scanItemId: string
+  scanBatchId: string
+  draftPersonId: string
+  documentType: string
+  originalFileName: string
+  imageContentType: string
+  nameZh: string
+  nameEn: string
+  birthDate: string | null
+  gender: string
+  nationality: string | null
+  documentNumber: string
+  issuingCountry: string | null
+  expiryDate: string | null
+  reviewStatus: 'PENDING' | 'REVIEWED'
+  reviewedAt: string | null
+  deleteAfter: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReviewQueuePersonResponse {
+  draftPersonId: string
+  nameZh: string
+  birthDate: string | null
+  gender: string
+  documents: ScanItemResponse[]
+}
+
+export interface ReviewScanItemRequest {
+  nameZh: string
+  nameEn: string
+  birthDate: string | null
+  gender: string
+  nationality: string | null
+  documentNumber: string
+  issuingCountry: string | null
+  expiryDate: string | null
+}
+
+export async function createScanBatch(
+  tourId: string,
+  documentType: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}/scan-batches`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ documentType }),
+    },
+  )
+
+  if (!response.ok) {
+    let message = `Create scan batch failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as { message?: string }
+      message = body.message ?? message
+    } catch {
+      // Keep the status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<ScanBatchResponse>
+}
+
+export async function addScanItem(
+  batchId: string,
+  request: CreateScanItemRequest,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/scan-batches/${encodeURIComponent(batchId)}/items`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message = `Add scan item failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as { message?: string }
+      message = body.message ?? message
+    } catch {
+      // Keep the status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<ScanItemResponse>
+}
+
+export async function getReviewQueue(tourId: string) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}/review-queue`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Review queue failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<ReviewQueuePersonResponse[]>
+}
+
+export function getScanItemImageUrl(scanItemId: string) {
+  return `${apiBaseUrl}/api/scan-items/${encodeURIComponent(scanItemId)}/image`
+}
+
+export async function reviewScanItem(
+  scanItemId: string,
+  request: ReviewScanItemRequest,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/scan-items/${encodeURIComponent(scanItemId)}/review`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message = `Review scan item failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as { message?: string }
+      message = body.message ?? message
+    } catch {
+      // Keep the status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<ScanItemResponse>
+}
