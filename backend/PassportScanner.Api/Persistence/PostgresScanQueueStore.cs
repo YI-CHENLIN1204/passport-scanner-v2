@@ -6,7 +6,9 @@ using PassportScanner.Api.Domain;
 namespace PassportScanner.Api.Persistence;
 
 public sealed class PostgresScanQueueStore(
-    PassportScannerDbContext db)
+    PassportScannerDbContext db,
+    ITravelerStore travelerStore,
+    ITourStore tourStore)
     : IScanQueueStore
 {
     private const string Pending = "PENDING";
@@ -231,8 +233,6 @@ public sealed class PostgresScanQueueStore(
         item.IssuingCountry =
             NormalizeNullable(request.IssuingCountry);
         item.ExpiryDate = ParseDate(request.ExpiryDate);
-        item.ReviewStatus = Reviewed;
-        item.ReviewedAt = now;
         item.UpdatedAt = now;
 
         ReassignReviewedItem(
@@ -247,7 +247,75 @@ public sealed class PostgresScanQueueStore(
         CleanupEmptyDraft(oldDraftId);
         db.SaveChanges();
 
+        var reviewedDocument = BuildReviewedDocumentInput(
+            item,
+            now);
+
+        var saved = travelerStore.SaveDocumentReview(
+            reviewedDocument,
+            now);
+
+        var batch = db.ScanBatches
+            .AsNoTracking()
+            .Single(value =>
+                value.ScanBatchId == item.ScanBatchId);
+
+        if (!tourStore.EnsureMember(
+            batch.TourId,
+            saved.TravelerId,
+            now))
+        {
+            throw new KeyNotFoundException(
+                "找不到指定團別。");
+        }
+
+        item.ReviewStatus = Reviewed;
+        item.ReviewedAt = now;
+        item.UpdatedAt = now;
+        db.SaveChanges();
+
         return ToItemResponse(item);
+    }
+
+    private static ReviewedDocumentInput BuildReviewedDocumentInput(
+        ScanItemRecord item,
+        DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(item.NameZh))
+        {
+            throw new ArgumentException(
+                "審核完成前必須確認中文姓名。");
+        }
+
+        if (!item.BirthDate.HasValue)
+        {
+            throw new ArgumentException(
+                "審核完成前必須確認出生日期。");
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Gender))
+        {
+            throw new ArgumentException(
+                "審核完成前必須確認性別。");
+        }
+
+        if (string.IsNullOrWhiteSpace(item.DocumentNumber))
+        {
+            throw new ArgumentException(
+                "審核完成前必須確認證件號碼。");
+        }
+
+        return new ReviewedDocumentInput(
+            item.DocumentType,
+            item.NameZh,
+            item.NameEn,
+            item.BirthDate.Value,
+            item.Gender,
+            item.Nationality,
+            item.DocumentNumber,
+            item.IssuingCountry,
+            item.ExpiryDate,
+            now);
     }
 
     private TourPersonDraftRecord ResolveDraftPerson(
