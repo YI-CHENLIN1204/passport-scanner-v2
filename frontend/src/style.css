@@ -52,3 +52,28 @@ a {
 #app {
   min-height: 100vh;
 }
+
+
+::selection {
+  background: #dfe6ef;
+  color: #172033;
+}
+
+:focus-visible {
+  outline: 2px solid #7c8ca3;
+  outline-offset: 2px;
+}
+
+input::placeholder {
+  color: #9aa5b4;
+}
+
+button,
+input,
+select {
+  transition:
+    border-color .12s ease,
+    background-color .12s ease,
+    box-shadow .12s ease,
+    opacity .12s ease;
+}
