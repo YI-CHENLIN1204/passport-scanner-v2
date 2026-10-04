@@ -29,6 +29,7 @@ interface BatchFileState {
   file: File
   status: 'queued' | 'processing' | 'done' | 'error'
   message: string
+  elapsedMs: number | null
 }
 
 const tours = ref<TourSummaryResponse[]>([])
@@ -75,6 +76,24 @@ const batchFinished = computed(
     !running.value &&
     completedCount.value === files.value.length,
 )
+
+const averageCompletedMs = computed(() => {
+  const completed = files.value
+    .map(item => item.elapsedMs)
+    .filter(
+      (value): value is number =>
+        typeof value === 'number',
+    )
+
+  if (!completed.length) return null
+
+  return (
+    completed.reduce(
+      (sum, value) => sum + value,
+      0,
+    ) / completed.length
+  )
+})
 
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
@@ -360,6 +379,7 @@ function addFiles(chosen: File[]) {
       file,
       status: 'queued',
       message: '等待辨識',
+      elapsedMs: null,
     })
 
     existing.add(key)
@@ -397,19 +417,26 @@ function resetFiles() {
   dragActive.value = false
 }
 
-async function verifyDocumentType(file: File) {
+async function verifyDocumentTypeOnlyWhenNeeded(
+  file: File,
+  strongExpectedEvidence: boolean,
+) {
+  if (strongExpectedEvidence) {
+    return
+  }
+
   progressMessage.value =
-    `正在確認「${file.name}」的證件類型…`
+    `辨識結果較弱，正在額外確認「${file.name}」的證件類型…`
 
   const detection =
     await detectDocumentTypeWithPaddle(file)
 
   const expected = expectedDetectedType()
 
+  // Unknown means the classifier also cannot be certain. Keep the item for
+  // human review instead of discarding a potentially valid low-quality scan.
   if (detection.type === 'unknown') {
-    throw new Error(
-      '無法確認這張圖片的證件類型，請檢查照片是否清楚且完整。',
-    )
+    return
   }
 
   if (detection.type !== expected) {
@@ -430,6 +457,12 @@ async function buildPassportItem(
   )
 
   const parsed = result.parsedMrz
+
+  await verifyDocumentTypeOnlyWhenNeeded(
+    file,
+    Boolean(parsed) || result.structureComplete,
+  )
+
   const orientedImage =
     result.orientedImage ?? file
   const reviewImage =
@@ -465,8 +498,14 @@ async function buildPassportItem(
       structureComplete: result.structureComplete,
       line1Valid: result.line1Valid,
       rotationDegrees: result.rotationDegrees ?? 0,
+      orientationAttempts:
+        result.orientationAttempts ?? 1,
       detectedItems: result.detectedItems,
       averageScore: result.averageScore,
+      initializationMs: result.initializationMs,
+      predictMs: result.predictMs,
+      totalMs: result.totalMs,
+      fallbackUsed: result.fallbackUsed,
     }),
   }
 }
@@ -481,6 +520,16 @@ async function buildPermitItem(
         progressMessage.value = progress.message
       },
     )
+
+  await verifyDocumentTypeOnlyWhenNeeded(
+    file,
+    Boolean(result.parsedMrz) ||
+      Boolean(
+        result.permitNumber &&
+          result.birthDate &&
+          result.sex,
+      ),
+  )
 
   const orientedImage =
     result.orientedImage ?? file
@@ -508,8 +557,17 @@ async function buildPermitItem(
       engine: 'PaddleOCR',
       mrzUsed: result.mrzUsed,
       rotationDegrees: result.rotationDegrees,
+      orientationAttempts:
+        result.orientationAttempts,
       detectedItems: result.detectedItems,
       averageScore: result.averageScore,
+      initializationMs: result.initializationMs,
+      predictMs: result.predictMs,
+      totalMs: result.totalMs,
+      extractedFieldCount:
+        result.extractedFieldCount,
+      chineseNamePasses:
+        result.chineseNamePasses,
     }),
   }
 }
@@ -524,6 +582,16 @@ async function buildNationalIdItem(
         progressMessage.value = progress.message
       },
     )
+
+  await verifyDocumentTypeOnlyWhenNeeded(
+    file,
+    result.idChecksumValid ||
+      Boolean(
+        result.nationalId &&
+          result.birthDate &&
+          result.chineseName,
+      ),
+  )
 
   const orientedImage =
     result.orientedImage ?? file
@@ -551,8 +619,15 @@ async function buildNationalIdItem(
       engine: 'PaddleOCR',
       idChecksumValid: result.idChecksumValid,
       rotationDegrees: result.rotationDegrees,
+      orientationAttempts:
+        result.orientationAttempts,
       detectedItems: result.detectedItems,
       averageScore: result.averageScore,
+      initializationMs: result.initializationMs,
+      predictMs: result.predictMs,
+      totalMs: result.totalMs,
+      extractedFieldCount:
+        result.extractedFieldCount,
     }),
   }
 }
@@ -593,6 +668,7 @@ async function runBatch() {
   files.value.forEach(item => {
     item.status = 'queued'
     item.message = '等待辨識'
+    item.elapsedMs = null
   })
 
   try {
@@ -611,11 +687,11 @@ async function runBatch() {
       item.message =
         `正在處理 ${index + 1} / ${files.value.length}`
 
-      try {
-        await verifyDocumentType(item.file)
+      const itemStartedAt = performance.now()
 
+      try {
         progressMessage.value =
-          `證件類型正確，正在辨識 ${index + 1} / ${files.value.length}…`
+          `正在辨識 ${index + 1} / ${files.value.length}…`
 
         const request = await buildScanItem(item.file)
         await addScanItem(batch.scanBatchId, request)
@@ -629,6 +705,8 @@ async function runBatch() {
             ? err.message
             : '辨識失敗'
       } finally {
+        item.elapsedMs =
+          performance.now() - itemStartedAt
         completedCount.value = index + 1
       }
     }
@@ -796,7 +874,7 @@ onMounted(load)
           <div>
             <strong>加入同類型證件</strong>
             <small>
-              系統會先確認證件類型，再開始 OCR。
+              正常照片直接辨識；只有結果可疑時才額外確認證件類型。
             </small>
           </div>
         </div>
@@ -887,6 +965,9 @@ onMounted(load)
             <template v-if="failedCount">
               · 失敗 {{ failedCount }}
             </template>
+            <template v-if="averageCompletedMs !== null">
+              · 平均 {{ (averageCompletedMs / 1000).toFixed(1) }} 秒/張
+            </template>
           </span>
           <span>
             {{ completedCount }} / {{ files.length }}
@@ -933,6 +1014,9 @@ onMounted(load)
                     ).toFixed(2)
                   }}
                   MB
+                  <template v-if="item.elapsedMs !== null">
+                    · {{ (item.elapsedMs / 1000).toFixed(1) }} 秒
+                  </template>
                 </span>
               </div>
             </div>
