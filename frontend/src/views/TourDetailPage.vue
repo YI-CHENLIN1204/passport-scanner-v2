@@ -1559,7 +1559,7 @@ onBeforeUnmount(() => {
 
 table {
   width: 100%;
-  min-width: 760px;
+  min-width: 0;
   border-collapse: collapse;
 }
 
@@ -2021,6 +2021,10 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
+  .table-wrap table {
+    min-width: 680px;
+  }
+
   .tour-header,
   .header-actions {
     align-items: stretch;
