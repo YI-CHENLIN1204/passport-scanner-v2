@@ -160,10 +160,15 @@ onBeforeUnmount(() => {
 }
 
 .app-content {
-  width: calc(100% - 248px);
+  width: calc(100% - 244px);
   min-height: 100vh;
-  margin-left: 248px;
+  margin-left: 244px;
   padding: 34px clamp(24px, 4vw, 54px) 56px;
+}
+
+.app-content > :deep(.page) {
+  width: min(100%, 1440px);
+  margin-inline: auto;
 }
 
 .connection-banner {
