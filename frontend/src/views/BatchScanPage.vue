@@ -14,6 +14,7 @@ import {
   recognizePassportWithPaddle,
   recognizeTaiwanCompatriotPermitWithPaddle,
   recognizeTaiwanNationalIdWithPaddle,
+  warmupPaddleOcr,
   type DetectedDocumentType,
 } from '../services/paddleOcr'
 
@@ -804,7 +805,13 @@ watch(
   },
 )
 
-onMounted(load)
+onMounted(() => {
+  void warmupPaddleOcr().catch(() => {
+    // The normal scan flow will show the initialization error if warmup
+    // cannot complete. Do not block the page while the user selects files.
+  })
+  void load()
+})
 </script>
 
 <template>
