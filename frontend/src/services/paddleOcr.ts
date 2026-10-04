@@ -721,6 +721,10 @@ async function getPaddle() {
     : new Error('PaddleOCR 初始化失敗。')
 }
 
+export async function warmupPaddleOcr() {
+  await getPaddle()
+}
+
 function geometryFirstMatching(
   prediction: unknown,
   predicate: (text: string) => boolean,
