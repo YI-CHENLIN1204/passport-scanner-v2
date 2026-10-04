@@ -22,6 +22,7 @@ builder.Services.AddDbContext<PassportScannerDbContext>(options =>
 
 builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
 builder.Services.AddScoped<ITourStore, PostgresTourStore>();
+builder.Services.AddScoped<IScanQueueStore, PostgresScanQueueStore>();
 
 builder.Services.AddCors(options =>
 {
@@ -79,6 +80,69 @@ using (var scope = app.Services.CreateScope())
 
         CREATE UNIQUE INDEX IF NOT EXISTS ux_tour_members_tour_traveler
             ON tour_members (tour_id, traveler_id);
+
+        CREATE TABLE IF NOT EXISTS scan_batches (
+            scan_batch_id uuid PRIMARY KEY,
+            tour_id uuid NOT NULL
+                REFERENCES tours(tour_id)
+                ON DELETE CASCADE,
+            document_type varchar(40) NOT NULL,
+            status varchar(20) NOT NULL,
+            item_count integer NOT NULL,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS tour_person_drafts (
+            draft_person_id uuid PRIMARY KEY,
+            tour_id uuid NOT NULL
+                REFERENCES tours(tour_id)
+                ON DELETE CASCADE,
+            name_zh varchar(80) NOT NULL,
+            birth_date date NULL,
+            gender varchar(12) NOT NULL,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_tour_person_drafts_identity
+            ON tour_person_drafts (
+                tour_id,
+                name_zh,
+                birth_date,
+                gender
+            );
+
+        CREATE TABLE IF NOT EXISTS scan_items (
+            scan_item_id uuid PRIMARY KEY,
+            scan_batch_id uuid NOT NULL
+                REFERENCES scan_batches(scan_batch_id)
+                ON DELETE CASCADE,
+            draft_person_id uuid NOT NULL
+                REFERENCES tour_person_drafts(draft_person_id)
+                ON DELETE CASCADE,
+            document_type varchar(40) NOT NULL,
+            original_file_name varchar(255) NOT NULL,
+            image_content_type varchar(80) NOT NULL,
+            image_bytes bytea NOT NULL,
+            name_zh varchar(80) NOT NULL,
+            name_en varchar(160) NOT NULL,
+            birth_date date NULL,
+            gender varchar(12) NOT NULL,
+            nationality varchar(12) NULL,
+            document_number varchar(80) NOT NULL,
+            issuing_country varchar(12) NULL,
+            expiry_date date NULL,
+            ocr_payload_json text NOT NULL,
+            review_status varchar(20) NOT NULL,
+            reviewed_at timestamptz NULL,
+            delete_after timestamptz NOT NULL,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
+            ON scan_items (draft_person_id, review_status);
         """);
 }
 
@@ -143,6 +207,106 @@ app.MapGet(
         catch (KeyNotFoundException)
         {
             return Results.NotFound();
+        }
+    });
+
+app.MapPost(
+    "/api/tours/{tourId:guid}/scan-batches",
+    (
+        Guid tourId,
+        CreateScanBatchRequest request,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            return Results.Created(
+                $"/api/tours/{tourId}/scan-batches",
+                store.CreateBatch(
+                    tourId,
+                    request,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapPost(
+    "/api/scan-batches/{batchId:guid}/items",
+    (
+        Guid batchId,
+        CreateScanItemRequest request,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            return Results.Created(
+                $"/api/scan-batches/{batchId}/items",
+                store.AddItem(
+                    batchId,
+                    request,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapGet(
+    "/api/tours/{tourId:guid}/review-queue",
+    (Guid tourId, IScanQueueStore store) =>
+        Results.Ok(store.ListReviewQueue(tourId)));
+
+app.MapGet(
+    "/api/scan-items/{scanItemId:guid}/image",
+    (Guid scanItemId, IScanQueueStore store) =>
+    {
+        var image = store.GetItemImage(scanItemId);
+
+        return image is null
+            ? Results.NotFound()
+            : Results.File(
+                image.Bytes,
+                image.ContentType,
+                image.FileName);
+    });
+
+app.MapPut(
+    "/api/scan-items/{scanItemId:guid}/review",
+    (
+        Guid scanItemId,
+        ReviewScanItemRequest request,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            var item = store.ReviewItem(
+                scanItemId,
+                request,
+                DateTimeOffset.UtcNow);
+
+            return item is null
+                ? Results.NotFound()
+                : Results.Ok(item);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
         }
     });
 
