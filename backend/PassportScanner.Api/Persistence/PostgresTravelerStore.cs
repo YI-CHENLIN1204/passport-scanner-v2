@@ -18,7 +18,7 @@ public sealed class PostgresTravelerStore(
         DateTimeOffset now)
     {
         var documentType = Normalize(input.DocumentType);
-        var nameZh = input.ChineseName.Trim();
+        var nameZh = NormalizeIdentityName(input.ChineseName);
         var nameEn = Normalize(input.EnglishName);
         var documentNumber = Normalize(input.DocumentNumber);
         var nationality = NormalizeNullable(input.Nationality);
@@ -69,6 +69,36 @@ public sealed class PostgresTravelerStore(
             existingDocument.VerifiedAt = input.VerifiedAt;
 
             db.SaveChanges();
+
+            var matchingTravelers = FindTravelerMatches(
+                nameZh,
+                input.BirthDate,
+                sex);
+
+            traveler = ConsolidateTravelerMatches(
+                matchingTravelers,
+                nameZh,
+                nameEn,
+                input.BirthDate,
+                sex,
+                nationality,
+                now);
+
+            if (existingDocument.IsCurrent)
+            {
+                MergeTraveler(
+                    traveler,
+                    nameZh,
+                    nameEn,
+                    input.BirthDate,
+                    sex,
+                    nationality,
+                    documentType,
+                    documentNumber,
+                    now);
+            }
+
+            db.SaveChanges();
             transaction.Commit();
 
             return BuildResult(
@@ -79,21 +109,22 @@ public sealed class PostgresTravelerStore(
 
         var travelerMatches = FindTravelerMatches(
             nameZh,
-            nameEn,
             input.BirthDate,
-            nationality);
-
-        if (travelerMatches.Count > 1)
-        {
-            throw new AmbiguousTravelerMatchException();
-        }
+            sex);
 
         TravelerRecord targetTraveler;
         DocumentSaveAction action;
 
-        if (travelerMatches.Count == 1)
+        if (travelerMatches.Count > 0)
         {
-            targetTraveler = travelerMatches[0];
+            targetTraveler = ConsolidateTravelerMatches(
+                travelerMatches,
+                nameZh,
+                nameEn,
+                input.BirthDate,
+                sex,
+                nationality,
+                now);
 
             MergeTraveler(
                 targetTraveler,
@@ -281,38 +312,131 @@ public sealed class PostgresTravelerStore(
 
     private List<TravelerRecord> FindTravelerMatches(
         string nameZh,
-        string nameEn,
         DateOnly birthDate,
-        string? nationality)
+        string sex)
     {
-        var query = db.Travelers
-            .Where(traveler =>
-                traveler.BirthDate == birthDate);
-
-        if (!string.IsNullOrWhiteSpace(nameZh))
-        {
-            query = query.Where(
-                traveler => traveler.NameZh == nameZh);
-        }
-        else if (!string.IsNullOrWhiteSpace(nameEn))
-        {
-            query = query.Where(
-                traveler => traveler.NameEn == nameEn);
-        }
-        else
+        if (string.IsNullOrWhiteSpace(nameZh))
         {
             return [];
         }
 
-        if (!string.IsNullOrWhiteSpace(nationality))
+        return db.Travelers
+            .Where(traveler =>
+                traveler.NameZh == nameZh &&
+                traveler.BirthDate == birthDate &&
+                traveler.Gender == sex)
+            .OrderBy(traveler => traveler.CreatedAt)
+            .ThenBy(traveler => traveler.TravelerId)
+            .ToList();
+    }
+
+    private TravelerRecord ConsolidateTravelerMatches(
+        IReadOnlyList<TravelerRecord> matches,
+        string nameZh,
+        string nameEn,
+        DateOnly birthDate,
+        string sex,
+        string? nationality,
+        DateTimeOffset now)
+    {
+        if (matches.Count == 0)
         {
-            query = query.Where(
-                traveler =>
-                    traveler.Nationality == null ||
-                    traveler.Nationality == nationality);
+            throw new InvalidOperationException(
+                "Cannot consolidate an empty traveler match set.");
         }
 
-        return query.ToList();
+        var canonical = matches
+            .OrderBy(item => item.CreatedAt)
+            .ThenBy(item => item.TravelerId)
+            .First();
+
+        MergeTravelerIdentityOnly(
+            canonical,
+            nameZh,
+            nameEn,
+            birthDate,
+            sex,
+            nationality,
+            now);
+
+        var canonicalTourIds = db.TourMembers
+            .Where(item => item.TravelerId == canonical.TravelerId)
+            .Select(item => item.TourId)
+            .ToHashSet();
+
+        foreach (var duplicate in matches.Where(
+            item => item.TravelerId != canonical.TravelerId))
+        {
+            if (
+                string.IsNullOrWhiteSpace(canonical.NameEn) &&
+                !string.IsNullOrWhiteSpace(duplicate.NameEn))
+            {
+                canonical.NameEn = duplicate.NameEn;
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(canonical.Nationality) &&
+                !string.IsNullOrWhiteSpace(duplicate.Nationality))
+            {
+                canonical.Nationality = duplicate.Nationality;
+            }
+
+            var duplicateDocuments = db.DocumentVersions
+                .Where(item => item.TravelerId == duplicate.TravelerId)
+                .ToList();
+
+            foreach (var document in duplicateDocuments)
+            {
+                document.TravelerId = canonical.TravelerId;
+            }
+
+            var duplicateMemberships = db.TourMembers
+                .Where(item => item.TravelerId == duplicate.TravelerId)
+                .ToList();
+
+            foreach (var membership in duplicateMemberships)
+            {
+                if (canonicalTourIds.Contains(membership.TourId))
+                {
+                    db.TourMembers.Remove(membership);
+                    continue;
+                }
+
+                membership.TravelerId = canonical.TravelerId;
+                canonicalTourIds.Add(membership.TourId);
+            }
+
+            db.Travelers.Remove(duplicate);
+        }
+
+        db.SaveChanges();
+        ReconcileCurrentDocuments(canonical.TravelerId);
+
+        canonical.UpdatedAt = now;
+        db.SaveChanges();
+
+        return canonical;
+    }
+
+    private void ReconcileCurrentDocuments(Guid travelerId)
+    {
+        var currentDocuments = db.DocumentVersions
+            .Where(item =>
+                item.TravelerId == travelerId &&
+                item.IsCurrent)
+            .OrderByDescending(item => item.VerifiedAt)
+            .ThenByDescending(item => item.CreatedAt)
+            .ToList();
+
+        foreach (var group in currentDocuments.GroupBy(
+            item => item.DocumentType,
+            StringComparer.Ordinal))
+        {
+            foreach (var oldDocument in group.Skip(1))
+            {
+                oldDocument.IsCurrent = false;
+            }
+        }
     }
 
     private DocumentSaveResult BuildResult(
@@ -411,6 +535,10 @@ public sealed class PostgresTravelerStore(
 
         traveler.UpdatedAt = now;
     }
+
+    private static string NormalizeIdentityName(string value) =>
+        string.Concat(
+            value.Trim().Where(character => !char.IsWhiteSpace(character)));
 
     private static string Normalize(string value) =>
         value.Trim().ToUpperInvariant();
