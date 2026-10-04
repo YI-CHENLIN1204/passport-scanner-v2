@@ -50,6 +50,8 @@ using (var scope = app.Services.CreateScope())
             tour_name varchar(160) NOT NULL,
             departure_date date NOT NULL,
             return_date date NOT NULL,
+            required_document_types text[] NOT NULL
+                DEFAULT ARRAY['PASSPORT']::text[],
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
@@ -59,6 +61,10 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE tours
             DROP COLUMN IF EXISTS expected_member_count;
+
+        ALTER TABLE tours
+            ADD COLUMN IF NOT EXISTS required_document_types text[] NOT NULL
+                DEFAULT ARRAY['PASSPORT']::text[];
 
         CREATE TABLE IF NOT EXISTS tour_members (
             tour_member_id uuid PRIMARY KEY,
