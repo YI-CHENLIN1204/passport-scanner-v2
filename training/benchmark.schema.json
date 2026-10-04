@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Passport Scanner OCR Benchmark Record",
+  "type": "object",
+  "required": [
+    "sampleId",
+    "documentType",
+    "timing",
+    "originalFields",
+    "groundTruth"
+  ],
+  "properties": {
+    "sampleId": {
+      "type": "string"
+    },
+    "documentType": {
+      "enum": [
+        "PASSPORT",
+        "TAIWAN_COMPATRIOT_PERMIT",
+        "TAIWAN_NATIONAL_ID"
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "properties": {
+        "initializationMs": { "type": ["number", "null"] },
+        "predictMs": { "type": ["number", "null"] },
+        "totalMs": { "type": ["number", "null"] },
+        "orientationAttempts": { "type": ["integer", "null"] },
+        "fallbackUsed": { "type": ["boolean", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "originalFields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "null"]
+      }
+    },
+    "groundTruth": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "null"]
+      }
+    }
+  },
+  "additionalProperties": true
+}
