@@ -12,6 +12,10 @@ public sealed class PassportScannerDbContext(
         Set<DocumentVersionRecord>();
     public DbSet<TourRecord> Tours => Set<TourRecord>();
     public DbSet<TourMemberRecord> TourMembers => Set<TourMemberRecord>();
+    public DbSet<ScanBatchRecord> ScanBatches => Set<ScanBatchRecord>();
+    public DbSet<TourPersonDraftRecord> TourPersonDrafts =>
+        Set<TourPersonDraftRecord>();
+    public DbSet<ScanItemRecord> ScanItems => Set<ScanItemRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -224,6 +228,207 @@ public sealed class PassportScannerDbContext(
         member.HasOne<TravelerRecord>()
             .WithMany()
             .HasForeignKey(item => item.TravelerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var scanBatch = modelBuilder.Entity<ScanBatchRecord>();
+
+        scanBatch.ToTable("scan_batches");
+        scanBatch.HasKey(item => item.ScanBatchId);
+
+        scanBatch.Property(item => item.ScanBatchId)
+            .HasColumnName("scan_batch_id");
+
+        scanBatch.Property(item => item.TourId)
+            .HasColumnName("tour_id")
+            .IsRequired();
+
+        scanBatch.Property(item => item.DocumentType)
+            .HasColumnName("document_type")
+            .HasMaxLength(40)
+            .IsRequired();
+
+        scanBatch.Property(item => item.Status)
+            .HasColumnName("status")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        scanBatch.Property(item => item.ItemCount)
+            .HasColumnName("item_count")
+            .IsRequired();
+
+        scanBatch.Property(item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        scanBatch.Property(item => item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        scanBatch.HasOne<TourRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.TourId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var draftPerson =
+            modelBuilder.Entity<TourPersonDraftRecord>();
+
+        draftPerson.ToTable("tour_person_drafts");
+        draftPerson.HasKey(item => item.DraftPersonId);
+
+        draftPerson.Property(item => item.DraftPersonId)
+            .HasColumnName("draft_person_id");
+
+        draftPerson.Property(item => item.TourId)
+            .HasColumnName("tour_id")
+            .IsRequired();
+
+        draftPerson.Property(item => item.NameZh)
+            .HasColumnName("name_zh")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        draftPerson.Property(item => item.BirthDate)
+            .HasColumnName("birth_date");
+
+        draftPerson.Property(item => item.Gender)
+            .HasColumnName("gender")
+            .HasMaxLength(12)
+            .IsRequired();
+
+        draftPerson.Property(item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        draftPerson.Property(item => item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        draftPerson.HasIndex(item => new
+            {
+                item.TourId,
+                item.NameZh,
+                item.BirthDate,
+                item.Gender
+            })
+            .HasDatabaseName(
+                "ix_tour_person_drafts_identity");
+
+        draftPerson.HasOne<TourRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.TourId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var scanItem = modelBuilder.Entity<ScanItemRecord>();
+
+        scanItem.ToTable("scan_items");
+        scanItem.HasKey(item => item.ScanItemId);
+
+        scanItem.Property(item => item.ScanItemId)
+            .HasColumnName("scan_item_id");
+
+        scanItem.Property(item => item.ScanBatchId)
+            .HasColumnName("scan_batch_id")
+            .IsRequired();
+
+        scanItem.Property(item => item.DraftPersonId)
+            .HasColumnName("draft_person_id")
+            .IsRequired();
+
+        scanItem.Property(item => item.DocumentType)
+            .HasColumnName("document_type")
+            .HasMaxLength(40)
+            .IsRequired();
+
+        scanItem.Property(item => item.OriginalFileName)
+            .HasColumnName("original_file_name")
+            .HasMaxLength(255)
+            .IsRequired();
+
+        scanItem.Property(item => item.ImageContentType)
+            .HasColumnName("image_content_type")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        scanItem.Property(item => item.ImageBytes)
+            .HasColumnName("image_bytes")
+            .HasColumnType("bytea")
+            .IsRequired();
+
+        scanItem.Property(item => item.NameZh)
+            .HasColumnName("name_zh")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        scanItem.Property(item => item.NameEn)
+            .HasColumnName("name_en")
+            .HasMaxLength(160)
+            .IsRequired();
+
+        scanItem.Property(item => item.BirthDate)
+            .HasColumnName("birth_date");
+
+        scanItem.Property(item => item.Gender)
+            .HasColumnName("gender")
+            .HasMaxLength(12)
+            .IsRequired();
+
+        scanItem.Property(item => item.Nationality)
+            .HasColumnName("nationality")
+            .HasMaxLength(12);
+
+        scanItem.Property(item => item.DocumentNumber)
+            .HasColumnName("document_number")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        scanItem.Property(item => item.IssuingCountry)
+            .HasColumnName("issuing_country")
+            .HasMaxLength(12);
+
+        scanItem.Property(item => item.ExpiryDate)
+            .HasColumnName("expiry_date");
+
+        scanItem.Property(item => item.OcrPayloadJson)
+            .HasColumnName("ocr_payload_json")
+            .HasColumnType("text")
+            .IsRequired();
+
+        scanItem.Property(item => item.ReviewStatus)
+            .HasColumnName("review_status")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        scanItem.Property(item => item.ReviewedAt)
+            .HasColumnName("reviewed_at");
+
+        scanItem.Property(item => item.DeleteAfter)
+            .HasColumnName("delete_after")
+            .IsRequired();
+
+        scanItem.Property(item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        scanItem.Property(item => item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        scanItem.HasIndex(item => new
+            {
+                item.DraftPersonId,
+                item.ReviewStatus
+            })
+            .HasDatabaseName(
+                "ix_scan_items_draft_review_status");
+
+        scanItem.HasOne<ScanBatchRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.ScanBatchId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        scanItem.HasOne<TourPersonDraftRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.DraftPersonId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
