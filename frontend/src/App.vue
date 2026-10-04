@@ -43,6 +43,27 @@ const error = ref('')
 const loading = ref(true)
 
 const documentType = ref<DocumentType>('passport')
+
+const documentTypeOptions = [
+  { ui: 'passport' as DocumentType, api: 'PASSPORT', label: '護照' },
+  {
+    ui: 'taiwan-compatriot-permit' as DocumentType,
+    api: 'TAIWAN_COMPATRIOT_PERMIT',
+    label: '台胞證',
+  },
+  {
+    ui: 'tw-id' as DocumentType,
+    api: 'TAIWAN_NATIONAL_ID',
+    label: '台灣身分證',
+  },
+]
+
+const availableDocumentTypes = computed(() => {
+  const required = selectedTour.value?.requiredDocumentTypes ?? []
+  return documentTypeOptions.filter(option =>
+    required.includes(option.api),
+  )
+})
 const selectedFile = ref<File | null>(null)
 const previewUrl = ref('')
 const uploadError = ref('')
@@ -57,6 +78,15 @@ const documentMismatch = ref<{
   file: File
   evidence: string[]
 } | null>(null)
+
+const canUseDetectedDocumentType = computed(() => {
+  const detected = documentMismatch.value?.detected
+  if (!detected) return false
+
+  return availableDocumentTypes.value.some(
+    option => option.ui === detected,
+  )
+})
 
 const ocrRunning = ref(false)
 const ocrError = ref('')
@@ -197,7 +227,7 @@ function rejectMismatchedFile(
 
 function useDetectedDocumentType() {
   const mismatch = documentMismatch.value
-  if (!mismatch) return
+  if (!mismatch || !canUseDetectedDocumentType.value) return
 
   documentType.value =
     mismatch.detected as DocumentType
@@ -424,12 +454,35 @@ async function runPassportOcr() {
   }
 }
 
+function syncDocumentTypeForTour(tour: TourSummaryResponse) {
+  const currentApiType = documentTypeOptions.find(
+    option => option.ui === documentType.value,
+  )?.api
+
+  if (
+    currentApiType &&
+    tour.requiredDocumentTypes.includes(currentApiType)
+  ) {
+    return
+  }
+
+  const firstRequired = documentTypeOptions.find(
+    option => tour.requiredDocumentTypes.includes(option.api),
+  )
+
+  if (firstRequired) {
+    documentType.value = firstRequired.ui
+  }
+}
+
 function selectTour(tour: TourSummaryResponse) {
   selectedTour.value = tour
+  syncDocumentTypeForTour(tour)
 }
 
 function scanTour(tour: TourSummaryResponse) {
   selectedTour.value = tour
+  syncDocumentTypeForTour(tour)
   clearPreview()
   activeView.value = 'scan'
 }
@@ -561,9 +614,13 @@ onBeforeUnmount(() => {
             :disabled="documentTypeChecking"
             @change="handleDocumentTypeChange"
           >
-            <option value="passport">護照</option>
-            <option value="taiwan-compatriot-permit">台胞證</option>
-            <option value="tw-id">台灣身分證</option>
+            <option
+              v-for="option in availableDocumentTypes"
+              :key="option.ui"
+              :value="option.ui"
+            >
+              {{ option.label }}
+            </option>
           </select>
         </label>
 
@@ -666,6 +723,9 @@ onBeforeUnmount(() => {
             但系統偵測到
             <strong>{{ documentTypeLabel(documentMismatch.detected) }}</strong>。
             為避免用錯 parser，這張圖片尚未進入後續辨識。
+            <template v-if="!canUseDetectedDocumentType">
+              而且目前團別沒有設定需要這種證件。
+            </template>
           </p>
 
           <p
@@ -686,6 +746,7 @@ onBeforeUnmount(() => {
             </button>
 
             <button
+              v-if="canUseDetectedDocumentType"
               type="button"
               @click="useDetectedDocumentType"
             >
