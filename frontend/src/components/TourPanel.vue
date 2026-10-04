@@ -37,7 +37,14 @@ const form = ref({
   tourName: '',
   departureDate: '',
   returnDate: '',
+  requiredDocumentTypes: ['PASSPORT'] as string[],
 })
+
+const documentOptions = [
+  { value: 'PASSPORT', label: '護照' },
+  { value: 'TAIWAN_COMPATRIOT_PERMIT', label: '台胞證' },
+  { value: 'TAIWAN_NATIONAL_ID', label: '台灣身分證' },
+]
 
 const activeTourId = computed(
   () =>
@@ -111,6 +118,11 @@ async function createNewTour() {
     return
   }
 
+  if (!form.value.requiredDocumentTypes.length) {
+    createError.value = '請至少選擇一種此團需要的證件。'
+    return
+  }
+
   creating.value = true
 
   try {
@@ -118,12 +130,14 @@ async function createNewTour() {
       tourName: form.value.tourName.trim(),
       departureDate: form.value.departureDate,
       returnDate: form.value.returnDate,
+      requiredDocumentTypes: form.value.requiredDocumentTypes,
     })
 
     form.value = {
       tourName: '',
       departureDate: '',
       returnDate: '',
+      requiredDocumentTypes: ['PASSPORT'],
     }
 
     await loadTours()
@@ -170,10 +184,15 @@ function hasDocument(
   )
 }
 
-function memberStatus(member: TourMemberResponse) {
-  return member.documents.length > 0
-    ? '已覆核'
-    : '待補證件'
+function memberStatus(
+  member: TourMemberResponse,
+  requiredDocumentTypes: string[],
+) {
+  return requiredDocumentTypes.every(
+    type => hasDocument(member, type),
+  )
+    ? '完成'
+    : '缺證件'
 }
 
 watch(
@@ -224,7 +243,7 @@ onMounted(async () => {
       <div class="create-tour-heading">
         <div>
           <strong>建立新團別</strong>
-          <span>目前只需要團名、出發日與回國日。</span>
+          <span>設定團名、日期與這一團實際需要收的證件。</span>
         </div>
       </div>
 
@@ -253,6 +272,22 @@ onMounted(async () => {
             type="date"
           />
         </label>
+
+        <fieldset class="document-requirements">
+          <legend>此團需要的證件</legend>
+          <label
+            v-for="option in documentOptions"
+            :key="option.value"
+            class="document-requirement-option"
+          >
+            <input
+              v-model="form.requiredDocumentTypes"
+              type="checkbox"
+              :value="option.value"
+            />
+            <span>{{ option.label }}</span>
+          </label>
+        </fieldset>
 
         <button
           type="button"
@@ -349,6 +384,15 @@ onMounted(async () => {
               份證件
             </span>
           </span>
+
+          <span class="tour-required-documents">
+            <span
+              v-for="type in tour.requiredDocumentTypes"
+              :key="type"
+            >
+              {{ documentLabel(type) }}
+            </span>
+          </span>
         </button>
       </section>
 
@@ -377,6 +421,14 @@ onMounted(async () => {
                 →
                 {{ detail.tour.returnDate }}
               </p>
+              <div class="tour-required-documents detail-required-documents">
+                <span
+                  v-for="type in detail.tour.requiredDocumentTypes"
+                  :key="type"
+                >
+                  {{ documentLabel(type) }}
+                </span>
+              </div>
             </div>
 
             <div class="tour-detail-actions">
@@ -424,9 +476,12 @@ onMounted(async () => {
               <thead>
                 <tr>
                   <th>姓名</th>
-                  <th>護照</th>
-                  <th>台胞證</th>
-                  <th>身分證</th>
+                  <th
+                    v-for="type in detail.tour.requiredDocumentTypes"
+                    :key="type"
+                  >
+                    {{ documentLabel(type) }}
+                  </th>
                   <th>狀態</th>
                 </tr>
               </thead>
@@ -450,60 +505,27 @@ onMounted(async () => {
                       </span>
                     </div>
                   </td>
-                  <td class="document-status-cell">
+                  <td
+                    v-for="type in detail.tour.requiredDocumentTypes"
+                    :key="type"
+                    class="document-status-cell"
+                  >
                     <span
                       :class="{
-                        complete: hasDocument(member, 'PASSPORT'),
+                        complete: hasDocument(member, type),
                       }"
                     >
-                      {{
-                        hasDocument(member, 'PASSPORT')
-                          ? '✓'
-                          : '—'
-                      }}
-                    </span>
-                  </td>
-                  <td class="document-status-cell">
-                    <span
-                      :class="{
-                        complete: hasDocument(
-                          member,
-                          'TAIWAN_COMPATRIOT_PERMIT',
-                        ),
-                      }"
-                    >
-                      {{
-                        hasDocument(
-                          member,
-                          'TAIWAN_COMPATRIOT_PERMIT',
-                        )
-                          ? '✓'
-                          : '—'
-                      }}
-                    </span>
-                  </td>
-                  <td class="document-status-cell">
-                    <span
-                      :class="{
-                        complete: hasDocument(
-                          member,
-                          'TAIWAN_NATIONAL_ID',
-                        ),
-                      }"
-                    >
-                      {{
-                        hasDocument(
-                          member,
-                          'TAIWAN_NATIONAL_ID',
-                        )
-                          ? '✓'
-                          : '—'
-                      }}
+                      {{ hasDocument(member, type) ? '✓' : '—' }}
                     </span>
                   </td>
                   <td>
                     <span class="member-status">
-                      {{ memberStatus(member) }}
+                      {{
+                        memberStatus(
+                          member,
+                          detail.tour.requiredDocumentTypes,
+                        )
+                      }}
                     </span>
                   </td>
                 </tr>
@@ -577,9 +599,10 @@ onMounted(async () => {
 .create-tour-grid {
   display: grid;
   grid-template-columns:
-    minmax(220px, 1.5fr)
-    minmax(150px, .8fr)
-    minmax(150px, .8fr)
+    minmax(220px, 1.4fr)
+    minmax(150px, .75fr)
+    minmax(150px, .75fr)
+    minmax(250px, 1.1fr)
     auto;
   gap: 12px;
   align-items: end;
@@ -591,6 +614,36 @@ onMounted(async () => {
   color: #2f3c54;
   font-size: 13px;
   font-weight: 600;
+}
+
+.document-requirements {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 44px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #ccd6e5;
+  border-radius: 10px;
+}
+
+.document-requirements legend {
+  padding: 0 4px;
+  color: #2f3c54;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.document-requirement-option {
+  display: inline-flex !important;
+  grid-template-columns: none !important;
+  gap: 5px !important;
+  align-items: center;
+  font-weight: 500 !important;
+}
+
+.document-requirement-option input {
+  min-height: auto;
 }
 
 .create-tour-grid input,
@@ -721,6 +774,26 @@ button.secondary {
 .tour-list-metrics strong {
   color: #273753;
   font-size: 13px;
+}
+
+.tour-required-documents {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tour-required-documents > span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #27406c;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.detail-required-documents {
+  margin-top: 10px;
 }
 
 .tour-detail-card {
