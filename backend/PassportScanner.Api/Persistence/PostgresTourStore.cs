@@ -10,6 +10,13 @@ public sealed class PostgresTourStore(
     PassportScannerDbContext db)
     : ITourStore
 {
+    private static readonly HashSet<string> AllowedDocumentTypes =
+        new(StringComparer.Ordinal)
+        {
+            "PASSPORT",
+            "TAIWAN_COMPATRIOT_PERMIT",
+            "TAIWAN_NATIONAL_ID"
+        };
     public IReadOnlyList<TourSummaryResponse> ListTours(
         string? query)
     {
@@ -57,9 +64,13 @@ public sealed class PostgresTourStore(
             .Where(item => travelerIds.Contains(item.TravelerId))
             .ToDictionary(item => item.TravelerId);
 
+        var requiredDocumentTypes = tour.RequiredDocumentTypes;
+
         var documents = db.DocumentVersions
             .AsNoTracking()
-            .Where(item => travelerIds.Contains(item.TravelerId))
+            .Where(item =>
+                travelerIds.Contains(item.TravelerId) &&
+                requiredDocumentTypes.Contains(item.DocumentType))
             .OrderByDescending(item => item.IsCurrent)
             .ThenByDescending(item => item.CreatedAt)
             .ToList();
@@ -116,12 +127,30 @@ public sealed class PostgresTourStore(
             throw new ArgumentException("回國日不可早於出發日。");
         }
 
+        var requiredDocumentTypes =
+            (request.RequiredDocumentTypes ?? Array.Empty<string>())
+            .Select(item => item.Trim().ToUpperInvariant())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (requiredDocumentTypes.Length == 0)
+        {
+            throw new ArgumentException("請至少選擇一種此團需要的證件。");
+        }
+
+        if (requiredDocumentTypes.Any(item => !AllowedDocumentTypes.Contains(item)))
+        {
+            throw new ArgumentException("包含不支援的團別證件類型。");
+        }
+
         var tour = new TourRecord
         {
             TourId = Guid.NewGuid(),
             TourName = name,
             DepartureDate = request.DepartureDate,
             ReturnDate = request.ReturnDate,
+            RequiredDocumentTypes = requiredDocumentTypes,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -177,44 +206,76 @@ public sealed class PostgresTourStore(
             return $"\"{text.Replace("\"", "\"\"")}\"";
         }
 
+        var headers = new List<string>
+        {
+            "中文姓名",
+            "英文姓名",
+            "出生日期",
+            "性別",
+            "國籍"
+        };
+
+        foreach (var type in detail.Tour.RequiredDocumentTypes)
+        {
+            switch (type)
+            {
+                case "PASSPORT":
+                    headers.Add("護照號碼");
+                    headers.Add("護照有效期限");
+                    break;
+                case "TAIWAN_COMPATRIOT_PERMIT":
+                    headers.Add("台胞證號碼");
+                    headers.Add("台胞證有效期限");
+                    break;
+                case "TAIWAN_NATIONAL_ID":
+                    headers.Add("身分證字號");
+                    break;
+            }
+        }
+
         var builder = new StringBuilder();
-        builder.AppendLine(
-            "中文姓名,英文姓名,出生日期,性別,國籍,護照號碼,護照有效期限,台胞證號碼,台胞證有效期限,身分證字號");
+        builder.AppendLine(string.Join(",", headers));
 
         foreach (var member in detail.Members)
         {
-            var passport = member.Documents.FirstOrDefault(
-                item => item.DocumentType == "PASSPORT");
-            var permit = member.Documents.FirstOrDefault(
-                item => item.DocumentType == "TAIWAN_COMPATRIOT_PERMIT");
-            var nationalId = member.Documents.FirstOrDefault(
-                item => item.DocumentType == "TAIWAN_NATIONAL_ID");
-
-            builder.AppendLine(string.Join(
-                ",",
+            var values = new List<string>
+            {
                 Csv(member.NameZh),
                 Csv(member.NameEn),
                 Csv(member.BirthDate.ToString(
                     "yyyy-MM-dd",
                     CultureInfo.InvariantCulture)),
                 Csv(member.Gender),
-                Csv(member.Nationality),
-                Csv(passport?.DocumentNumber),
-                Csv(passport?.ExpiryDate?.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture)),
-                Csv(permit?.DocumentNumber),
-                Csv(permit?.ExpiryDate?.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture)),
-                Csv(nationalId?.DocumentNumber)));
+                Csv(member.Nationality)
+            };
+
+            foreach (var type in detail.Tour.RequiredDocumentTypes)
+            {
+                var document = member.Documents.FirstOrDefault(
+                    item => item.DocumentType == type);
+
+                switch (type)
+                {
+                    case "PASSPORT":
+                    case "TAIWAN_COMPATRIOT_PERMIT":
+                        values.Add(Csv(document?.DocumentNumber));
+                        values.Add(Csv(document?.ExpiryDate?.ToString(
+                            "yyyy-MM-dd",
+                            CultureInfo.InvariantCulture)));
+                        break;
+                    case "TAIWAN_NATIONAL_ID":
+                        values.Add(Csv(document?.DocumentNumber));
+                        break;
+                }
+            }
+
+            builder.AppendLine(string.Join(",", values));
         }
 
         return Encoding.UTF8.GetPreamble()
             .Concat(Encoding.UTF8.GetBytes(builder.ToString()))
             .ToArray();
     }
-
     private TourSummaryResponse ToSummary(TourRecord tour)
     {
         var memberCount = db.TourMembers.Count(
@@ -224,16 +285,20 @@ public sealed class PostgresTourStore(
             .Where(item => item.TourId == tour.TourId)
             .Select(item => item.TravelerId);
 
+        var requiredDocumentTypes = tour.RequiredDocumentTypes;
+
         var documentCount = db.DocumentVersions.Count(
             item =>
                 travelerIds.Contains(item.TravelerId) &&
-                item.IsCurrent);
+                item.IsCurrent &&
+                requiredDocumentTypes.Contains(item.DocumentType));
 
         return new TourSummaryResponse(
             tour.TourId,
             tour.TourName,
             tour.DepartureDate,
             tour.ReturnDate,
+            tour.RequiredDocumentTypes,
             memberCount,
             documentCount,
             tour.UpdatedAt);
