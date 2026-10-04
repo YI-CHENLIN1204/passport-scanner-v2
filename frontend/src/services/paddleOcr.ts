@@ -2895,6 +2895,11 @@ async function recognizePassportOrientedWithInstance(
     progress: PassportOcrProgress,
   ) => void,
 ): Promise<PaddleBaselineResult> {
+  const scanStartedAt = performance.now()
+  const softBudgetMs = 9_000
+  const withinBudget = () =>
+    performance.now() - scanStartedAt < softBudgetMs
+
   const attempts: Array<{
     rotation: number
     image: File
@@ -2980,21 +2985,30 @@ async function recognizePassportOrientedWithInstance(
     true,
   )
 
-  if (!isStrongPassport(original)) {
+  if (
+    !isStrongPassport(original) &&
+    withinBudget()
+  ) {
     const plus90 = await runRotation(
       90,
       0.32,
       false,
     )
 
-    if (!isStrongPassport(plus90)) {
+    if (
+      !isStrongPassport(plus90) &&
+      withinBudget()
+    ) {
       const minus90 = await runRotation(
         -90,
         0.5,
         false,
       )
 
-      if (!isStrongPassport(minus90)) {
+      if (
+        !isStrongPassport(minus90) &&
+        withinBudget()
+      ) {
         await runRotation(
           180,
           0.66,
@@ -3015,7 +3029,8 @@ async function recognizePassportOrientedWithInstance(
   // recovery pass only for that selected direction.
   if (
     best.rotation !== 0 &&
-    !isStrongPassport(best.result)
+    !isStrongPassport(best.result) &&
+    withinBudget()
   ) {
     const recovered =
       await predictPassportWithDistanceFallback(
@@ -3085,7 +3100,10 @@ async function recognizePassportOrientedWithInstance(
         !best.result.chineseName
       )
 
-    if (shouldRetryOcr) {
+    if (
+      shouldRetryOcr &&
+      withinBudget()
+    ) {
       const deskewedResult =
         await predictPassportWithDistanceFallback(
           instance,
@@ -3113,7 +3131,10 @@ async function recognizePassportOrientedWithInstance(
     }
   }
 
-  if (!best.result.parsedMrz) {
+  if (
+    !best.result.parsedMrz &&
+    withinBudget()
+  ) {
     onProgress?.({
       stage: 'fallback',
       progress: 0.91,
@@ -3184,15 +3205,7 @@ async function recognizePassportOrientedWithInstance(
     reviewRotation
 
   best.result.orientedImage =
-    best.result.parsedMrz &&
-    best.result.structureComplete
-      ? await createStraightenedReviewImage(
-          instance,
-          reviewImage,
-          1.42,
-          undefined,
-        )
-      : reviewImage
+    reviewImage
 
   onProgress?.({
     stage: 'completed',
@@ -4785,6 +4798,9 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   ) => void,
 ): Promise<TaiwanCompatriotPermitOcrResult> {
   const totalStartedAt = performance.now()
+  const softBudgetMs = 9_000
+  const withinBudget = () =>
+    performance.now() - totalStartedAt < softBudgetMs
   onProgress?.({
     stage: 'initializing',
     progress: 0.05,
@@ -4868,19 +4884,28 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     ) &&
     result.uprightSemanticScore >= 0.6
 
-  if (!strongEnough) {
+  if (
+    !strongEnough &&
+    withinBudget()
+  ) {
     const plus90 = await tryRotation(
       90,
       0.34,
     )
 
-    if (!isStrongPermit(plus90)) {
+    if (
+      !isStrongPermit(plus90) &&
+      withinBudget()
+    ) {
       const minus90 = await tryRotation(
         -90,
         0.52,
       )
 
-      if (!isStrongPermit(minus90)) {
+      if (
+        !isStrongPermit(minus90) &&
+        withinBudget()
+      ) {
         const currentBest = [...attempts].sort(
           (a, b) =>
             permitResultQuality(b.result) -
@@ -4888,11 +4913,14 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
         )[0]
 
         if (
+          withinBudget() &&
           (
-            currentBest.result.parsedMrz?.validation.requiredValid !== true &&
-            currentBest.result.extractedFieldCount < 4
-          ) ||
-          !currentBest.result.chineseName
+            (
+              currentBest.result.parsedMrz?.validation.requiredValid !== true &&
+              currentBest.result.extractedFieldCount < 4
+            ) ||
+            !currentBest.result.chineseName
+          )
         ) {
           await tryRotation(180, 0.66)
         }
@@ -4929,27 +4957,29 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     reviewRotation =
       normalizeRotation(best.rotation - skew)
 
-    const deskewPrediction = await predictPermit(
-      instance,
-      reviewImage,
-      0,
-      totalStartedAt,
-    )
+    if (withinBudget()) {
+      const deskewPrediction = await predictPermit(
+        instance,
+        reviewImage,
+        0,
+        totalStartedAt,
+      )
 
-    deskewPrediction.result.rotationDegrees =
-      reviewRotation
-    deskewPrediction.result.orientationAttempts =
-      attempts.length + 1
+      deskewPrediction.result.rotationDegrees =
+        reviewRotation
+      deskewPrediction.result.orientationAttempts =
+        attempts.length + 1
 
-    if (
-      permitResultQuality(deskewPrediction.result) >=
-      permitResultQuality(best.result)
-    ) {
-      best = {
-        rotation: reviewRotation,
-        image: reviewImage,
-        prediction: deskewPrediction.prediction,
-        result: deskewPrediction.result,
+      if (
+        permitResultQuality(deskewPrediction.result) >=
+        permitResultQuality(best.result)
+      ) {
+        best = {
+          rotation: reviewRotation,
+          image: reviewImage,
+          prediction: deskewPrediction.prediction,
+          result: deskewPrediction.result,
+        }
       }
     }
   }
@@ -4957,7 +4987,10 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   // MRZ can be usable for permit number / birth date / sex while
   // its encoded Chinese-name segment is still unreadable. In that case
   // mrzUsed is true, but we must still retry the visual name area.
-  if (!best.result.chineseName) {
+  if (
+    !best.result.chineseName &&
+    withinBudget()
+  ) {
     onProgress?.({
       stage: 'name-retry',
       progress: 0.9,
@@ -5004,14 +5037,16 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   best.result.rotationDegrees =
     reviewRotation
   best.result.orientedImage =
-    await createStraightenedReviewImage(
-      instance,
-      reviewImage,
-      1.586,
-      reviewImage === best.image
-        ? best.prediction
-        : undefined,
-    )
+    withinBudget()
+      ? await createStraightenedReviewImage(
+          instance,
+          reviewImage,
+          1.586,
+          reviewImage === best.image
+            ? best.prediction
+            : undefined,
+        )
+      : reviewImage
 
   onProgress?.({
     stage: 'completed',
@@ -5760,6 +5795,9 @@ export async function recognizeTaiwanNationalIdWithPaddle(
   ) => void,
 ): Promise<TaiwanNationalIdOcrResult> {
   const totalStartedAt = performance.now()
+  const softBudgetMs = 9_000
+  const withinBudget = () =>
+    performance.now() - totalStartedAt < softBudgetMs
 
   onProgress?.({
     stage: 'initializing',
@@ -5841,19 +5879,28 @@ export async function recognizeTaiwanNationalIdWithPaddle(
     result.textHorizontalScore >= 0.78 &&
     result.uprightSemanticScore >= 0.6
 
-  if (!strongEnough) {
+  if (
+    !strongEnough &&
+    withinBudget()
+  ) {
     const plus90 = await tryRotation(
       90,
       0.34,
     )
 
-    if (!isStrongNationalId(plus90)) {
+    if (
+      !isStrongNationalId(plus90) &&
+      withinBudget()
+    ) {
       const minus90 = await tryRotation(
         -90,
         0.52,
       )
 
-      if (!isStrongNationalId(minus90)) {
+      if (
+        !isStrongNationalId(minus90) &&
+        withinBudget()
+      ) {
         await tryRotation(180, 0.66)
       }
     }
@@ -5893,33 +5940,38 @@ export async function recognizeTaiwanNationalIdWithPaddle(
         best.rotation - skew,
       )
 
-    const predicted =
-      await predictTaiwanNationalId(
-        instance,
-        reviewImage,
-        0,
-        totalStartedAt,
-      )
+    if (withinBudget()) {
+      const predicted =
+        await predictTaiwanNationalId(
+          instance,
+          reviewImage,
+          0,
+          totalStartedAt,
+        )
 
-    predicted.result.rotationDegrees =
-      reviewRotation
-    predicted.result.orientationAttempts =
-      attempts.length + 1
+      predicted.result.rotationDegrees =
+        reviewRotation
+      predicted.result.orientationAttempts =
+        attempts.length + 1
 
-    if (
-      taiwanIdResultQuality(predicted.result) >=
-      taiwanIdResultQuality(best.result)
-    ) {
-      best = {
-        rotation: reviewRotation,
-        image: reviewImage,
-        prediction: predicted.prediction,
-        result: predicted.result,
+      if (
+        taiwanIdResultQuality(predicted.result) >=
+        taiwanIdResultQuality(best.result)
+      ) {
+        best = {
+          rotation: reviewRotation,
+          image: reviewImage,
+          prediction: predicted.prediction,
+          result: predicted.result,
+        }
       }
     }
   }
 
-  if (!best.result.chineseName) {
+  if (
+    !best.result.chineseName &&
+    withinBudget()
+  ) {
     onProgress?.({
       stage: 'name-retry',
       progress: 0.92,
@@ -5957,14 +6009,16 @@ export async function recognizeTaiwanNationalIdWithPaddle(
   best.result.rotationDegrees =
     reviewRotation
   best.result.orientedImage =
-    await createStraightenedReviewImage(
-      instance,
-      reviewImage,
-      1.586,
-      reviewImage === best.image
-        ? best.prediction
-        : undefined,
-    )
+    withinBudget()
+      ? await createStraightenedReviewImage(
+          instance,
+          reviewImage,
+          1.586,
+          reviewImage === best.image
+            ? best.prediction
+            : undefined,
+        )
+      : reviewImage
 
   onProgress?.({
     stage: 'completed',
