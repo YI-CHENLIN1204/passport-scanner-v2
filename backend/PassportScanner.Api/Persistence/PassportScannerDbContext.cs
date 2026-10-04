@@ -172,6 +172,11 @@ public sealed class PassportScannerDbContext(
             .HasColumnName("return_date")
             .IsRequired();
 
+        tour.Property(item => item.RequiredDocumentTypes)
+            .HasColumnName("required_document_types")
+            .HasColumnType("text[]")
+            .IsRequired();
+
         tour.Property(item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
