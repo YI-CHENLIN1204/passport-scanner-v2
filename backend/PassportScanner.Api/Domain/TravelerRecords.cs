@@ -17,7 +17,7 @@ public sealed class TravelerRecord
 public sealed class DocumentVersionRecord
 {
     public required Guid DocumentVersionId { get; init; }
-    public required Guid TravelerId { get; init; }
+    public required Guid TravelerId { get; set; }
     public required string DocumentType { get; init; }
     public required string NameZhOnDocument { get; set; }
     public required string NameEnOnDocument { get; set; }
