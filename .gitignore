@@ -433,3 +433,14 @@ FodyWeavers.xsd
 .env
 .env.*
 !.env.example
+
+
+# OCR training / benchmark data
+# Real passport / permit / ID images and derived crops are sensitive and
+# must never be committed to Git.
+training/data/
+training/exports/
+training/checkpoints/
+training/output/
+training/private-models/
+training/benchmarks/private/
