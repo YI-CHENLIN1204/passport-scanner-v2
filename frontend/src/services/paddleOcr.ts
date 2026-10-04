@@ -3129,9 +3129,7 @@ async function recognizePassportOrientedWithInstance(
           instance,
           reviewImage,
           1.42,
-          reviewImage === best.image
-            ? best.prediction
-            : undefined,
+          undefined,
         )
       : reviewImage
 
