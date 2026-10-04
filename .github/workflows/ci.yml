@@ -59,18 +59,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build and start database/backend
-        run: docker compose up -d --build database backend
+      - name: Build and start application stack
+        run: docker compose up -d --build database backend frontend
 
-      - name: Wait for API
+      - name: Wait for API and frontend proxy
         run: |
           for i in {1..30}; do
             if curl --fail --silent http://localhost:5080/api/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:5080/api/health > /dev/null
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5173/api/health > /dev/null; then
               exit 0
             fi
             sleep 2
           done
-          docker compose logs backend database
+          docker compose logs frontend backend database
           exit 1
 
       - name: Verify PostgreSQL persistence status
@@ -162,12 +169,12 @@ jobs:
             fi
             sleep 2
           done
-          docker compose logs backend database
+          docker compose logs frontend backend database
           exit 1
 
       - name: Show logs on failure
         if: failure()
-        run: docker compose logs backend database
+        run: docker compose logs frontend backend database
 
       - name: Stop smoke stack
         if: always()
