@@ -8,6 +8,7 @@ public sealed class TravelerRecord
     public required DateOnly BirthDate { get; set; }
     public required string Gender { get; set; }
     public string? Nationality { get; set; }
+    public string? NationalIdNumber { get; set; }
     public required string PersonalIdType { get; set; }
     public required string PersonalIdNumber { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
