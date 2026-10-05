@@ -307,7 +307,10 @@ public sealed class PostgresOcrBenchmarkStore(
         string field) =>
         field switch
         {
-            "nameZh" => item.NameZh,
+            "nameZh" =>
+                item.DocumentType == "TAIWAN_COMPATRIOT_PERMIT"
+                    ? item.NameZhOnDocument
+                    : item.NameZh,
             "nameEn" => item.NameEn,
             "birthDate" =>
                 item.BirthDate?.ToString(
