@@ -12,7 +12,6 @@ import {
 } from '../services/nameScriptConversion'
 import {
   deletePendingScanItem,
-  downloadTourCsv,
   getReviewQueue,
   getScanItemImageUrl,
   getTourDetail,
@@ -39,6 +38,19 @@ type RowFilter =
   | 'missing'
   | 'complete'
 
+type ExportKind =
+  | 'TOTAL'
+  | 'PASSPORT'
+  | 'TAIWAN_COMPATRIOT_PERMIT'
+  | 'TAIWAN_NATIONAL_ID'
+
+interface ExportFieldDefinition {
+  key: string
+  label: string
+  kinds: ExportKind[]
+  documentType?: string
+}
+
 interface DocumentCell {
   status: 'missing' | 'pending' | 'reviewed'
   item?: ScanItemResponse
@@ -59,6 +71,18 @@ const queue = ref<ReviewQueuePersonResponse[]>([])
 const loading = ref(true)
 const error = ref('')
 const exporting = ref(false)
+const exportOpen = ref(false)
+const exportSelectedKinds = ref<ExportKind[]>([])
+const exportColumns = ref<Record<ExportKind, string[]>>({
+  TOTAL: [],
+  PASSPORT: [],
+  TAIWAN_COMPATRIOT_PERMIT: [],
+  TAIWAN_NATIONAL_ID: [],
+})
+const draggingExportField = ref<{
+  kind: ExportKind
+  key: string
+} | null>(null)
 const tourEditing = ref(false)
 const tourSaving = ref(false)
 const tourEditError = ref('')
@@ -91,10 +115,95 @@ const reviewForm = ref<ReviewScanItemRequest>({
   birthDate: null,
   gender: '',
   nationality: null,
+  nationalIdNumber: null,
   documentNumber: '',
   issuingCountry: null,
   expiryDate: null,
 })
+
+const exportFieldDefinitions: ExportFieldDefinition[] = [
+  {
+    key: 'nameZh',
+    label: '中文姓名',
+    kinds: [
+      'TOTAL',
+      'PASSPORT',
+      'TAIWAN_COMPATRIOT_PERMIT',
+      'TAIWAN_NATIONAL_ID',
+    ],
+  },
+  {
+    key: 'nameEn',
+    label: '英文姓名',
+    kinds: ['TOTAL', 'PASSPORT'],
+  },
+  {
+    key: 'birthDate',
+    label: '出生日期',
+    kinds: [
+      'TOTAL',
+      'PASSPORT',
+      'TAIWAN_COMPATRIOT_PERMIT',
+      'TAIWAN_NATIONAL_ID',
+    ],
+  },
+  {
+    key: 'gender',
+    label: '性別',
+    kinds: [
+      'TOTAL',
+      'PASSPORT',
+      'TAIWAN_COMPATRIOT_PERMIT',
+      'TAIWAN_NATIONAL_ID',
+    ],
+  },
+  {
+    key: 'nationality',
+    label: '國籍',
+    kinds: ['TOTAL', 'PASSPORT'],
+  },
+  {
+    key: 'nationalIdNumber',
+    label: '身分證字號',
+    kinds: ['TOTAL', 'PASSPORT', 'TAIWAN_NATIONAL_ID'],
+  },
+  {
+    key: 'passportNumber',
+    label: '護照號碼',
+    kinds: ['TOTAL', 'PASSPORT'],
+    documentType: 'PASSPORT',
+  },
+  {
+    key: 'passportIssuingCountry',
+    label: '護照簽發國',
+    kinds: ['TOTAL', 'PASSPORT'],
+    documentType: 'PASSPORT',
+  },
+  {
+    key: 'passportExpiryDate',
+    label: '護照有效期限',
+    kinds: ['TOTAL', 'PASSPORT'],
+    documentType: 'PASSPORT',
+  },
+  {
+    key: 'permitNumber',
+    label: '台胞證號碼',
+    kinds: ['TOTAL', 'TAIWAN_COMPATRIOT_PERMIT'],
+    documentType: 'TAIWAN_COMPATRIOT_PERMIT',
+  },
+  {
+    key: 'permitExpiryDate',
+    label: '台胞證有效期限',
+    kinds: ['TOTAL', 'TAIWAN_COMPATRIOT_PERMIT'],
+    documentType: 'TAIWAN_COMPATRIOT_PERMIT',
+  },
+  {
+    key: 'nationalIdDocumentNumber',
+    label: '身分證證號',
+    kinds: ['TOTAL', 'TAIWAN_NATIONAL_ID'],
+    documentType: 'TAIWAN_NATIONAL_ID',
+  },
+]
 
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
