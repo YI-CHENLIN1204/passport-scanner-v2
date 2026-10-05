@@ -10,6 +10,9 @@ import {
   type TourSummaryResponse,
 } from '../services/api'
 import {
+  convertSimplifiedNameToTraditional,
+} from '../services/nameScriptConversion'
+import {
   detectDocumentTypeWithPaddle,
   recognizePassportWithPaddle,
   recognizeTaiwanCompatriotPermitWithPaddle,
@@ -707,6 +710,13 @@ async function buildPermitItem(
   const imageBase64 =
     await fileToBase64(reviewImage)
 
+  const printedChineseName =
+    result.chineseName ?? ''
+  const traditionalChineseName =
+    convertSimplifiedNameToTraditional(
+      printedChineseName,
+    ).value
+
   return {
     originalFileName: sourceFile.name,
     imageContentType:
@@ -714,8 +724,8 @@ async function buildPermitItem(
       file.type ||
       'image/jpeg',
     imageBase64,
-    nameZh: result.chineseName,
-    nameZhOnDocument: result.chineseName,
+    nameZh: traditionalChineseName,
+    nameZhOnDocument: printedChineseName,
     nameEn: '',
     birthDate: result.birthDate || null,
     gender: result.sex,
