@@ -18,6 +18,7 @@ public sealed record ReviewedDocumentInput(
     DateOnly BirthDate,
     string Sex,
     string? Nationality,
+    string? NationalIdNumber,
     string DocumentNumber,
     string? IssuingCountry,
     DateOnly? ExpiryDate,
@@ -36,6 +37,7 @@ public sealed record TravelerSummary(
     DateOnly BirthDate,
     string Gender,
     string? Nationality,
+    string? NationalIdNumber,
     int DocumentVersionCount,
     IReadOnlyList<string> CurrentDocumentTypes);
 
