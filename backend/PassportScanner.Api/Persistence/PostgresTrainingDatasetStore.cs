@@ -88,6 +88,36 @@ public sealed class PostgresTrainingDatasetStore(
             existing.UpdatedAt);
     }
 
+    public void RefreshSelectedSample(
+        Guid scanItemId,
+        DateTimeOffset now)
+    {
+        var sample = db.TrainingSamples
+            .SingleOrDefault(item =>
+                item.SourceScanItemId == scanItemId);
+
+        if (sample is null)
+        {
+            return;
+        }
+
+        var scanItem = db.ScanItems
+            .AsNoTracking()
+            .SingleOrDefault(item =>
+                item.ScanItemId == scanItemId);
+
+        if (scanItem is null ||
+            scanItem.ReviewStatus != Reviewed)
+        {
+            return;
+        }
+
+        sample.GroundTruthJson =
+            BuildGroundTruthJson(scanItem);
+        sample.UpdatedAt = now;
+        db.SaveChanges();
+    }
+
     public TrainingDatasetSummaryResponse GetSummary(
         DateTimeOffset generatedAt)
     {
