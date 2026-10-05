@@ -107,6 +107,14 @@ const reviewDocumentIndex = ref(0)
 const reviewSaving = ref(false)
 const reviewError = ref('')
 const reviewZoom = ref(1)
+const reviewImagePanel = ref<HTMLElement | null>(null)
+const reviewDragging = ref(false)
+const reviewDragStart = ref({
+  x: 0,
+  y: 0,
+  scrollLeft: 0,
+  scrollTop: 0,
+})
 const reviewUseForTraining = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
@@ -999,6 +1007,11 @@ async function exportConfiguredCsv() {
 
 function resetReviewZoom() {
   reviewZoom.value = 1
+
+  if (reviewImagePanel.value) {
+    reviewImagePanel.value.scrollLeft = 0
+    reviewImagePanel.value.scrollTop = 0
+  }
 }
 
 function setReviewZoom(value: number) {
@@ -1032,17 +1045,64 @@ function onReviewWheel(event: WheelEvent) {
   }
 }
 
+function startReviewPan(event: PointerEvent) {
+  const panel = reviewImagePanel.value
+  if (!panel || event.button !== 0) return
+
+  reviewDragging.value = true
+  reviewDragStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+    scrollLeft: panel.scrollLeft,
+    scrollTop: panel.scrollTop,
+  }
+
+  panel.setPointerCapture(event.pointerId)
+}
+
+function moveReviewPan(event: PointerEvent) {
+  const panel = reviewImagePanel.value
+  if (!panel || !reviewDragging.value) return
+
+  event.preventDefault()
+
+  panel.scrollLeft =
+    reviewDragStart.value.scrollLeft -
+    (event.clientX - reviewDragStart.value.x)
+  panel.scrollTop =
+    reviewDragStart.value.scrollTop -
+    (event.clientY - reviewDragStart.value.y)
+}
+
+function stopReviewPan(event?: PointerEvent) {
+  const panel = reviewImagePanel.value
+
+  if (
+    panel &&
+    event &&
+    panel.hasPointerCapture(event.pointerId)
+  ) {
+    panel.releasePointerCapture(event.pointerId)
+  }
+
+  reviewDragging.value = false
+}
+
 function openReview(
   person: ReviewQueuePersonResponse,
 ) {
   reviewPerson.value = person
-  reviewDocumentIndex.value = Math.max(
-    0,
-    person.documents.findIndex(
-      document =>
-        document.reviewStatus === 'PENDING',
-    ),
+
+  const pendingIndex = person.documents.findIndex(
+    document =>
+      document.reviewStatus === 'PENDING',
   )
+
+  reviewDocumentIndex.value =
+    pendingIndex >= 0
+      ? pendingIndex
+      : Math.max(0, person.documents.length - 1)
+
   reviewError.value = ''
   resetReviewZoom()
 }
@@ -1681,6 +1741,19 @@ onBeforeUnmount(() => {
                   >
                     審核
                   </button>
+
+                  <button
+                    v-else-if="row.reviewPerson"
+                    type="button"
+                    class="review-button edit-reviewed"
+                    @click="
+                      openReview(
+                        row.reviewPerson,
+                      )
+                    "
+                  >
+                    編輯
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -2086,11 +2159,23 @@ onBeforeUnmount(() => {
             </div>
 
             <div
+              ref="reviewImagePanel"
               class="review-image-panel"
+              :class="{ dragging: reviewDragging }"
               @wheel="onReviewWheel"
+              @pointerdown="startReviewPan"
+              @pointermove="moveReviewPan"
+              @pointerup="stopReviewPan"
+              @pointercancel="stopReviewPan"
+              @pointerleave="
+                reviewDragging
+                  ? stopReviewPan($event)
+                  : undefined
+              "
             >
               <img
                 :src="currentImageUrl"
+                draggable="false"
                 :style="{
                   width:
                     `${reviewZoom * 100}%`,
@@ -2103,7 +2188,7 @@ onBeforeUnmount(() => {
 
             <small class="zoom-help">
               可使用按鈕放大；Ctrl / ⌘
-              + 滾輪也可以縮放。
+              + 滾輪也可以縮放。放大後可直接按住照片拖曳查看。
             </small>
           </div>
 
@@ -3181,6 +3266,9 @@ tbody tr:last-child td {
   overflow: auto;
   display: flex;
   align-items: flex-start;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   justify-content: center;
   border: 1px solid #273347;
   border-radius: 10px;
@@ -3198,6 +3286,10 @@ tbody tr:last-child td {
     -10px 0;
 }
 
+.review-image-panel.dragging {
+  cursor: grabbing;
+}
+
 .review-image-panel img {
   display: block;
   flex: 0 0 auto;
@@ -3205,6 +3297,7 @@ tbody tr:last-child td {
   min-width: 100%;
   max-width: none;
   object-fit: contain;
+  pointer-events: none;
   transition: width .12s ease;
 }
 
