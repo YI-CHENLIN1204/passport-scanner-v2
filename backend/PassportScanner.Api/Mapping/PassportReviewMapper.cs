@@ -12,6 +12,7 @@ public static class PassportReviewMapper
         return new ReviewedDocumentInput(
             DocumentType: "PASSPORT",
             ChineseName: request.ChineseName,
+            ChineseNameOnDocument: request.ChineseName,
             EnglishName: request.EnglishName,
             BirthDate: DateOnly.ParseExact(
                 request.BirthDate,
