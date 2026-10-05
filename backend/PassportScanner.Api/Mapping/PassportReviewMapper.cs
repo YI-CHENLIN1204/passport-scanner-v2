@@ -20,6 +20,7 @@ public static class PassportReviewMapper
                 CultureInfo.InvariantCulture),
             Sex: request.Sex,
             Nationality: request.Nationality,
+            NationalIdNumber: null,
             DocumentNumber: request.PassportNumber,
             IssuingCountry: request.IssuingState,
             ExpiryDate: DateOnly.ParseExact(
