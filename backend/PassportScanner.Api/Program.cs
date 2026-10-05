@@ -23,6 +23,7 @@ builder.Services.AddDbContext<PassportScannerDbContext>(options =>
 builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
 builder.Services.AddScoped<ITourStore, PostgresTourStore>();
 builder.Services.AddScoped<IScanQueueStore, PostgresScanQueueStore>();
+builder.Services.AddScoped<IOcrBenchmarkStore, PostgresOcrBenchmarkStore>();
 
 builder.Services.AddCors(options =>
 {
@@ -309,6 +310,13 @@ app.MapPut(
                 new { message = ex.Message });
         }
     });
+
+app.MapGet(
+    "/api/ocr-benchmark/summary",
+    (IOcrBenchmarkStore store) =>
+        Results.Ok(
+            store.GetSummary(
+                DateTimeOffset.UtcNow)));
 
 app.MapGet(
     "/api/document-store/status",
