@@ -549,16 +549,405 @@ async function reloadQueue() {
   if (tour) detail.value = tour
 }
 
-async function exportCsv() {
-  if (!detail.value || exporting.value) return
+function exportKindLabel(kind: ExportKind) {
+  if (kind === 'TOTAL') return '總表'
+  return documentLabel(kind)
+}
 
-  exporting.value = true
+function exportKindsForTour() {
+  const kinds: ExportKind[] = ['TOTAL']
+
+  for (
+    const type of
+    detail.value?.tour.requiredDocumentTypes ?? []
+  ) {
+    if (
+      type === 'PASSPORT' ||
+      type === 'TAIWAN_COMPATRIOT_PERMIT' ||
+      type === 'TAIWAN_NATIONAL_ID'
+    ) {
+      kinds.push(type)
+    }
+  }
+
+  return kinds
+}
+
+function exportFieldsFor(kind: ExportKind) {
+  const required =
+    detail.value?.tour.requiredDocumentTypes ?? []
+
+  return exportFieldDefinitions.filter(field => {
+    if (!field.kinds.includes(kind)) {
+      return false
+    }
+
+    if (
+      kind === 'TOTAL' &&
+      field.documentType &&
+      !required.includes(field.documentType)
+    ) {
+      return false
+    }
+
+    return true
+  })
+}
+
+function defaultExportColumns(kind: ExportKind) {
+  const preferred: Record<ExportKind, string[]> = {
+    TOTAL: [
+      'nameZh',
+      'nameEn',
+      'birthDate',
+      'gender',
+      'nationality',
+      'nationalIdNumber',
+      'passportNumber',
+      'passportExpiryDate',
+      'permitNumber',
+      'permitExpiryDate',
+      'nationalIdDocumentNumber',
+    ],
+    PASSPORT: [
+      'nameZh',
+      'nameEn',
+      'birthDate',
+      'gender',
+      'nationality',
+      'nationalIdNumber',
+      'passportNumber',
+      'passportIssuingCountry',
+      'passportExpiryDate',
+    ],
+    TAIWAN_COMPATRIOT_PERMIT: [
+      'nameZh',
+      'birthDate',
+      'gender',
+      'permitNumber',
+      'permitExpiryDate',
+    ],
+    TAIWAN_NATIONAL_ID: [
+      'nameZh',
+      'birthDate',
+      'gender',
+      'nationalIdNumber',
+    ],
+  }
+
+  const allowed = new Set(
+    exportFieldsFor(kind).map(field => field.key),
+  )
+
+  return preferred[kind].filter(key =>
+    allowed.has(key),
+  )
+}
+
+function exportStorageKey(kind: ExportKind) {
+  return `passport-scanner.export-columns.${kind}`
+}
+
+function loadExportColumns(kind: ExportKind) {
+  const allowed = new Set(
+    exportFieldsFor(kind).map(field => field.key),
+  )
 
   try {
-    await downloadTourCsv(
-      props.tourId,
-      `${detail.value.tour.tourName}.csv`,
+    const raw = localStorage.getItem(
+      exportStorageKey(kind),
     )
+    const saved = raw
+      ? (JSON.parse(raw) as string[])
+      : []
+
+    const filtered = saved.filter(key =>
+      allowed.has(key),
+    )
+
+    if (filtered.length) {
+      return filtered
+    }
+  } catch {
+    // Fall back to defaults when browser storage is unavailable.
+  }
+
+  return defaultExportColumns(kind)
+}
+
+function persistExportColumns(kind: ExportKind) {
+  try {
+    localStorage.setItem(
+      exportStorageKey(kind),
+      JSON.stringify(exportColumns.value[kind]),
+    )
+  } catch {
+    // Export still works without persistent browser settings.
+  }
+}
+
+function openExportModal() {
+  if (!detail.value) return
+
+  const kinds = exportKindsForTour()
+
+  for (const kind of kinds) {
+    exportColumns.value[kind] =
+      loadExportColumns(kind)
+  }
+
+  exportSelectedKinds.value = [...kinds]
+  exportOpen.value = true
+}
+
+function closeExportModal() {
+  if (exporting.value) return
+  exportOpen.value = false
+  draggingExportField.value = null
+}
+
+function toggleExportKind(
+  kind: ExportKind,
+  checked: boolean,
+) {
+  if (checked) {
+    if (!exportSelectedKinds.value.includes(kind)) {
+      exportSelectedKinds.value.push(kind)
+    }
+    return
+  }
+
+  exportSelectedKinds.value =
+    exportSelectedKinds.value.filter(
+      value => value !== kind,
+    )
+}
+
+function toggleExportField(
+  kind: ExportKind,
+  key: string,
+  checked: boolean,
+) {
+  const current = exportColumns.value[kind]
+
+  if (checked) {
+    if (!current.includes(key)) {
+      current.push(key)
+    }
+  } else {
+    exportColumns.value[kind] =
+      current.filter(value => value !== key)
+  }
+
+  persistExportColumns(kind)
+}
+
+function startExportFieldDrag(
+  kind: ExportKind,
+  key: string,
+) {
+  if (!exportColumns.value[kind].includes(key)) {
+    return
+  }
+
+  draggingExportField.value = { kind, key }
+}
+
+function dropExportField(
+  kind: ExportKind,
+  targetKey: string,
+) {
+  const dragging = draggingExportField.value
+
+  if (
+    !dragging ||
+    dragging.kind !== kind ||
+    dragging.key === targetKey
+  ) {
+    draggingExportField.value = null
+    return
+  }
+
+  const columns = [...exportColumns.value[kind]]
+  const from = columns.indexOf(dragging.key)
+  const to = columns.indexOf(targetKey)
+
+  if (from < 0 || to < 0) {
+    draggingExportField.value = null
+    return
+  }
+
+  columns.splice(from, 1)
+  columns.splice(to, 0, dragging.key)
+  exportColumns.value[kind] = columns
+  persistExportColumns(kind)
+  draggingExportField.value = null
+}
+
+function exportDocument(
+  member: TourMemberResponse,
+  type: string,
+) {
+  return member.documents.find(
+    document =>
+      document.documentType === type &&
+      document.isCurrent,
+  )
+}
+
+function exportFieldValue(
+  member: TourMemberResponse,
+  key: string,
+) {
+  const passport =
+    exportDocument(member, 'PASSPORT')
+  const permit =
+    exportDocument(
+      member,
+      'TAIWAN_COMPATRIOT_PERMIT',
+    )
+  const nationalId =
+    exportDocument(member, 'TAIWAN_NATIONAL_ID')
+
+  switch (key) {
+    case 'nameZh':
+      return member.nameZh
+    case 'nameEn':
+      return member.nameEn
+    case 'birthDate':
+      return member.birthDate
+    case 'gender':
+      return member.gender
+    case 'nationality':
+      return member.nationality ?? ''
+    case 'nationalIdNumber':
+      return member.nationalIdNumber ?? ''
+    case 'passportNumber':
+      return passport?.documentNumber ?? ''
+    case 'passportIssuingCountry':
+      return passport?.issuingCountry ?? ''
+    case 'passportExpiryDate':
+      return passport?.expiryDate ?? ''
+    case 'permitNumber':
+      return permit?.documentNumber ?? ''
+    case 'permitExpiryDate':
+      return permit?.expiryDate ?? ''
+    case 'nationalIdDocumentNumber':
+      return nationalId?.documentNumber ?? ''
+    default:
+      return ''
+  }
+}
+
+function escapeCsv(value: string) {
+  return `"${String(value).replace(/"/g, '""')}"`
+}
+
+function membersForExport(kind: ExportKind) {
+  if (!detail.value) return []
+
+  if (kind === 'TOTAL') {
+    return detail.value.members
+  }
+
+  return detail.value.members.filter(member =>
+    member.documents.some(
+      document =>
+        document.documentType === kind &&
+        document.isCurrent,
+    ),
+  )
+}
+
+function buildExportCsv(kind: ExportKind) {
+  const columns = exportColumns.value[kind]
+  const fieldMap = new Map(
+    exportFieldsFor(kind).map(field => [
+      field.key,
+      field,
+    ]),
+  )
+
+  const header = columns.map(key =>
+    escapeCsv(fieldMap.get(key)?.label ?? key),
+  )
+
+  const rows = membersForExport(kind).map(member =>
+    columns.map(key =>
+      escapeCsv(exportFieldValue(member, key)),
+    ),
+  )
+
+  return [
+    header.join(','),
+    ...rows.map(row => row.join(',')),
+  ].join('\r\n')
+}
+
+function safeFilename(value: string) {
+  return value
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .trim()
+}
+
+function downloadCsvFile(
+  filename: string,
+  content: string,
+) {
+  const blob = new Blob(
+    ['\ufeff', content],
+    { type: 'text/csv;charset=utf-8' },
+  )
+  const url = URL.createObjectURL(blob)
+
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function exportConfiguredCsv() {
+  if (!detail.value || exporting.value) return
+
+  const kinds = exportKindsForTour().filter(
+    kind => exportSelectedKinds.value.includes(kind),
+  )
+
+  if (!kinds.length) {
+    error.value = '請至少選擇一個要輸出的表。'
+    return
+  }
+
+  for (const kind of kinds) {
+    if (!exportColumns.value[kind].length) {
+      error.value =
+        `${exportKindLabel(kind)}至少要選擇一個欄位。`
+      return
+    }
+  }
+
+  exporting.value = true
+  error.value = ''
+
+  try {
+    const base = safeFilename(
+      detail.value.tour.tourName,
+    )
+
+    for (const kind of kinds) {
+      downloadCsvFile(
+        `${base}-${exportKindLabel(kind)}.csv`,
+        buildExportCsv(kind),
+      )
+    }
+
+    exportOpen.value = false
   } catch (err) {
     error.value =
       err instanceof Error
