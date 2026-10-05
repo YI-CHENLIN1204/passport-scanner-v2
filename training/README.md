@@ -134,3 +134,30 @@ The production scan flow preserves two versions:
 That makes it possible to calculate benchmark accuracy without guessing what the OCR originally produced.
 
 Training-image retention is a separate explicit process and must not silently extend production image retention.
+
+
+## Production collection flow
+
+New production scans preserve the model's raw output in `ocrPayloadJson.originalFields`.
+
+After human review:
+
+- reviewed `scan_items` fields are the ground truth used by benchmark aggregation;
+- the production image still follows the normal tour return-date + 7-day deletion rule;
+- the image is copied into `training_samples` only when the reviewer explicitly enables “保留此樣本供 OCR 改善”;
+- the training copy is independent from production photo retention.
+
+## Private dataset export
+
+The internal OCR Quality page can export selected samples as a private ZIP.
+
+The ZIP contains:
+
+- `images/<DOCUMENT_TYPE>/<sample-id>.<ext>`
+- `labels/<DOCUMENT_TYPE>/<sample-id>.json`
+- `manifest.jsonl`
+- `README.txt`
+
+The label JSON contains the original OCR payload and reviewed ground truth. Field-specific recognition crops are intentionally not generated blindly at export time; crop generation belongs to the later model-specific preparation step so that passport MRZ, passport Chinese name, permit fields, and national-ID fields can each use the correct layout strategy.
+
+Never commit the exported ZIP or extracted private data to Git.
