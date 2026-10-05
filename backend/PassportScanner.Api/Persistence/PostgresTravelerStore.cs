@@ -19,6 +19,10 @@ public sealed class PostgresTravelerStore(
     {
         var documentType = Normalize(input.DocumentType);
         var nameZh = NormalizeIdentityName(input.ChineseName);
+        var nameZhOnDocument = NormalizeIdentityName(
+            string.IsNullOrWhiteSpace(input.ChineseNameOnDocument)
+                ? input.ChineseName
+                : input.ChineseNameOnDocument);
         var nameEn = Normalize(input.EnglishName);
         var documentNumber = Normalize(input.DocumentNumber);
         var nationality = NormalizeNullable(input.Nationality);
@@ -62,7 +66,7 @@ public sealed class PostgresTravelerStore(
                     now);
             }
 
-            existingDocument.NameZhOnDocument = nameZh;
+            existingDocument.NameZhOnDocument = nameZhOnDocument;
             existingDocument.NameEnOnDocument = nameEn;
             existingDocument.Nationality = nationality;
             existingDocument.ExpiryDate = input.ExpiryDate;
@@ -176,7 +180,7 @@ public sealed class PostgresTravelerStore(
             DocumentVersionId = Guid.NewGuid(),
             TravelerId = targetTraveler.TravelerId,
             DocumentType = documentType,
-            NameZhOnDocument = nameZh,
+            NameZhOnDocument = nameZhOnDocument,
             NameEnOnDocument = nameEn,
             DocumentNumber = documentNumber,
             IssuingCountry = issuingCountry,
