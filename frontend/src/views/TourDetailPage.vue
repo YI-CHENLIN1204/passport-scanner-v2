@@ -7,11 +7,13 @@ import {
   watch,
 } from 'vue'
 import {
+  deletePendingScanItem,
   downloadTourCsv,
   getReviewQueue,
   getScanItemImageUrl,
   getTourDetail,
   reviewScanItem,
+  updateTour,
   type ReviewQueuePersonResponse,
   type ReviewScanItemRequest,
   type ScanItemResponse,
@@ -53,6 +55,20 @@ const queue = ref<ReviewQueuePersonResponse[]>([])
 const loading = ref(true)
 const error = ref('')
 const exporting = ref(false)
+const tourEditing = ref(false)
+const tourSaving = ref(false)
+const tourEditError = ref('')
+const tourEditForm = ref({
+  tourName: '',
+  departureDate: '',
+  returnDate: '',
+  requiredDocumentTypes: [] as string[],
+})
+const documentOptions = [
+  { value: 'PASSPORT', label: '護照' },
+  { value: 'TAIWAN_COMPATRIOT_PERMIT', label: '台胞證' },
+  { value: 'TAIWAN_NATIONAL_ID', label: '身分證' },
+]
 
 const tableSearch = ref('')
 const rowFilter = ref<RowFilter>('all')
@@ -66,6 +82,7 @@ const reviewZoom = ref(1)
 const reviewUseForTraining = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
+  nameZhOnDocument: '',
   nameEn: '',
   birthDate: null,
   gender: '',
@@ -292,6 +309,91 @@ function canReview(row: OperationalRow) {
   )
 }
 
+function openTourEdit() {
+  if (!detail.value) return
+
+  tourEditForm.value = {
+    tourName: detail.value.tour.tourName,
+    departureDate: detail.value.tour.departureDate,
+    returnDate: detail.value.tour.returnDate,
+    requiredDocumentTypes:
+      [...detail.value.tour.requiredDocumentTypes],
+  }
+  tourEditError.value = ''
+  tourEditing.value = true
+}
+
+function closeTourEdit() {
+  if (tourSaving.value) return
+  tourEditing.value = false
+  tourEditError.value = ''
+}
+
+async function saveTourEdit() {
+  if (!detail.value || tourSaving.value) return
+
+  tourEditError.value = ''
+
+  if (!tourEditForm.value.tourName.trim()) {
+    tourEditError.value = '團別名稱不可空白。'
+    return
+  }
+
+  if (
+    !tourEditForm.value.departureDate ||
+    !tourEditForm.value.returnDate
+  ) {
+    tourEditError.value =
+      '請確認出發日與回國日。'
+    return
+  }
+
+  if (
+    tourEditForm.value.returnDate <
+    tourEditForm.value.departureDate
+  ) {
+    tourEditError.value =
+      '回國日不可早於出發日。'
+    return
+  }
+
+  if (
+    !tourEditForm.value.requiredDocumentTypes.length
+  ) {
+    tourEditError.value =
+      '請至少保留一種此團需要的證件。'
+    return
+  }
+
+  tourSaving.value = true
+
+  try {
+    await updateTour(
+      detail.value.tour.tourId,
+      {
+        tourName:
+          tourEditForm.value.tourName.trim(),
+        departureDate:
+          tourEditForm.value.departureDate,
+        returnDate:
+          tourEditForm.value.returnDate,
+        requiredDocumentTypes:
+          tourEditForm.value.requiredDocumentTypes,
+      },
+    )
+
+    tourEditing.value = false
+    await load()
+  } catch (err) {
+    tourEditError.value =
+      err instanceof Error
+        ? err.message
+        : '團別更新失敗。'
+  } finally {
+    tourSaving.value = false
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -467,10 +569,15 @@ const reviewFormErrors = computed(() => {
 
   if (
     document?.documentType ===
-      'TAIWAN_COMPATRIOT_PERMIT' &&
-    !form.expiryDate
+      'TAIWAN_COMPATRIOT_PERMIT'
   ) {
-    errors.push('請確認台胞證有效期限。')
+    if (!form.nameZhOnDocument?.trim()) {
+      errors.push('請確認台胞證上的原文姓名。')
+    }
+
+    if (!form.expiryDate) {
+      errors.push('請確認台胞證有效期限。')
+    }
   }
 
   return errors
@@ -490,6 +597,9 @@ watch(
 
     reviewForm.value = {
       nameZh: document.nameZh,
+      nameZhOnDocument:
+        document.nameZhOnDocument ||
+        document.nameZh,
       nameEn: document.nameEn,
       birthDate: document.birthDate,
       gender: document.gender,
@@ -505,6 +615,20 @@ watch(
     reviewError.value = ''
   },
   { immediate: true },
+)
+
+watch(
+  () => reviewForm.value.nameZh,
+  value => {
+    if (
+      currentDocument.value &&
+      currentDocument.value.documentType !==
+        'TAIWAN_COMPATRIOT_PERMIT'
+    ) {
+      reviewForm.value.nameZhOnDocument =
+        value
+    }
+  },
 )
 
 function selectReviewDocument(index: number) {
@@ -527,6 +651,51 @@ function firstPendingPerson(
       ),
     ) ?? null
   )
+}
+
+async function deleteCurrentReviewItem() {
+  const document = currentDocument.value
+
+  if (
+    !document ||
+    reviewSaving.value ||
+    document.reviewStatus !== 'PENDING'
+  ) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `確定刪除這張${documentLabel(document.documentType)}嗎？這筆待審核資料與覆核圖片會從目前團別移除。`,
+  )
+
+  if (!confirmed) return
+
+  reviewSaving.value = true
+  reviewError.value = ''
+
+  try {
+    await deletePendingScanItem(
+      document.scanItemId,
+    )
+    await reloadQueue()
+
+    const next = firstPendingPerson(
+      document.scanItemId,
+    )
+
+    if (next) {
+      openReview(next)
+    } else {
+      reviewPerson.value = null
+    }
+  } catch (err) {
+    reviewError.value =
+      err instanceof Error
+        ? err.message
+        : '刪除待審核證件失敗。'
+  } finally {
+    reviewSaving.value = false
+  }
 }
 
 async function saveReview(moveNext: boolean) {
@@ -681,6 +850,14 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="header-actions">
+          <button
+            type="button"
+            class="secondary-action"
+            @click="openTourEdit"
+          >
+            編輯團別
+          </button>
+
           <button
             type="button"
             class="secondary-action"
@@ -948,6 +1125,102 @@ onBeforeUnmount(() => {
     </template>
 
     <div
+      v-if="tourEditing"
+      class="modal-backdrop"
+      @click.self="closeTourEdit"
+    >
+      <section
+        class="tour-edit-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header>
+          <div>
+            <p class="page-kicker">EDIT TOUR</p>
+            <h2>編輯團別</h2>
+          </div>
+          <button
+            type="button"
+            class="close-button"
+            :disabled="tourSaving"
+            @click="closeTourEdit"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="tour-edit-form">
+          <label>
+            <span>團別名稱</span>
+            <input
+              v-model="tourEditForm.tourName"
+              type="text"
+            />
+          </label>
+
+          <div class="two-column">
+            <label>
+              <span>出發日</span>
+              <input
+                v-model="tourEditForm.departureDate"
+                type="date"
+              />
+            </label>
+            <label>
+              <span>回國日</span>
+              <input
+                v-model="tourEditForm.returnDate"
+                type="date"
+                :min="tourEditForm.departureDate || undefined"
+              />
+            </label>
+          </div>
+
+          <fieldset class="document-picker">
+            <legend>此團需要的證件</legend>
+            <label
+              v-for="option in documentOptions"
+              :key="option.value"
+            >
+              <input
+                v-model="tourEditForm.requiredDocumentTypes"
+                type="checkbox"
+                :value="option.value"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          </fieldset>
+        </div>
+
+        <p
+          v-if="tourEditError"
+          class="error-message"
+        >
+          {{ tourEditError }}
+        </p>
+
+        <footer>
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="tourSaving"
+            @click="closeTourEdit"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="primary-action"
+            :disabled="tourSaving"
+            @click="saveTourEdit"
+          >
+            {{ tourSaving ? '儲存中…' : '儲存修改' }}
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <div
       v-if="
         reviewPerson &&
         currentDocument
@@ -1116,7 +1389,30 @@ onBeforeUnmount(() => {
               </strong>
             </div>
 
-            <label>
+            <template
+              v-if="
+                currentDocument.documentType ===
+                'TAIWAN_COMPATRIOT_PERMIT'
+              "
+            >
+              <label>
+                <span>證件原文姓名（照台胞證簡體）</span>
+                <input
+                  v-model="reviewForm.nameZhOnDocument"
+                  type="text"
+                />
+              </label>
+
+              <label>
+                <span>旅客中文姓名（公司主檔繁體）</span>
+                <input
+                  v-model="reviewForm.nameZh"
+                  type="text"
+                />
+              </label>
+            </template>
+
+            <label v-else>
               <span>中文姓名</span>
               <input
                 v-model="reviewForm.nameZh"
@@ -1285,6 +1581,19 @@ onBeforeUnmount(() => {
 
           <div>
             <button
+              v-if="
+                currentDocument.reviewStatus ===
+                'PENDING'
+              "
+              type="button"
+              class="danger-action"
+              :disabled="reviewSaving"
+              @click="deleteCurrentReviewItem"
+            >
+              刪除
+            </button>
+
+            <button
               type="button"
               class="secondary-action"
               :disabled="!canSaveReview"
@@ -1382,7 +1691,8 @@ onBeforeUnmount(() => {
 .primary-action,
 .secondary-action,
 .review-button,
-.close-button {
+.close-button,
+.danger-action {
   border-radius: 9px;
   font: inherit;
   cursor: pointer;
@@ -1406,6 +1716,91 @@ onBeforeUnmount(() => {
   color: #334158;
   font-size: 12px;
   font-weight: 650;
+}
+
+
+.danger-action {
+  min-height: 41px;
+  padding: 0 14px;
+  border: 1px solid #e1b6b2;
+  border-radius: 9px;
+  background: #fff5f4;
+  color: #a43b33;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tour-edit-modal {
+  width: min(580px, 100%);
+  padding: 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+}
+
+.tour-edit-modal > header,
+.tour-edit-modal > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-edit-modal h2 {
+  margin: 3px 0 0;
+  color: #182236;
+  font-size: 19px;
+}
+
+.tour-edit-modal > footer {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.tour-edit-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.tour-edit-form label {
+  display: grid;
+  gap: 5px;
+  color: #46536a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tour-edit-form input[type='text'],
+.tour-edit-form input[type='date'] {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d0d9e5;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.document-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d9e0e9;
+  border-radius: 9px;
+}
+
+.document-picker legend {
+  padding: 0 5px;
+  color: #66748a;
+  font-size: 10px;
+}
+
+.document-picker label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .required-documents {
