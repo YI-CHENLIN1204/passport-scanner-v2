@@ -103,6 +103,18 @@ public sealed class PostgresOcrBenchmarkStore(
 
         foreach (var item in items)
         {
+            // Historical permit reviews used one Chinese-name field for both
+            // the printed simplified name and the business traditional name.
+            // They cannot provide trustworthy OCR name ground truth.
+            if (
+                item.DocumentType ==
+                    "TAIWAN_COMPATRIOT_PERMIT" &&
+                string.IsNullOrWhiteSpace(
+                    item.NameZhOnDocument))
+            {
+                continue;
+            }
+
             using var payload =
                 TryParsePayload(item.OcrPayloadJson);
 
