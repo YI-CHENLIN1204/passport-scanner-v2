@@ -9,6 +9,10 @@ public interface ITrainingDatasetStore
         bool selected,
         DateTimeOffset now);
 
+    void RefreshSelectedSample(
+        Guid scanItemId,
+        DateTimeOffset now);
+
     TrainingDatasetSummaryResponse GetSummary(
         DateTimeOffset generatedAt);
 
