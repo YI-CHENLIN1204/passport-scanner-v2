@@ -24,6 +24,7 @@ const editForm = ref<UpdateTravelerRequest>({
   birthDate: '',
   gender: '',
   nationality: null,
+  nationalIdNumber: null,
   documents: [],
 })
 
@@ -55,6 +56,8 @@ async function openEdit(
       birthDate: detail.traveler.birthDate,
       gender: detail.traveler.gender,
       nationality: detail.traveler.nationality,
+      nationalIdNumber:
+        detail.traveler.nationalIdNumber,
       documents: detail.documents
         .filter(document => document.isCurrent)
         .map(document => ({
@@ -297,7 +300,7 @@ onMounted(load)
             </label>
           </div>
 
-          <div class="three-column">
+          <div class="two-column">
             <label>
               <span>出生日期</span>
               <input
@@ -315,12 +318,23 @@ onMounted(load)
                 <option value="X">X</option>
               </select>
             </label>
+          </div>
 
+          <div class="two-column">
             <label>
               <span>國籍</span>
               <input
                 v-model="editForm.nationality"
                 type="text"
+              />
+            </label>
+
+            <label>
+              <span>身分證字號</span>
+              <input
+                v-model="editForm.nationalIdNumber"
+                type="text"
+                maxlength="10"
               />
             </label>
           </div>
