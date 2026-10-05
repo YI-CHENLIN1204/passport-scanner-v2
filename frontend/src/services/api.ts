@@ -453,7 +453,11 @@ export interface TourSummaryResponse {
 export interface TourMemberDocumentResponse {
   documentVersionId: string
   documentType: string
+  nameZhOnDocument: string
+  nameEnOnDocument: string
   documentNumber: string
+  issuingCountry: string | null
+  nationality: string | null
   expiryDate: string | null
   isCurrent: boolean
   verifiedAt: string
@@ -467,6 +471,7 @@ export interface TourMemberResponse {
   birthDate: string
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documents: TourMemberDocumentResponse[]
 }
 
