@@ -7,6 +7,7 @@ public sealed record TravelerSummaryResponse(
     string BirthDate,
     string Gender,
     string? Nationality,
+    string? NationalIdNumber,
     int DocumentVersionCount,
     IReadOnlyList<string> CurrentDocumentTypes);
 
@@ -42,6 +43,7 @@ public sealed record UpdateTravelerRequest(
     string BirthDate,
     string Gender,
     string? Nationality,
+    string? NationalIdNumber,
     IReadOnlyList<UpdateTravelerDocumentRequest>? Documents);
 
 public sealed record DocumentStoreStatusResponse(
