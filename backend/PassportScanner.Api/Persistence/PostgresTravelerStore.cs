@@ -29,8 +29,17 @@ public sealed class PostgresTravelerStore(
         var nameEn = Normalize(input.EnglishName);
         var documentNumber = Normalize(input.DocumentNumber);
         var nationality = NormalizeNullable(input.Nationality);
+        var nationalIdNumber =
+            NormalizeNullable(input.NationalIdNumber);
         var issuingCountry = NormalizeNullable(input.IssuingCountry);
         var sex = Normalize(input.Sex);
+
+        if (
+            string.IsNullOrWhiteSpace(nationalIdNumber) &&
+            documentType == "TAIWAN_NATIONAL_ID")
+        {
+            nationalIdNumber = documentNumber;
+        }
 
         using var transaction = db.Database.BeginTransaction();
 
@@ -67,6 +76,12 @@ public sealed class PostgresTravelerStore(
                     sex,
                     nationality,
                     now);
+            }
+
+            if (!string.IsNullOrWhiteSpace(nationalIdNumber))
+            {
+                traveler.NationalIdNumber =
+                    nationalIdNumber;
             }
 
             existingDocument.NameZhOnDocument = nameZhOnDocument;
@@ -144,6 +159,12 @@ public sealed class PostgresTravelerStore(
                 documentNumber,
                 now);
 
+            if (!string.IsNullOrWhiteSpace(nationalIdNumber))
+            {
+                targetTraveler.NationalIdNumber =
+                    nationalIdNumber;
+            }
+
             var oldDocuments = db.DocumentVersions
                 .Where(item =>
                     item.TravelerId == targetTraveler.TravelerId &&
@@ -168,6 +189,7 @@ public sealed class PostgresTravelerStore(
                 BirthDate = input.BirthDate,
                 Gender = sex,
                 Nationality = nationality,
+                NationalIdNumber = nationalIdNumber,
                 PersonalIdType = documentType,
                 PersonalIdNumber = documentNumber,
                 CreatedAt = now,
@@ -226,6 +248,8 @@ public sealed class PostgresTravelerStore(
                 traveler.NameZh.Contains(trimmedQuery) ||
                 traveler.NameEn.Contains(normalizedQuery) ||
                 traveler.PersonalIdNumber.Contains(normalizedQuery) ||
+                (traveler.NationalIdNumber != null &&
+                 traveler.NationalIdNumber.Contains(normalizedQuery)) ||
                 matchingTravelerIds.Contains(traveler.TravelerId));
         }
 
@@ -346,6 +370,8 @@ public sealed class PostgresTravelerStore(
         traveler.Gender = gender;
         traveler.Nationality =
             NormalizeNullable(request.Nationality);
+        traveler.NationalIdNumber =
+            NormalizeNullable(request.NationalIdNumber);
         traveler.UpdatedAt = now;
 
         foreach (var update in request.Documents ??
@@ -467,6 +493,8 @@ public sealed class PostgresTravelerStore(
                 traveler.Gender;
             scanItem.Nationality =
                 document.Nationality;
+            scanItem.NationalIdNumber =
+                traveler.NationalIdNumber;
             scanItem.DocumentNumber =
                 document.DocumentNumber;
             scanItem.IssuingCountry =
@@ -601,6 +629,14 @@ public sealed class PostgresTravelerStore(
                 canonical.Nationality = duplicate.Nationality;
             }
 
+            if (
+                string.IsNullOrWhiteSpace(canonical.NationalIdNumber) &&
+                !string.IsNullOrWhiteSpace(duplicate.NationalIdNumber))
+            {
+                canonical.NationalIdNumber =
+                    duplicate.NationalIdNumber;
+            }
+
             var duplicateDocuments = db.DocumentVersions
                 .Where(item => item.TravelerId == duplicate.TravelerId)
                 .ToList();
@@ -694,6 +730,7 @@ public sealed class PostgresTravelerStore(
             traveler.BirthDate,
             traveler.Gender,
             traveler.Nationality,
+            traveler.NationalIdNumber,
             travelerDocuments.Count,
             currentTypes);
     }
