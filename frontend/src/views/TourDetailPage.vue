@@ -2459,11 +2459,18 @@ onBeforeUnmount(() => {
               {{
                 reviewSaving
                   ? '儲存中…'
-                  : '儲存審核'
+                  : currentDocument.reviewStatus ===
+                      'REVIEWED'
+                    ? '儲存修改'
+                    : '儲存審核'
               }}
             </button>
 
             <button
+              v-if="
+                currentDocument.reviewStatus ===
+                'PENDING'
+              "
               type="button"
               class="primary-action"
               :disabled="!canSaveReview"
@@ -3269,7 +3276,7 @@ tbody tr:last-child td {
   cursor: grab;
   touch-action: none;
   user-select: none;
-  justify-content: center;
+  justify-content: flex-start;
   border: 1px solid #273347;
   border-radius: 10px;
   background:
