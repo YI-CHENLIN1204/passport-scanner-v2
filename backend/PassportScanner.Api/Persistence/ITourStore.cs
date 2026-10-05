@@ -9,6 +9,11 @@ public interface ITourStore
     TourSummaryResponse CreateTour(
         CreateTourRequest request,
         DateTimeOffset now);
+
+    TourSummaryResponse? UpdateTour(
+        Guid tourId,
+        UpdateTourRequest request,
+        DateTimeOffset now);
     bool EnsureMember(
         Guid tourId,
         Guid travelerId,
