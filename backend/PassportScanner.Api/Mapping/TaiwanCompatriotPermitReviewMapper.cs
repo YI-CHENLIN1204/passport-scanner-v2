@@ -20,6 +20,7 @@ public static class TaiwanCompatriotPermitReviewMapper
                 CultureInfo.InvariantCulture),
             Sex: request.Sex,
             Nationality: null,
+            NationalIdNumber: null,
             DocumentNumber: request.PermitNumber,
             IssuingCountry: null,
             ExpiryDate: DateOnly.ParseExact(
