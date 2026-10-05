@@ -12,6 +12,7 @@ public static class TaiwanCompatriotPermitReviewMapper
         return new ReviewedDocumentInput(
             DocumentType: "TAIWAN_COMPATRIOT_PERMIT",
             ChineseName: request.ChineseName,
+            ChineseNameOnDocument: request.ChineseName,
             EnglishName: string.Empty,
             BirthDate: DateOnly.ParseExact(
                 request.BirthDate,
