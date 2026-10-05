@@ -52,6 +52,10 @@ public sealed class PassportScannerDbContext(
             .HasColumnName("nationality")
             .HasMaxLength(12);
 
+        traveler.Property(item => item.NationalIdNumber)
+            .HasColumnName("national_id_number")
+            .HasMaxLength(20);
+
         traveler.Property(item => item.PersonalIdType)
             .HasColumnName("personal_id_type")
             .HasMaxLength(40)
@@ -382,6 +386,10 @@ public sealed class PassportScannerDbContext(
         scanItem.Property(item => item.Nationality)
             .HasColumnName("nationality")
             .HasMaxLength(12);
+
+        scanItem.Property(item => item.NationalIdNumber)
+            .HasColumnName("national_id_number")
+            .HasMaxLength(20);
 
         scanItem.Property(item => item.DocumentNumber)
             .HasColumnName("document_number")
