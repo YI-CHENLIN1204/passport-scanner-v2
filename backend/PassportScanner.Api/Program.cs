@@ -48,6 +48,12 @@ using (var scope = app.Services.CreateScope())
 
     db.Database.ExecuteSqlRaw(
         """
+        ALTER TABLE travelers
+            ADD COLUMN IF NOT EXISTS national_id_number varchar(20) NULL;
+
+        CREATE INDEX IF NOT EXISTS ix_travelers_national_id_number
+            ON travelers (national_id_number);
+
         CREATE TABLE IF NOT EXISTS tours (
             tour_id uuid PRIMARY KEY,
             tour_name varchar(160) NOT NULL,
@@ -133,6 +139,7 @@ using (var scope = app.Services.CreateScope())
             birth_date date NULL,
             gender varchar(12) NOT NULL,
             nationality varchar(12) NULL,
+            national_id_number varchar(20) NULL,
             document_number varchar(80) NOT NULL,
             issuing_country varchar(12) NULL,
             expiry_date date NULL,
@@ -147,6 +154,9 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE scan_items
             ADD COLUMN IF NOT EXISTS name_zh_on_document varchar(80);
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS national_id_number varchar(20) NULL;
 
         UPDATE scan_items
             SET name_zh_on_document = ''
