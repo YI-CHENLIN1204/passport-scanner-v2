@@ -610,6 +610,7 @@ async function buildPassportItem(
       'image/jpeg',
     imageBase64,
     nameZh: result.chineseName ?? '',
+    nameZhOnDocument: result.chineseName ?? '',
     nameEn: parsed
       ? [parsed.surname, parsed.givenNames]
           .filter(Boolean)
@@ -714,6 +715,7 @@ async function buildPermitItem(
       'image/jpeg',
     imageBase64,
     nameZh: result.chineseName,
+    nameZhOnDocument: result.chineseName,
     nameEn: '',
     birthDate: result.birthDate || null,
     gender: result.sex,
@@ -802,6 +804,7 @@ async function buildNationalIdItem(
       'image/jpeg',
     imageBase64,
     nameZh: result.chineseName,
+    nameZhOnDocument: result.chineseName,
     nameEn: '',
     birthDate: result.birthDate || null,
     gender: result.sex,
