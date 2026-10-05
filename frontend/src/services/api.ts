@@ -589,6 +589,7 @@ export interface ReviewScanItemRequest {
   documentNumber: string
   issuingCountry: string | null
   expiryDate: string | null
+  useForTraining?: boolean
 }
 
 export async function createScanBatch(
@@ -704,4 +705,147 @@ export async function reviewScanItem(
   }
 
   return response.json() as Promise<ScanItemResponse>
+}
+
+
+export interface OcrBenchmarkFieldMetric {
+  field: string
+  comparedCount: number
+  exactMatchCount: number
+  exactMatchRate: number
+}
+
+export interface OcrBenchmarkDocumentSummary {
+  documentType: string
+  reviewedSampleCount: number
+  scoredSampleCount: number
+  fullDocumentExactCount: number
+  fullDocumentExactRate: number
+  manualCorrectionCount: number
+  manualCorrectionRate: number
+  averageTotalMs: number | null
+  medianTotalMs: number | null
+  p90TotalMs: number | null
+  averageOrientationAttempts: number | null
+  fallbackRate: number | null
+  fields: OcrBenchmarkFieldMetric[]
+}
+
+export interface OcrBenchmarkSummaryResponse {
+  generatedAt: string
+  reviewedSampleCount: number
+  scoredSampleCount: number
+  documents: OcrBenchmarkDocumentSummary[]
+}
+
+export interface TrainingDatasetDocumentSummary {
+  documentType: string
+  sampleCount: number
+}
+
+export interface TrainingDatasetSummaryResponse {
+  sampleCount: number
+  documents: TrainingDatasetDocumentSummary[]
+  generatedAt: string
+}
+
+export async function getOcrBenchmarkSummary() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-benchmark/summary`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `OCR benchmark failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<OcrBenchmarkSummaryResponse>
+}
+
+export async function getTrainingDatasetSummary() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/summary`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Training dataset summary failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<TrainingDatasetSummaryResponse>
+}
+
+export async function setTrainingSampleSelection(
+  scanItemId: string,
+  selected: boolean,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/scan-items/${encodeURIComponent(scanItemId)}/training-selection`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ selected }),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Training selection failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<{
+    scanItemId: string
+    selected: boolean
+    trainingSampleId: string | null
+    updatedAt: string
+  }>
+}
+
+export async function downloadTrainingDataset() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/export.zip`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Training dataset export failed: ${response.status}`,
+    )
+  }
+
+  const blob = await response.blob()
+  const contentDisposition =
+    response.headers.get('Content-Disposition') ?? ''
+  const filenameMatch =
+    contentDisposition.match(/filename="?([^";]+)"?/i)
+  const filename =
+    filenameMatch?.[1] ??
+    'ocr-training-dataset.zip'
+  const url = URL.createObjectURL(blob)
+
+  try {
+    const anchor =
+      document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
