@@ -43,7 +43,7 @@ public sealed class ScanItemRecord
     public required string OcrPayloadJson { get; set; }
     public required string ReviewStatus { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
-    public required DateTimeOffset DeleteAfter { get; init; }
+    public required DateTimeOffset DeleteAfter { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
