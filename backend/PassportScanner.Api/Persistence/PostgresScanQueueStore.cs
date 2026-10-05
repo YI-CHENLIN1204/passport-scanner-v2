@@ -125,6 +125,13 @@ public sealed class PostgresScanQueueStore(
             BirthDate = identity.BirthDate,
             Gender = identity.Gender,
             Nationality = NormalizeNullable(request.Nationality),
+            NationalIdNumber =
+                NormalizeNullable(
+                    request.NationalIdNumber ??
+                    (batch.DocumentType ==
+                        "TAIWAN_NATIONAL_ID"
+                        ? request.DocumentNumber
+                        : null)),
             DocumentNumber = Normalize(request.DocumentNumber),
             IssuingCountry =
                 NormalizeNullable(request.IssuingCountry),
@@ -238,6 +245,13 @@ public sealed class PostgresScanQueueStore(
         item.Gender = identity.Gender;
         item.Nationality =
             NormalizeNullable(request.Nationality);
+        item.NationalIdNumber =
+            NormalizeNullable(
+                request.NationalIdNumber ??
+                (item.DocumentType ==
+                    "TAIWAN_NATIONAL_ID"
+                    ? request.DocumentNumber
+                    : null));
         item.DocumentNumber =
             Normalize(request.DocumentNumber);
         item.IssuingCountry =
@@ -368,6 +382,7 @@ public sealed class PostgresScanQueueStore(
             item.BirthDate.Value,
             item.Gender,
             item.Nationality,
+            item.NationalIdNumber,
             item.DocumentNumber,
             item.IssuingCountry,
             item.ExpiryDate,
@@ -641,6 +656,7 @@ public sealed class PostgresScanQueueStore(
             item.BirthDate,
             item.Gender,
             item.Nationality,
+            item.NationalIdNumber,
             item.DocumentNumber,
             item.IssuingCountry,
             item.ExpiryDate,
