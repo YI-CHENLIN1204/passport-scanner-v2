@@ -2133,7 +2133,7 @@ onBeforeUnmount(() => {
               "
             >
               <div class="readonly-ocr-field">
-                <span>OCR 原始姓名（台胞證簡體）</span>
+                <span>台胞證簡體姓名（系統對照）</span>
                 <strong>
                   {{
                     currentDocument.nameZhOnDocument ||
@@ -2160,7 +2160,7 @@ onBeforeUnmount(() => {
                       .ambiguousCharacters.length
                   "
                 >
-                  原始姓名含可能一對多的字：
+                  簡體姓名含可能一對多的字：
                   {{
                     permitNameConversion
                       .ambiguousCharacters.join('、')
