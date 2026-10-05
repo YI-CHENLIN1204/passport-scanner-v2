@@ -320,6 +320,60 @@ export async function getTravelerDetail(
 }
 
 
+
+export interface UpdateTravelerDocumentRequest {
+  documentVersionId: string
+  nameZhOnDocument: string
+  nameEnOnDocument: string
+  documentNumber: string
+  issuingCountry: string | null
+  nationality: string | null
+  expiryDate: string | null
+}
+
+export interface UpdateTravelerRequest {
+  nameZh: string
+  nameEn: string
+  birthDate: string
+  gender: string
+  nationality: string | null
+  documents: UpdateTravelerDocumentRequest[]
+}
+
+export async function updateTraveler(
+  travelerId: string,
+  request: UpdateTravelerRequest,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/travelers/${encodeURIComponent(travelerId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Update traveler failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<TravelerDetailResponse>
+}
+
 export interface TaiwanNationalIdReviewSaveResponse {
   accepted: boolean
   persistence: 'postgresql'
@@ -426,6 +480,9 @@ export interface CreateTourRequest {
   requiredDocumentTypes: string[]
 }
 
+export interface UpdateTourRequest
+  extends CreateTourRequest {}
+
 export async function listTours(query = '') {
   const params = new URLSearchParams()
   if (query.trim()) params.set('query', query.trim())
@@ -471,6 +528,40 @@ export async function createTour(
       message = body.message ?? message
     } catch {
       // Keep status message when response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<TourSummaryResponse>
+}
+
+export async function updateTour(
+  tourId: string,
+  request: UpdateTourRequest,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Update tour failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
     }
 
     throw new Error(message)
