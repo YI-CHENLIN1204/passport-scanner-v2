@@ -264,7 +264,12 @@ public sealed class PostgresTrainingDatasetStore(
         JsonSerializer.Serialize(
             new
             {
-                nameZh = item.NameZh,
+                nameZh =
+                    item.DocumentType == "TAIWAN_COMPATRIOT_PERMIT"
+                        ? item.NameZhOnDocument
+                        : item.NameZh,
+                businessNameZh = item.NameZh,
+                nameZhOnDocument = item.NameZhOnDocument,
                 nameEn = item.NameEn,
                 birthDate =
                     item.BirthDate?.ToString(
