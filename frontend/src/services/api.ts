@@ -232,7 +232,6 @@ export async function saveTaiwanCompatriotPermitReview(
 export interface TravelerSummaryResponse {
   travelerId: string
   nameZh: string
-  nameZhOnDocument?: string | null
   nameEn: string
   birthDate: string
   gender: string
@@ -560,6 +559,7 @@ export interface ScanItemResponse {
   originalFileName: string
   imageContentType: string
   nameZh: string
+  nameZhOnDocument: string
   nameEn: string
   birthDate: string | null
   gender: string
