@@ -761,6 +761,8 @@ async function buildPermitItem(
       },
       originalFields: {
         nameZh: result.chineseName,
+        nameZhTraditional:
+          traditionalChineseName,
         nameEn: '',
         birthDate:
           result.birthDate || null,
