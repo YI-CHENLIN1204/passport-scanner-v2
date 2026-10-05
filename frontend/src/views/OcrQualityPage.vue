@@ -313,15 +313,21 @@ onMounted(load)
                 <span
                   :style="{
                     width:
-                      `${Math.round(
-                        field.exactMatchRate *
-                          100,
-                      )}%`,
+                      field.comparedCount
+                        ? `${Math.round(
+                            field.exactMatchRate *
+                              100,
+                          )}%`
+                        : '0%',
                   }"
                 ></span>
               </div>
               <strong>
-                {{ rate(field.exactMatchRate) }}
+                {{
+                  field.comparedCount
+                    ? rate(field.exactMatchRate)
+                    : '—'
+                }}
               </strong>
             </div>
           </div>
