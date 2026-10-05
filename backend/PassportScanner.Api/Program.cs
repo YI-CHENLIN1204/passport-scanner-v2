@@ -128,6 +128,7 @@ using (var scope = app.Services.CreateScope())
             image_content_type varchar(80) NOT NULL,
             image_bytes bytea NOT NULL,
             name_zh varchar(80) NOT NULL,
+            name_zh_on_document varchar(80) NOT NULL DEFAULT '',
             name_en varchar(160) NOT NULL,
             birth_date date NULL,
             gender varchar(12) NOT NULL,
@@ -142,6 +143,17 @@ using (var scope = app.Services.CreateScope())
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS name_zh_on_document varchar(80);
+
+        UPDATE scan_items
+            SET name_zh_on_document = name_zh
+            WHERE name_zh_on_document IS NULL
+               OR name_zh_on_document = '';
+
+        ALTER TABLE scan_items
+            ALTER COLUMN name_zh_on_document SET NOT NULL;
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
