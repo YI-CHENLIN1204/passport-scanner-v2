@@ -20,6 +20,8 @@ public static class TaiwanNationalIdReviewMapper
                 CultureInfo.InvariantCulture),
             Sex: request.Sex,
             Nationality: null,
+            NationalIdNumber:
+                request.NationalId.Trim().ToUpperInvariant(),
             DocumentNumber:
                 request.NationalId.Trim().ToUpperInvariant(),
             IssuingCountry: null,
