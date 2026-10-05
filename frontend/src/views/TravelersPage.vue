@@ -1,20 +1,138 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import {
+  getTravelerDetail,
   searchTravelers,
+  updateTraveler,
+  type TravelerDetailResponse,
   type TravelerSummaryResponse,
+  type UpdateTravelerRequest,
 } from '../services/api'
 
 const travelers = ref<TravelerSummaryResponse[]>([])
 const search = ref('')
 const loading = ref(true)
 const error = ref('')
+const editOpen = ref(false)
+const editSaving = ref(false)
+const editError = ref('')
+const editingTraveler =
+  ref<TravelerDetailResponse | null>(null)
+const editForm = ref<UpdateTravelerRequest>({
+  nameZh: '',
+  nameEn: '',
+  birthDate: '',
+  gender: '',
+  nationality: null,
+  documents: [],
+})
 
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
   if (type === 'TAIWAN_COMPATRIOT_PERMIT') return '台胞證'
   if (type === 'TAIWAN_NATIONAL_ID') return '身分證'
   return type
+}
+
+async function openEdit(
+  traveler: TravelerSummaryResponse,
+) {
+  editError.value = ''
+
+  try {
+    const detail = await getTravelerDetail(
+      traveler.travelerId,
+    )
+
+    if (!detail) {
+      throw new Error('找不到旅客資料。')
+    }
+
+    editingTraveler.value = detail
+    editForm.value = {
+      nameZh: detail.traveler.nameZh,
+      nameEn: detail.traveler.nameEn,
+      birthDate: detail.traveler.birthDate,
+      gender: detail.traveler.gender,
+      nationality: detail.traveler.nationality,
+      documents: detail.documents
+        .filter(document => document.isCurrent)
+        .map(document => ({
+          documentVersionId:
+            document.documentVersionId,
+          nameZhOnDocument:
+            document.nameZhOnDocument,
+          nameEnOnDocument:
+            document.nameEnOnDocument,
+          documentNumber:
+            document.documentNumber,
+          issuingCountry:
+            document.issuingCountry,
+          nationality:
+            document.nationality,
+          expiryDate:
+            document.expiryDate,
+        })),
+    }
+    editOpen.value = true
+  } catch (err) {
+    error.value =
+      err instanceof Error
+        ? err.message
+        : '旅客資料載入失敗。'
+  }
+}
+
+function closeEdit() {
+  if (editSaving.value) return
+  editOpen.value = false
+  editingTraveler.value = null
+  editError.value = ''
+}
+
+async function saveEdit() {
+  if (
+    !editingTraveler.value ||
+    editSaving.value
+  ) {
+    return
+  }
+
+  editError.value = ''
+
+  if (!editForm.value.nameZh.trim()) {
+    editError.value = '中文姓名不可空白。'
+    return
+  }
+
+  if (!editForm.value.birthDate) {
+    editError.value = '請確認出生日期。'
+    return
+  }
+
+  if (!editForm.value.gender) {
+    editError.value = '請確認性別。'
+    return
+  }
+
+  editSaving.value = true
+
+  try {
+    await updateTraveler(
+      editingTraveler.value.traveler.travelerId,
+      editForm.value,
+    )
+    editOpen.value = false
+    editingTraveler.value = null
+    await load()
+  } catch (err) {
+    editError.value =
+      err instanceof Error
+        ? err.message
+        : '旅客資料更新失敗。'
+  } finally {
+    editSaving.value = false
+  }
 }
 
 async function load() {
@@ -87,6 +205,7 @@ onMounted(load)
             <th>性別</th>
             <th>目前證件</th>
             <th>版本數</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -120,9 +239,194 @@ onMounted(load)
               </div>
             </td>
             <td>{{ traveler.documentVersionCount }}</td>
+            <td class="action-cell">
+              <button
+                type="button"
+                class="edit-button"
+                @click="openEdit(traveler)"
+              >
+                編輯
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div
+      v-if="editOpen && editingTraveler"
+      class="modal-backdrop"
+      @click.self="closeEdit"
+    >
+      <section
+        class="edit-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header>
+          <div>
+            <p class="page-kicker">EDIT TRAVELER</p>
+            <h2>編輯旅客資料</h2>
+          </div>
+          <button
+            type="button"
+            class="close-button"
+            :disabled="editSaving"
+            @click="closeEdit"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="edit-form">
+          <div class="two-column">
+            <label>
+              <span>中文姓名</span>
+              <input
+                v-model="editForm.nameZh"
+                type="text"
+              />
+            </label>
+
+            <label>
+              <span>英文姓名</span>
+              <input
+                v-model="editForm.nameEn"
+                type="text"
+              />
+            </label>
+          </div>
+
+          <div class="three-column">
+            <label>
+              <span>出生日期</span>
+              <input
+                v-model="editForm.birthDate"
+                type="date"
+              />
+            </label>
+
+            <label>
+              <span>性別</span>
+              <select v-model="editForm.gender">
+                <option value="">待確認</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+                <option value="X">X</option>
+              </select>
+            </label>
+
+            <label>
+              <span>國籍</span>
+              <input
+                v-model="editForm.nationality"
+                type="text"
+              />
+            </label>
+          </div>
+
+          <section class="documents-edit">
+            <header>
+              <strong>目前證件</strong>
+              <span>
+                可修正審核後才發現的證件資料。
+              </span>
+            </header>
+
+            <article
+              v-for="document in editForm.documents"
+              :key="document.documentVersionId"
+              class="document-edit-card"
+            >
+              <strong>
+                {{
+                  documentLabel(
+                    editingTraveler.documents.find(
+                      item =>
+                        item.documentVersionId ===
+                        document.documentVersionId,
+                    )?.documentType ?? '',
+                  )
+                }}
+              </strong>
+
+              <div class="two-column">
+                <label>
+                  <span>證件中文姓名</span>
+                  <input
+                    v-model="document.nameZhOnDocument"
+                    type="text"
+                  />
+                </label>
+
+                <label>
+                  <span>證件英文姓名</span>
+                  <input
+                    v-model="document.nameEnOnDocument"
+                    type="text"
+                  />
+                </label>
+              </div>
+
+              <div class="three-column">
+                <label>
+                  <span>證件號碼</span>
+                  <input
+                    v-model="document.documentNumber"
+                    type="text"
+                  />
+                </label>
+
+                <label>
+                  <span>簽發國</span>
+                  <input
+                    v-model="document.issuingCountry"
+                    type="text"
+                  />
+                </label>
+
+                <label>
+                  <span>有效期限</span>
+                  <input
+                    v-model="document.expiryDate"
+                    type="date"
+                  />
+                </label>
+              </div>
+            </article>
+          </section>
+        </div>
+
+        <p
+          v-if="editError"
+          class="error-message"
+        >
+          {{ editError }}
+        </p>
+
+        <footer>
+          <button
+            type="button"
+            class="cancel-button"
+            :disabled="editSaving"
+            @click="closeEdit"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="save-button"
+            :disabled="editSaving"
+            @click="saveEdit"
+          >
+            {{
+              editSaving
+                ? '儲存中…'
+                : '儲存修改'
+            }}
+          </button>
+        </footer>
+      </section>
     </div>
   </section>
 </template>
@@ -273,4 +577,177 @@ tr:last-child td {
     min-width: 720px;
   }
 }
+
+.action-cell {
+  width: 72px;
+  text-align: right;
+}
+
+.edit-button,
+.cancel-button,
+.save-button,
+.close-button {
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.edit-button {
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid #d3dbe7;
+  background: #fff;
+  color: #344158;
+  font-size: 11px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+}
+
+.edit-modal {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+}
+
+.edit-modal > header,
+.edit-modal > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-modal h2 {
+  margin: 3px 0 0;
+  color: #182236;
+  font-size: 20px;
+}
+
+.close-button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: #f0f3f7;
+  color: #435069;
+  font-size: 20px;
+}
+
+.edit-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.two-column,
+.three-column {
+  display: grid;
+  gap: 10px;
+}
+
+.two-column {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.three-column {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.edit-form label {
+  display: grid;
+  gap: 5px;
+  color: #46536a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.edit-form input,
+.edit-form select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d0d9e5;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+
+.documents-edit {
+  display: grid;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.documents-edit > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.documents-edit > header strong {
+  color: #27354b;
+  font-size: 12px;
+}
+
+.documents-edit > header span {
+  color: #8390a3;
+  font-size: 9px;
+}
+
+.document-edit-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e0e5ec;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.document-edit-card > strong {
+  color: #334158;
+  font-size: 11px;
+}
+
+.edit-modal > footer {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.cancel-button,
+.save-button {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.cancel-button {
+  border: 1px solid #d5dce7;
+  background: #fff;
+  color: #334158;
+}
+
+.save-button {
+  border: 1px solid #172033;
+  background: #172033;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .two-column,
+  .three-column {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>
