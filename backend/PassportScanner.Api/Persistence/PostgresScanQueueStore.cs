@@ -117,6 +117,10 @@ public sealed class PostgresScanQueueStore(
                 request.ImageContentType.Trim().ToLowerInvariant(),
             ImageBytes = imageBytes,
             NameZh = identity.NameZh,
+            NameZhOnDocument = NormalizeIdentityName(
+                string.IsNullOrWhiteSpace(request.NameZhOnDocument)
+                    ? request.NameZh
+                    : request.NameZhOnDocument),
             NameEn = Normalize(request.NameEn),
             BirthDate = identity.BirthDate,
             Gender = identity.Gender,
@@ -224,6 +228,10 @@ public sealed class PostgresScanQueueStore(
             request.Gender);
 
         item.NameZh = identity.NameZh;
+        item.NameZhOnDocument = NormalizeIdentityName(
+            string.IsNullOrWhiteSpace(request.NameZhOnDocument)
+                ? request.NameZh
+                : request.NameZhOnDocument);
         item.NameEn = Normalize(request.NameEn);
         item.BirthDate = identity.BirthDate;
         item.Gender = identity.Gender;
@@ -317,6 +325,7 @@ public sealed class PostgresScanQueueStore(
         return new ReviewedDocumentInput(
             item.DocumentType,
             item.NameZh,
+            item.NameZhOnDocument,
             item.NameEn,
             item.BirthDate.Value,
             item.Gender,
@@ -589,6 +598,7 @@ public sealed class PostgresScanQueueStore(
             item.OriginalFileName,
             item.ImageContentType,
             item.NameZh,
+            item.NameZhOnDocument,
             item.NameEn,
             item.BirthDate,
             item.Gender,
