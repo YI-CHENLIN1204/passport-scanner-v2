@@ -2478,6 +2478,154 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.export-modal {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+}
+
+.export-modal > header,
+.export-modal > footer {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.export-modal > header h2 {
+  margin: 3px 0 5px;
+  color: #182236;
+  font-size: 20px;
+}
+
+.export-modal > header p:not(.page-kicker) {
+  margin: 0;
+  color: #778397;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.export-modal > footer {
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.export-kind-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid #dde4ed;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.export-kind-picker label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid #d9e0e9;
+  border-radius: 8px;
+  background: #fff;
+  color: #344158;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.export-config-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.export-config-card {
+  overflow: hidden;
+  border: 1px solid #dde4ed;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.export-config-card > header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf1f5;
+  background: #fafbfc;
+}
+
+.export-config-card > header > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.export-config-card > header strong {
+  color: #243249;
+  font-size: 11px;
+}
+
+.export-config-card > header span,
+.export-config-card > header small {
+  color: #8190a3;
+  font-size: 9px;
+}
+
+.export-field-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: #edf1f5;
+}
+
+.export-field-row {
+  display: grid;
+  grid-template-columns: auto 20px 1fr auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 41px;
+  padding: 0 10px;
+  background: #fff;
+  color: #59667b;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.export-field-row.selected {
+  background: #f7f9fc;
+  color: #25344b;
+}
+
+.export-field-row.selected .drag-handle {
+  color: #5e6f89;
+  cursor: grab;
+}
+
+.export-field-row:not(.selected) .drag-handle {
+  color: #c1c8d2;
+}
+
+.export-field-row small {
+  min-width: 20px;
+  color: #7c899a;
+  text-align: right;
+  font-size: 9px;
+}
+
+.drag-handle {
+  letter-spacing: -2px;
+  user-select: none;
+}
+
 .tour-edit-modal {
   width: min(580px, 100%);
   padding: 20px;
