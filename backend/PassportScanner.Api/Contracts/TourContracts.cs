@@ -6,6 +6,12 @@ public sealed record CreateTourRequest(
     DateOnly ReturnDate,
     IReadOnlyList<string>? RequiredDocumentTypes);
 
+public sealed record UpdateTourRequest(
+    string TourName,
+    DateOnly DepartureDate,
+    DateOnly ReturnDate,
+    IReadOnlyList<string>? RequiredDocumentTypes);
+
 public sealed record TourSummaryResponse(
     Guid TourId,
     string TourName,
