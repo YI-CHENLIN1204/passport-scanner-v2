@@ -95,7 +95,8 @@ public sealed class PostgresTravelerStore(
             var matchingTravelers = FindTravelerMatches(
                 nameZh,
                 input.BirthDate,
-                sex);
+                sex,
+                nationalIdNumber);
 
             traveler = ConsolidateTravelerMatches(
                 matchingTravelers,
@@ -132,7 +133,8 @@ public sealed class PostgresTravelerStore(
         var travelerMatches = FindTravelerMatches(
             nameZh,
             input.BirthDate,
-            sex);
+            sex,
+            nationalIdNumber);
 
         TravelerRecord targetTraveler;
         DocumentSaveAction action;
@@ -561,8 +563,27 @@ public sealed class PostgresTravelerStore(
     private List<TravelerRecord> FindTravelerMatches(
         string nameZh,
         DateOnly birthDate,
-        string sex)
+        string sex,
+        string? nationalIdNumber)
     {
+        if (!string.IsNullOrWhiteSpace(nationalIdNumber))
+        {
+            var idMatches = db.Travelers
+                .Where(traveler =>
+                    traveler.NationalIdNumber ==
+                        nationalIdNumber)
+                .OrderBy(traveler =>
+                    traveler.CreatedAt)
+                .ThenBy(traveler =>
+                    traveler.TravelerId)
+                .ToList();
+
+            if (idMatches.Count > 0)
+            {
+                return idMatches;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(nameZh))
         {
             return [];
