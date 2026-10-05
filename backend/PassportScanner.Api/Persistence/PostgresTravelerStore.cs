@@ -6,7 +6,8 @@ using PassportScanner.Api.Domain;
 namespace PassportScanner.Api.Persistence;
 
 public sealed class PostgresTravelerStore(
-    PassportScannerDbContext db)
+    PassportScannerDbContext db,
+    ITrainingDatasetStore trainingDatasetStore)
     : ITravelerStore
 {
     public int TravelerCount =>
@@ -420,6 +421,91 @@ public sealed class PostgresTravelerStore(
         }
 
         db.SaveChanges();
+
+        var travelerDocumentIds = db.DocumentVersions
+            .AsNoTracking()
+            .Where(item =>
+                item.TravelerId == travelerId)
+            .Select(item =>
+                item.DocumentVersionId)
+            .ToList();
+
+        var linkedScanItems = db.ScanItems
+            .Where(item =>
+                item.SavedDocumentVersionId.HasValue &&
+                travelerDocumentIds.Contains(
+                    item.SavedDocumentVersionId.Value))
+            .ToList();
+
+        var documentById = db.DocumentVersions
+            .AsNoTracking()
+            .Where(item =>
+                travelerDocumentIds.Contains(
+                    item.DocumentVersionId))
+            .ToDictionary(
+                item => item.DocumentVersionId);
+
+        foreach (var scanItem in linkedScanItems)
+        {
+            if (
+                !scanItem.SavedDocumentVersionId.HasValue ||
+                !documentById.TryGetValue(
+                    scanItem.SavedDocumentVersionId.Value,
+                    out var document))
+            {
+                continue;
+            }
+
+            scanItem.NameZh = traveler.NameZh;
+            scanItem.NameZhOnDocument =
+                document.NameZhOnDocument;
+            scanItem.NameEn =
+                document.NameEnOnDocument;
+            scanItem.BirthDate =
+                traveler.BirthDate;
+            scanItem.Gender =
+                traveler.Gender;
+            scanItem.Nationality =
+                document.Nationality;
+            scanItem.DocumentNumber =
+                document.DocumentNumber;
+            scanItem.IssuingCountry =
+                document.IssuingCountry;
+            scanItem.ExpiryDate =
+                document.ExpiryDate;
+            scanItem.UpdatedAt = now;
+        }
+
+        var linkedDraftIds = linkedScanItems
+            .Select(item => item.DraftPersonId)
+            .Distinct()
+            .ToList();
+
+        var linkedDrafts = db.TourPersonDrafts
+            .Where(item =>
+                linkedDraftIds.Contains(
+                    item.DraftPersonId))
+            .ToList();
+
+        foreach (var draft in linkedDrafts)
+        {
+            draft.NameZh =
+                traveler.NameZh;
+            draft.BirthDate =
+                traveler.BirthDate;
+            draft.Gender =
+                traveler.Gender;
+            draft.UpdatedAt = now;
+        }
+
+        db.SaveChanges();
+
+        foreach (var scanItem in linkedScanItems)
+        {
+            trainingDatasetStore.RefreshSelectedSample(
+                scanItem.ScanItemId,
+                now);
+        }
 
         return GetTraveler(travelerId);
     }
