@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{
-  active: 'tours' | 'scan' | 'travelers'
+  active: 'tours' | 'scan' | 'travelers' | 'quality'
   health: 'checking' | 'online' | 'offline'
 }>()
 
@@ -26,6 +26,12 @@ const items = [
     label: '旅客資料',
     hint: '旅客與證件主檔',
     path: '/travelers',
+  },
+  {
+    key: 'quality' as const,
+    label: 'OCR 品質',
+    hint: '準確率與訓練資料',
+    path: '/ocr-quality',
   },
 ]
 </script>
@@ -78,10 +84,18 @@ const items = [
           </svg>
 
           <svg
-            v-else
+            v-else-if="item.key === 'travelers'"
             viewBox="0 0 24 24"
           >
             <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20c.5-4 3-6 7-6s6.5 2 7 6" />
+          </svg>
+
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+          >
+            <path d="M4 19V9M10 19V5M16 19v-7M22 19V3" />
+            <path d="M2 19h22" />
           </svg>
         </span>
 
@@ -336,7 +350,7 @@ const items = [
   }
 
   .sidebar-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     margin-top: 10px;
   }
 
