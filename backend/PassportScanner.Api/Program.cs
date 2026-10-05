@@ -222,6 +222,31 @@ app.MapPost(
         }
     });
 
+app.MapPut(
+    "/api/tours/{tourId:guid}",
+    (
+        Guid tourId,
+        UpdateTourRequest request,
+        ITourStore store) =>
+    {
+        try
+        {
+            var updated = store.UpdateTour(
+                tourId,
+                request,
+                DateTimeOffset.UtcNow);
+
+            return updated is null
+                ? Results.NotFound()
+                : Results.Ok(updated);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
 app.MapGet(
     "/api/tours/{tourId:guid}/export.csv",
     (Guid tourId, ITourStore store) =>
@@ -449,6 +474,33 @@ app.MapGet(
             ? Results.NotFound()
             : Results.Ok(
                 TravelerReadMapper.ToResponse(traveler));
+    });
+
+app.MapPut(
+    "/api/travelers/{travelerId:guid}",
+    (
+        Guid travelerId,
+        UpdateTravelerRequest request,
+        ITravelerStore store) =>
+    {
+        try
+        {
+            var updated = store.UpdateTraveler(
+                travelerId,
+                request,
+                DateTimeOffset.UtcNow);
+
+            return updated is null
+                ? Results.NotFound()
+                : Results.Ok(
+                    TravelerReadMapper.ToResponse(
+                        updated));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapPost(
