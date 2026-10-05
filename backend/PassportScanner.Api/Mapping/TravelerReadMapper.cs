@@ -15,6 +15,7 @@ public static class TravelerReadMapper
             traveler.BirthDate.ToString("yyyy-MM-dd"),
             traveler.Gender,
             traveler.Nationality,
+            traveler.NationalIdNumber,
             traveler.DocumentVersionCount,
             traveler.CurrentDocumentTypes);
     }
