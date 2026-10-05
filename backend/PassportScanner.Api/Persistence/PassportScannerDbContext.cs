@@ -16,6 +16,8 @@ public sealed class PassportScannerDbContext(
     public DbSet<TourPersonDraftRecord> TourPersonDrafts =>
         Set<TourPersonDraftRecord>();
     public DbSet<ScanItemRecord> ScanItems => Set<ScanItemRecord>();
+    public DbSet<TrainingSampleRecord> TrainingSamples =>
+        Set<TrainingSampleRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -430,5 +432,67 @@ public sealed class PassportScannerDbContext(
             .WithMany()
             .HasForeignKey(item => item.DraftPersonId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        var trainingSample =
+            modelBuilder.Entity<TrainingSampleRecord>();
+
+        trainingSample.ToTable("training_samples");
+        trainingSample.HasKey(item =>
+            item.TrainingSampleId);
+
+        trainingSample.Property(item =>
+                item.TrainingSampleId)
+            .HasColumnName("training_sample_id");
+
+        trainingSample.Property(item =>
+                item.SourceScanItemId)
+            .HasColumnName("source_scan_item_id")
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.DocumentType)
+            .HasColumnName("document_type")
+            .HasMaxLength(40)
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.ImageContentType)
+            .HasColumnName("image_content_type")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.ImageBytes)
+            .HasColumnName("image_bytes")
+            .HasColumnType("bytea")
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.OcrPayloadJson)
+            .HasColumnName("ocr_payload_json")
+            .HasColumnType("text")
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.GroundTruthJson)
+            .HasColumnName("ground_truth_json")
+            .HasColumnType("text")
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.SelectedAt)
+            .HasColumnName("selected_at")
+            .IsRequired();
+
+        trainingSample.Property(item =>
+                item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        trainingSample.HasIndex(item =>
+                item.SourceScanItemId)
+            .IsUnique()
+            .HasDatabaseName(
+                "ux_training_samples_source_scan_item");
     }
 }
