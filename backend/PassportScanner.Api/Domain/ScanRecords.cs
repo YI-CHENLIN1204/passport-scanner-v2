@@ -32,6 +32,7 @@ public sealed class ScanItemRecord
     public required string ImageContentType { get; init; }
     public required byte[] ImageBytes { get; init; }
     public required string NameZh { get; set; }
+    public required string NameZhOnDocument { get; set; }
     public required string NameEn { get; set; }
     public DateOnly? BirthDate { get; set; }
     public required string Gender { get; set; }
