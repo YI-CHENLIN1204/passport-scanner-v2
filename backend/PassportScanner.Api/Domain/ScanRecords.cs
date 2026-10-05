@@ -37,6 +37,7 @@ public sealed class ScanItemRecord
     public DateOnly? BirthDate { get; set; }
     public required string Gender { get; set; }
     public string? Nationality { get; set; }
+    public string? NationalIdNumber { get; set; }
     public required string DocumentNumber { get; set; }
     public string? IssuingCountry { get; set; }
     public DateOnly? ExpiryDate { get; set; }
