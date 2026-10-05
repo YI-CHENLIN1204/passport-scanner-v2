@@ -17,6 +17,7 @@ import {
   recognizePassportWithPaddle,
   recognizeTaiwanCompatriotPermitWithPaddle,
   recognizeTaiwanNationalIdWithPaddle,
+  validateTaiwanNationalId,
   warmupPaddleOcr,
   type DetectedDocumentType,
 } from '../services/paddleOcr'
@@ -168,6 +169,28 @@ function mrzBirthDateToIso(value: string) {
       : 1900 + yy
 
   return formatIsoDate(year, month, day)
+}
+
+function passportNationalIdFromMrz(
+  personalNumber: string,
+  issuingState: string,
+  nationality: string,
+) {
+  if (
+    issuingState !== 'TWN' &&
+    nationality !== 'TWN'
+  ) {
+    return null
+  }
+
+  const candidate = personalNumber
+    .replace(/</g, '')
+    .trim()
+    .toUpperCase()
+
+  return validateTaiwanNationalId(candidate)
+    ? candidate
+    : null
 }
 
 function mrzExpiryDateToIso(value: string) {
@@ -592,6 +615,13 @@ async function buildPassportItem(
   )
 
   const parsed = result.parsedMrz
+  const nationalIdNumber = parsed
+    ? passportNationalIdFromMrz(
+        parsed.personalNumber,
+        parsed.issuingState,
+        parsed.nationality,
+      )
+    : null
 
   await verifyDocumentTypeOnlyWhenNeeded(
     file,
@@ -624,6 +654,7 @@ async function buildPassportItem(
       : null,
     gender: parsed?.sex ?? '',
     nationality: parsed?.nationality ?? null,
+    nationalIdNumber,
     documentNumber: parsed?.documentNumber ?? '',
     issuingCountry: parsed?.issuingState ?? null,
     expiryDate: parsed
@@ -666,6 +697,7 @@ async function buildPassportItem(
         gender: parsed?.sex ?? '',
         nationality:
           parsed?.nationality ?? null,
+        nationalIdNumber,
         documentNumber:
           parsed?.documentNumber ?? '',
         issuingCountry:
@@ -730,6 +762,7 @@ async function buildPermitItem(
     birthDate: result.birthDate || null,
     gender: result.sex,
     nationality: null,
+    nationalIdNumber: null,
     documentNumber: result.permitNumber,
     issuingCountry: null,
     expiryDate: result.expiryDate || null,
@@ -768,6 +801,7 @@ async function buildPermitItem(
           result.birthDate || null,
         gender: result.sex,
         nationality: null,
+        nationalIdNumber: null,
         documentNumber:
           result.permitNumber,
         issuingCountry: null,
@@ -821,6 +855,7 @@ async function buildNationalIdItem(
     birthDate: result.birthDate || null,
     gender: result.sex,
     nationality: 'TWN',
+    nationalIdNumber: result.nationalId,
     documentNumber: result.nationalId,
     issuingCountry: 'TWN',
     expiryDate: null,
@@ -855,6 +890,7 @@ async function buildNationalIdItem(
           result.birthDate || null,
         gender: result.sex,
         nationality: 'TWN',
+        nationalIdNumber: result.nationalId,
         documentNumber:
           result.nationalId,
         issuingCountry: 'TWN',
