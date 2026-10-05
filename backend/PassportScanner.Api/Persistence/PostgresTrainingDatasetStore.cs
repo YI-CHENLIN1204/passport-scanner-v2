@@ -336,6 +336,8 @@ public sealed class PostgresTrainingDatasetStore(
                 gender = item.Gender,
                 nationality =
                     item.Nationality,
+                nationalIdNumber =
+                    item.NationalIdNumber,
                 documentNumber =
                     item.DocumentNumber,
                 issuingCountry =
