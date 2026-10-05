@@ -328,6 +328,27 @@ app.MapPut(
         }
     });
 
+app.MapDelete(
+    "/api/scan-items/{scanItemId:guid}",
+    (
+        Guid scanItemId,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            return store.DeletePendingItem(
+                scanItemId,
+                DateTimeOffset.UtcNow)
+                ? Results.NoContent()
+                : Results.NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
 app.MapPut(
     "/api/scan-items/{scanItemId:guid}/training-selection",
     (
