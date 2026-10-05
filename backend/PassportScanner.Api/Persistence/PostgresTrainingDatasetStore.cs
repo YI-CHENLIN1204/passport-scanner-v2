@@ -91,14 +91,24 @@ public sealed class PostgresTrainingDatasetStore(
     public TrainingDatasetSummaryResponse GetSummary(
         DateTimeOffset generatedAt)
     {
-        var rows = db.TrainingSamples
+        var counts = db.TrainingSamples
             .AsNoTracking()
             .GroupBy(item => item.DocumentType)
-            .Select(group =>
+            .Select(group => new
+            {
+                DocumentType = group.Key,
+                SampleCount = group.Count()
+            })
+            .ToList();
+
+        var rows = counts
+            .OrderBy(
+                item => item.DocumentType,
+                StringComparer.Ordinal)
+            .Select(item =>
                 new TrainingDatasetDocumentSummary(
-                    group.Key,
-                    group.Count()))
-            .OrderBy(item => item.DocumentType)
+                    item.DocumentType,
+                    item.SampleCount))
             .ToList();
 
         return new TrainingDatasetSummaryResponse(
