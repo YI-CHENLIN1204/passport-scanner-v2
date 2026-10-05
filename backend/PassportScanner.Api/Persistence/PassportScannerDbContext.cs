@@ -405,6 +405,9 @@ public sealed class PassportScannerDbContext(
             .HasMaxLength(20)
             .IsRequired();
 
+        scanItem.Property(item => item.SavedDocumentVersionId)
+            .HasColumnName("saved_document_version_id");
+
         scanItem.Property(item => item.ReviewedAt)
             .HasColumnName("reviewed_at");
 
