@@ -55,6 +55,7 @@ function fieldLabel(field: string) {
     birthDate: '出生日期',
     gender: '性別',
     nationality: '國籍',
+    nationalIdNumber: '身分證字號',
     documentNumber: '證件號碼',
     issuingCountry: '簽發國',
     expiryDate: '有效期限',
