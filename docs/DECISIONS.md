@@ -513,3 +513,41 @@ scan_items 的圖片只供內部人工覆核使用；辨識仍在瀏覽器執行
 團別列表、單一團別工作區、批次掃描與旅客主檔為獨立頁面。單一團別工作區負責顯示已收證件、待審核狀態與開啟人工覆核視窗。
 
 開發用 OCR benchmark / generalization test 不放在正式操作介面。
+
+
+### D-041：OCR 訓練資料與正式收件照片分離
+
+OCR 模型改善資料不得透過取消 production 照片刪除期限來累積。
+
+正式規則：
+
+- `scan_items` 的覆核照片仍遵守該團回國日後 7 天的 production 保存規則。
+- 人工審核畫面提供「保留此樣本供 OCR 改善」選項，預設不勾選。
+- 只有操作人員明確勾選且完成審核後，系統才把該證件圖片、OCR 原始輸出與人工 ground truth 複製到獨立 `training_samples`。
+- `training_samples` 不依賴 `scan_items` 外鍵刪除，因此 production 圖片到期不會意外刪除已明確選入的訓練樣本。
+- 不可因為要訓練模型，就自動把所有旅客證件永久保存。
+
+### D-042：OCR Benchmark 同時衡量準確率與速度
+
+護照、台胞證、台灣身分證共用 OCR 品質頁。
+
+Benchmark 以 `ocrPayloadJson.originalFields` 對人工審核後欄位做 exact-match，比較內容不直接回傳個資到統計 API。
+
+至少統計：
+
+- 各欄位 exact-match rate。
+- 整張證件全部必要欄位 exact-match rate。
+- 人工修正率。
+- Average / Median / P90 OCR 時間。
+- 平均 orientation attempts。
+- fallback 使用率。
+
+每種證件約 30–50 張可先做中期分析；約 100 張可做第一輪較穩定的正式分析，再決定 fine-tune 優先順序。
+
+### D-043：訓練資料匯出為私人 Dataset ZIP
+
+OCR 品質頁允許匯出已明確選入的 `training_samples`。
+
+Dataset ZIP 以隨機 sample ID 命名檔案，不以旅客姓名或證號作檔名；內容包含原圖／覆核圖、OCR 原始 payload、人工 ground truth 與 manifest。
+
+ZIP 含真實身分證件資料，只能放在受控私人儲存位置，不得提交 GitHub。Repository 的 `.gitignore` 必須持續排除 training data、export、checkpoint 與 private model。
