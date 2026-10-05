@@ -361,6 +361,11 @@ public sealed class PassportScannerDbContext(
             .HasMaxLength(80)
             .IsRequired();
 
+        scanItem.Property(item => item.NameZhOnDocument)
+            .HasColumnName("name_zh_on_document")
+            .HasMaxLength(80)
+            .IsRequired();
+
         scanItem.Property(item => item.NameEn)
             .HasColumnName("name_en")
             .HasMaxLength(160)
