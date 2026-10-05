@@ -148,9 +148,8 @@ using (var scope = app.Services.CreateScope())
             ADD COLUMN IF NOT EXISTS name_zh_on_document varchar(80);
 
         UPDATE scan_items
-            SET name_zh_on_document = name_zh
-            WHERE name_zh_on_document IS NULL
-               OR name_zh_on_document = '';
+            SET name_zh_on_document = ''
+            WHERE name_zh_on_document IS NULL;
 
         ALTER TABLE scan_items
             ALTER COLUMN name_zh_on_document SET NOT NULL;
