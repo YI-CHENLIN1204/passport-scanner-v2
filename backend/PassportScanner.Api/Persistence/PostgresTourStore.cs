@@ -161,6 +161,114 @@ public sealed class PostgresTourStore(
         return ToSummary(tour);
     }
 
+    public TourSummaryResponse? UpdateTour(
+        Guid tourId,
+        UpdateTourRequest request,
+        DateTimeOffset now)
+    {
+        var tour = db.Tours.SingleOrDefault(
+            item => item.TourId == tourId);
+
+        if (tour is null)
+        {
+            return null;
+        }
+
+        var name = request.TourName.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("團別名稱不可空白。");
+        }
+
+        if (request.ReturnDate < request.DepartureDate)
+        {
+            throw new ArgumentException("回國日不可早於出發日。");
+        }
+
+        var requiredDocumentTypes =
+            (request.RequiredDocumentTypes ?? Array.Empty<string>())
+            .Select(item => item.Trim().ToUpperInvariant())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (requiredDocumentTypes.Length == 0)
+        {
+            throw new ArgumentException("請至少選擇一種此團需要的證件。");
+        }
+
+        if (requiredDocumentTypes.Any(
+            item => !AllowedDocumentTypes.Contains(item)))
+        {
+            throw new ArgumentException("包含不支援的團別證件類型。");
+        }
+
+        var removedTypes = tour.RequiredDocumentTypes
+            .Except(requiredDocumentTypes, StringComparer.Ordinal)
+            .ToArray();
+
+        if (removedTypes.Length > 0)
+        {
+            var draftIds = db.TourPersonDrafts
+                .Where(item => item.TourId == tourId)
+                .Select(item => item.DraftPersonId)
+                .ToList();
+
+            var hasStaged = db.ScanItems.Any(item =>
+                draftIds.Contains(item.DraftPersonId) &&
+                removedTypes.Contains(item.DocumentType));
+
+            var travelerIds = db.TourMembers
+                .Where(item => item.TourId == tourId)
+                .Select(item => item.TravelerId)
+                .ToList();
+
+            var hasFormal = db.DocumentVersions.Any(item =>
+                travelerIds.Contains(item.TravelerId) &&
+                item.IsCurrent &&
+                removedTypes.Contains(item.DocumentType));
+
+            if (hasStaged || hasFormal)
+            {
+                throw new ArgumentException(
+                    "已有收件資料的證件類型不能直接從團別需求中移除。");
+            }
+        }
+
+        tour.TourName = name;
+        tour.DepartureDate = request.DepartureDate;
+        tour.ReturnDate = request.ReturnDate;
+        tour.RequiredDocumentTypes = requiredDocumentTypes;
+        tour.UpdatedAt = now;
+
+        var deleteAfter = new DateTimeOffset(
+            request.ReturnDate
+                .AddDays(8)
+                .ToDateTime(
+                    TimeOnly.MinValue,
+                    DateTimeKind.Utc));
+
+        var tourDraftIds = db.TourPersonDrafts
+            .Where(item => item.TourId == tourId)
+            .Select(item => item.DraftPersonId)
+            .ToList();
+
+        var scanItems = db.ScanItems
+            .Where(item => tourDraftIds.Contains(item.DraftPersonId))
+            .ToList();
+
+        foreach (var item in scanItems)
+        {
+            item.DeleteAfter = deleteAfter;
+            item.UpdatedAt = now;
+        }
+
+        db.SaveChanges();
+
+        return ToSummary(tour);
+    }
+
     public bool EnsureMember(
         Guid tourId,
         Guid travelerId,
