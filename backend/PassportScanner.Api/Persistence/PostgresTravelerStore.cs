@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 
 namespace PassportScanner.Api.Persistence;
@@ -292,6 +294,134 @@ public sealed class PostgresTravelerStore(
                         item.VerifiedAt,
                         item.CreatedAt))
                 .ToList());
+    }
+
+    public TravelerDetail? UpdateTraveler(
+        Guid travelerId,
+        UpdateTravelerRequest request,
+        DateTimeOffset now)
+    {
+        var traveler = db.Travelers.SingleOrDefault(
+            item => item.TravelerId == travelerId);
+
+        if (traveler is null)
+        {
+            return null;
+        }
+
+        var nameZh = NormalizeIdentityName(
+            request.NameZh ?? string.Empty);
+
+        if (string.IsNullOrWhiteSpace(nameZh))
+        {
+            throw new ArgumentException(
+                "旅客中文姓名不可空白。");
+        }
+
+        if (!DateOnly.TryParseExact(
+            request.BirthDate?.Trim(),
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var birthDate))
+        {
+            throw new ArgumentException(
+                "出生日期格式必須為 YYYY-MM-DD。");
+        }
+
+        var gender = Normalize(
+            request.Gender ?? string.Empty);
+
+        if (string.IsNullOrWhiteSpace(gender))
+        {
+            throw new ArgumentException(
+                "旅客性別不可空白。");
+        }
+
+        traveler.NameZh = nameZh;
+        traveler.NameEn = Normalize(
+            request.NameEn ?? string.Empty);
+        traveler.BirthDate = birthDate;
+        traveler.Gender = gender;
+        traveler.Nationality =
+            NormalizeNullable(request.Nationality);
+        traveler.UpdatedAt = now;
+
+        foreach (var update in request.Documents ??
+            Array.Empty<UpdateTravelerDocumentRequest>())
+        {
+            var document = db.DocumentVersions
+                .SingleOrDefault(item =>
+                    item.DocumentVersionId ==
+                        update.DocumentVersionId &&
+                    item.TravelerId == travelerId);
+
+            if (document is null)
+            {
+                throw new ArgumentException(
+                    "包含不屬於此旅客的證件版本。");
+            }
+
+            var documentNumber = Normalize(
+                update.DocumentNumber ?? string.Empty);
+
+            if (string.IsNullOrWhiteSpace(documentNumber))
+            {
+                throw new ArgumentException(
+                    "證件號碼不可空白。");
+            }
+
+            DateOnly? expiryDate = null;
+
+            if (!string.IsNullOrWhiteSpace(
+                update.ExpiryDate))
+            {
+                if (!DateOnly.TryParseExact(
+                    update.ExpiryDate.Trim(),
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var parsedExpiry))
+                {
+                    throw new ArgumentException(
+                        "證件有效期限格式必須為 YYYY-MM-DD。");
+                }
+
+                expiryDate = parsedExpiry;
+            }
+
+            document.NameZhOnDocument =
+                NormalizeIdentityName(
+                    update.NameZhOnDocument ??
+                    string.Empty);
+            document.NameEnOnDocument =
+                Normalize(
+                    update.NameEnOnDocument ??
+                    string.Empty);
+            document.DocumentNumber =
+                documentNumber;
+            document.IssuingCountry =
+                NormalizeNullable(
+                    update.IssuingCountry);
+            document.Nationality =
+                NormalizeNullable(
+                    update.Nationality);
+            document.ExpiryDate = expiryDate;
+            document.VerifiedAt = now;
+
+            if (
+                document.IsCurrent &&
+                traveler.PersonalIdType ==
+                    document.DocumentType)
+            {
+                traveler.PersonalIdNumber =
+                    documentNumber;
+            }
+        }
+
+        db.SaveChanges();
+
+        return GetTraveler(travelerId);
     }
 
     private DocumentVersionRecord? FindExistingDocument(
