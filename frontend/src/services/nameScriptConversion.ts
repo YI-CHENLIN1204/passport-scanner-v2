@@ -24,6 +24,27 @@ export interface NameScriptConversionResult {
   ambiguousCharacters: string[]
 }
 
+const traditionalToSimplifiedMap: Readonly<
+  Record<string, string>
+> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(singleCharacterMap)
+      .map(([simplified, traditional]) => [
+        traditional,
+        simplified,
+      ])
+      .concat(
+        Object.entries(ambiguousCharacterMap)
+          .flatMap(([simplified, traditionalValues]) =>
+            traditionalValues.map(traditional => [
+              traditional,
+              simplified,
+            ]),
+          ),
+      ),
+  ),
+)
+
 export function convertSimplifiedNameToTraditional(
   input: string,
 ): NameScriptConversionResult {
@@ -47,4 +68,17 @@ export function convertSimplifiedNameToTraditional(
     value,
     ambiguousCharacters,
   }
+}
+
+
+export function convertTraditionalNameToSimplified(
+  input: string,
+) {
+  return Array.from(input ?? '')
+    .map(
+      character =>
+        traditionalToSimplifiedMap[character] ??
+        character,
+    )
+    .join('')
 }
