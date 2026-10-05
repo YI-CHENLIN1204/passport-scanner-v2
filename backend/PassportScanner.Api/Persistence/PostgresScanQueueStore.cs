@@ -8,7 +8,8 @@ namespace PassportScanner.Api.Persistence;
 public sealed class PostgresScanQueueStore(
     PassportScannerDbContext db,
     ITravelerStore travelerStore,
-    ITourStore tourStore)
+    ITourStore tourStore,
+    ITrainingDatasetStore trainingDatasetStore)
     : IScanQueueStore
 {
     private const string Pending = "PENDING";
@@ -273,6 +274,14 @@ public sealed class PostgresScanQueueStore(
         item.ReviewedAt = now;
         item.UpdatedAt = now;
         db.SaveChanges();
+
+        if (request.UseForTraining)
+        {
+            trainingDatasetStore.SetSelection(
+                item.ScanItemId,
+                true,
+                now);
+        }
 
         return ToItemResponse(item);
     }
