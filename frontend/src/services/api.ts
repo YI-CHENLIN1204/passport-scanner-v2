@@ -236,6 +236,7 @@ export interface TravelerSummaryResponse {
   birthDate: string
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documentVersionCount: number
   currentDocumentTypes: string[]
 }
@@ -337,6 +338,7 @@ export interface UpdateTravelerRequest {
   birthDate: string
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documents: UpdateTravelerDocumentRequest[]
 }
 
@@ -636,6 +638,7 @@ export interface CreateScanItemRequest {
   birthDate: string | null
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documentNumber: string
   issuingCountry: string | null
   expiryDate: string | null
@@ -655,6 +658,7 @@ export interface ScanItemResponse {
   birthDate: string | null
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documentNumber: string
   issuingCountry: string | null
   expiryDate: string | null
@@ -680,6 +684,7 @@ export interface ReviewScanItemRequest {
   birthDate: string | null
   gender: string
   nationality: string | null
+  nationalIdNumber: string | null
   documentNumber: string
   issuingCountry: string | null
   expiryDate: string | null
