@@ -7,6 +7,9 @@ import {
   watch,
 } from 'vue'
 import {
+  convertSimplifiedNameToTraditional,
+} from '../services/nameScriptConversion'
+import {
   deletePendingScanItem,
   downloadTourCsv,
   getReviewQueue,
@@ -80,6 +83,7 @@ const reviewSaving = ref(false)
 const reviewError = ref('')
 const reviewZoom = ref(1)
 const reviewUseForTraining = ref(false)
+const permitBusinessNameManuallyEdited = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
   nameZhOnDocument: '',
@@ -520,6 +524,12 @@ const currentDocument = computed(() =>
   ] ?? null,
 )
 
+const permitNameConversion = computed(() =>
+  convertSimplifiedNameToTraditional(
+    reviewForm.value.nameZhOnDocument ?? '',
+  ),
+)
+
 const currentImageUrl = computed(() =>
   currentDocument.value
     ? getScanItemImageUrl(
@@ -595,11 +605,24 @@ watch(
   document => {
     if (!document) return
 
+    const printedName =
+      document.nameZhOnDocument ||
+      document.nameZh
+    const suggestedTraditionalName =
+      convertSimplifiedNameToTraditional(
+        printedName,
+      ).value
+
+    permitBusinessNameManuallyEdited.value = false
+
     reviewForm.value = {
-      nameZh: document.nameZh,
-      nameZhOnDocument:
-        document.nameZhOnDocument ||
-        document.nameZh,
+      nameZh:
+        document.documentType ===
+          'TAIWAN_COMPATRIOT_PERMIT' &&
+        document.reviewStatus === 'PENDING'
+          ? suggestedTraditionalName
+          : document.nameZh,
+      nameZhOnDocument: printedName,
       nameEn: document.nameEn,
       birthDate: document.birthDate,
       gender: document.gender,
@@ -628,6 +651,27 @@ watch(
       reviewForm.value.nameZhOnDocument =
         value
     }
+  },
+)
+
+watch(
+  () => reviewForm.value.nameZhOnDocument,
+  value => {
+    if (
+      !currentDocument.value ||
+      currentDocument.value.documentType !==
+        'TAIWAN_COMPATRIOT_PERMIT' ||
+      currentDocument.value.reviewStatus !==
+        'PENDING' ||
+      permitBusinessNameManuallyEdited.value
+    ) {
+      return
+    }
+
+    reviewForm.value.nameZh =
+      convertSimplifiedNameToTraditional(
+        value ?? '',
+      ).value
   },
 )
 
@@ -1408,8 +1452,28 @@ onBeforeUnmount(() => {
                 <input
                   v-model="reviewForm.nameZh"
                   type="text"
+                  @input="
+                    permitBusinessNameManuallyEdited = true
+                  "
                 />
               </label>
+
+              <small class="conversion-note">
+                系統會依證件原文自動轉成繁體，OCR
+                準確率仍以左上證件實際印刷的原文判定。
+                <template
+                  v-if="
+                    permitNameConversion
+                      .ambiguousCharacters.length
+                  "
+                >
+                  這個姓名含可能一對多的字：
+                  {{
+                    permitNameConversion
+                      .ambiguousCharacters.join('、')
+                  }}，請人工確認繁體寫法。
+                </template>
+              </small>
             </template>
 
             <label v-else>
@@ -2280,11 +2344,19 @@ tbody tr:last-child td {
 
 .review-image-panel img {
   display: block;
+  flex: 0 0 auto;
   height: auto;
   min-width: 100%;
   max-width: none;
   object-fit: contain;
   transition: width .12s ease;
+}
+
+.conversion-note {
+  margin-top: -5px;
+  color: #718096;
+  font-size: 9px;
+  line-height: 1.55;
 }
 
 .zoom-help {
