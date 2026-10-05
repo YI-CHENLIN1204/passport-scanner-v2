@@ -1129,6 +1129,8 @@ watch(
       birthDate: document.birthDate,
       gender: document.gender,
       nationality: document.nationality,
+      nationalIdNumber:
+        document.nationalIdNumber,
       documentNumber: document.documentNumber,
       issuingCountry: document.issuingCountry,
       expiryDate: document.expiryDate,
@@ -1386,9 +1388,9 @@ onBeforeUnmount(() => {
             type="button"
             class="secondary-action"
             :disabled="exporting"
-            @click="exportCsv"
+            @click="openExportModal"
           >
-            {{ exporting ? '匯出中…' : '匯出 CSV' }}
+            匯出 CSV
           </button>
 
           <button
@@ -2010,6 +2012,21 @@ onBeforeUnmount(() => {
                 </select>
               </label>
             </div>
+
+            <label
+              v-if="
+                currentDocument.documentType ===
+                'PASSPORT'
+              "
+            >
+              <span>身分證字號（MRZ）</span>
+              <input
+                v-model="reviewForm.nationalIdNumber"
+                type="text"
+                maxlength="10"
+                placeholder="若 MRZ 有資料會自動帶入"
+              />
+            </label>
 
             <label>
               <span>
