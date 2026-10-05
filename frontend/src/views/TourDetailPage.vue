@@ -742,6 +742,20 @@ function toggleExportField(
   persistExportColumns(kind)
 }
 
+function onExportFieldChange(
+  kind: ExportKind,
+  key: string,
+  event: Event,
+) {
+  const input = event.target as HTMLInputElement
+
+  toggleExportField(
+    kind,
+    key,
+    input.checked,
+  )
+}
+
 function startExportFieldDrag(
   kind: ExportKind,
   key: string,
@@ -1649,6 +1663,178 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </template>
+
+    <div
+      v-if="exportOpen"
+      class="modal-backdrop"
+      @click.self="closeExportModal"
+    >
+      <section
+        class="export-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header>
+          <div>
+            <p class="page-kicker">CSV EXPORT</p>
+            <h2>匯出團別資料</h2>
+            <p>
+              先選擇要輸出的表，再勾選欄位；
+              已勾選欄位可拖曳調整 CSV 欄位順序。
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="close-button"
+            :disabled="exporting"
+            @click="closeExportModal"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="export-kind-picker">
+          <label
+            v-for="kind in exportKindsForTour()"
+            :key="kind"
+          >
+            <input
+              v-model="exportSelectedKinds"
+              type="checkbox"
+              :value="kind"
+            />
+            <span>{{ exportKindLabel(kind) }}</span>
+          </label>
+        </div>
+
+        <div class="export-config-list">
+          <section
+            v-for="kind in exportKindsForTour()"
+            v-show="
+              exportSelectedKinds.includes(kind)
+            "
+            :key="kind"
+            class="export-config-card"
+          >
+            <header>
+              <div>
+                <strong>
+                  {{ exportKindLabel(kind) }}
+                </strong>
+                <span>
+                  {{ membersForExport(kind).length }}
+                  人
+                </span>
+              </div>
+              <small>
+                拖曳已勾選欄位可改變順序
+              </small>
+            </header>
+
+            <div class="export-field-list">
+              <label
+                v-for="field in exportFieldsFor(kind)"
+                :key="field.key"
+                class="export-field-row"
+                :class="{
+                  selected:
+                    exportColumns[kind].includes(
+                      field.key,
+                    ),
+                }"
+                :draggable="
+                  exportColumns[kind].includes(
+                    field.key,
+                  )
+                "
+                @dragstart="
+                  startExportFieldDrag(
+                    kind,
+                    field.key,
+                  )
+                "
+                @dragover.prevent
+                @drop.prevent="
+                  dropExportField(
+                    kind,
+                    field.key,
+                  )
+                "
+              >
+                <input
+                  type="checkbox"
+                  :checked="
+                    exportColumns[kind].includes(
+                      field.key,
+                    )
+                  "
+                  @change="
+                    onExportFieldChange(
+                      kind,
+                      field.key,
+                      $event,
+                    )
+                  "
+                />
+                <span class="drag-handle">
+                  ⋮⋮
+                </span>
+                <span>{{ field.label }}</span>
+                <small
+                  v-if="
+                    exportColumns[kind].includes(
+                      field.key,
+                    )
+                  "
+                >
+                  {{
+                    exportColumns[kind].indexOf(
+                      field.key,
+                    ) + 1
+                  }}
+                </small>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <p
+          v-if="error"
+          class="error-message"
+        >
+          {{ error }}
+        </p>
+
+        <footer>
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="exporting"
+            @click="closeExportModal"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="primary-action"
+            :disabled="
+              exporting ||
+              !exportSelectedKinds.length
+            "
+            @click="exportConfiguredCsv"
+          >
+            {{
+              exporting
+                ? '匯出中…'
+                : '匯出 ' +
+                  exportSelectedKinds.length +
+                  ' 個 CSV'
+            }}
+          </button>
+        </footer>
+      </section>
+    </div>
 
     <div
       v-if="tourEditing"
