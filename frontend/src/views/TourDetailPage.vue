@@ -8,6 +8,7 @@ import {
 } from 'vue'
 import {
   convertSimplifiedNameToTraditional,
+  convertTraditionalNameToSimplified,
 } from '../services/nameScriptConversion'
 import {
   deletePendingScanItem,
@@ -83,7 +84,6 @@ const reviewSaving = ref(false)
 const reviewError = ref('')
 const reviewZoom = ref(1)
 const reviewUseForTraining = ref(false)
-const permitBusinessNameManuallyEdited = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
   nameZhOnDocument: '',
@@ -526,7 +526,7 @@ const currentDocument = computed(() =>
 
 const permitNameConversion = computed(() =>
   convertSimplifiedNameToTraditional(
-    reviewForm.value.nameZhOnDocument ?? '',
+    currentDocument.value?.nameZhOnDocument ?? '',
   ),
 )
 
@@ -581,10 +581,6 @@ const reviewFormErrors = computed(() => {
     document?.documentType ===
       'TAIWAN_COMPATRIOT_PERMIT'
   ) {
-    if (!form.nameZhOnDocument?.trim()) {
-      errors.push('請確認台胞證上的原文姓名。')
-    }
-
     if (!form.expiryDate) {
       errors.push('請確認台胞證有效期限。')
     }
@@ -613,8 +609,6 @@ watch(
         printedName,
       ).value
 
-    permitBusinessNameManuallyEdited.value = false
-
     reviewForm.value = {
       nameZh:
         document.documentType ===
@@ -622,7 +616,17 @@ watch(
         document.reviewStatus === 'PENDING'
           ? suggestedTraditionalName
           : document.nameZh,
-      nameZhOnDocument: printedName,
+      nameZhOnDocument:
+        document.documentType ===
+          'TAIWAN_COMPATRIOT_PERMIT'
+          ? convertTraditionalNameToSimplified(
+              document.documentType ===
+                'TAIWAN_COMPATRIOT_PERMIT' &&
+              document.reviewStatus === 'PENDING'
+                ? suggestedTraditionalName
+                : document.nameZh,
+            )
+          : printedName,
       nameEn: document.nameEn,
       birthDate: document.birthDate,
       gender: document.gender,
@@ -643,35 +647,13 @@ watch(
 watch(
   () => reviewForm.value.nameZh,
   value => {
-    if (
-      currentDocument.value &&
-      currentDocument.value.documentType !==
+    if (!currentDocument.value) return
+
+    reviewForm.value.nameZhOnDocument =
+      currentDocument.value.documentType ===
         'TAIWAN_COMPATRIOT_PERMIT'
-    ) {
-      reviewForm.value.nameZhOnDocument =
-        value
-    }
-  },
-)
-
-watch(
-  () => reviewForm.value.nameZhOnDocument,
-  value => {
-    if (
-      !currentDocument.value ||
-      currentDocument.value.documentType !==
-        'TAIWAN_COMPATRIOT_PERMIT' ||
-      currentDocument.value.reviewStatus !==
-        'PENDING' ||
-      permitBusinessNameManuallyEdited.value
-    ) {
-      return
-    }
-
-    reviewForm.value.nameZh =
-      convertSimplifiedNameToTraditional(
-        value ?? '',
-      ).value
+        ? convertTraditionalNameToSimplified(value)
+        : value
   },
 )
 
@@ -1439,39 +1421,39 @@ onBeforeUnmount(() => {
                 'TAIWAN_COMPATRIOT_PERMIT'
               "
             >
-              <label>
-                <span>證件原文姓名（照台胞證簡體）</span>
-                <input
-                  v-model="reviewForm.nameZhOnDocument"
-                  type="text"
-                />
-              </label>
+              <div class="readonly-ocr-field">
+                <span>OCR 原始姓名（台胞證簡體）</span>
+                <strong>
+                  {{
+                    currentDocument.nameZhOnDocument ||
+                    '未辨識'
+                  }}
+                </strong>
+              </div>
 
               <label>
-                <span>旅客中文姓名（公司主檔繁體）</span>
+                <span>中文姓名（統一存繁體）</span>
                 <input
                   v-model="reviewForm.nameZh"
                   type="text"
-                  @input="
-                    permitBusinessNameManuallyEdited = true
-                  "
                 />
               </label>
 
               <small class="conversion-note">
-                系統會依證件原文自動轉成繁體，OCR
-                準確率仍以左上證件實際印刷的原文判定。
+                系統先把 OCR 簡體結果轉成繁體供你確認；
+                人物合併、團別名單與未來客人主檔都使用這個繁體姓名。
+                OCR 準確率會先做簡繁正規化後再比較。
                 <template
                   v-if="
                     permitNameConversion
                       .ambiguousCharacters.length
                   "
                 >
-                  這個姓名含可能一對多的字：
+                  原始姓名含可能一對多的字：
                   {{
                     permitNameConversion
                       .ambiguousCharacters.join('、')
-                  }}，請人工確認繁體寫法。
+                  }}，請人工確認繁體姓名。
                 </template>
               </small>
             </template>
@@ -2350,6 +2332,26 @@ tbody tr:last-child td {
   max-width: none;
   object-fit: contain;
   transition: width .12s ease;
+}
+
+.readonly-ocr-field {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid #e0e5ec;
+  border-radius: 8px;
+  background: #f7f9fb;
+}
+
+.readonly-ocr-field > span {
+  color: #6d7a8e;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.readonly-ocr-field > strong {
+  color: #26354b;
+  font-size: 12px;
 }
 
 .conversion-note {
