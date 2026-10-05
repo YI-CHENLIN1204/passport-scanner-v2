@@ -164,6 +164,16 @@ jobs:
             > /tmp/ocr-benchmark.json
           python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=next(item for item in data['documents'] if item['documentType'] == 'TAIWAN_COMPATRIOT_PERMIT'); assert doc['manualCorrectionCount'] == 1, doc; assert doc['manualCorrectionRate'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc; name=next(item for item in doc['fields'] if item['field'] == 'nameZh'); assert name['exactMatchCount'] == 0, name"
 
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" \
+            > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" \
+            -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
       - name: Restart backend and verify API reconnects
         run: |
           docker compose restart backend
