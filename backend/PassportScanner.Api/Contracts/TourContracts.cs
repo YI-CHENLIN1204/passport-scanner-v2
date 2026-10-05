@@ -28,7 +28,11 @@ public sealed record TourSummaryResponse(
 public sealed record TourMemberDocumentResponse(
     Guid DocumentVersionId,
     string DocumentType,
+    string NameZhOnDocument,
+    string NameEnOnDocument,
     string DocumentNumber,
+    string? IssuingCountry,
+    string? Nationality,
     DateOnly? ExpiryDate,
     bool IsCurrent,
     DateTimeOffset VerifiedAt);
@@ -41,6 +45,7 @@ public sealed record TourMemberResponse(
     DateOnly BirthDate,
     string Gender,
     string? Nationality,
+    string? NationalIdNumber,
     IReadOnlyList<TourMemberDocumentResponse> Documents);
 
 public sealed record TourDetailResponse(
