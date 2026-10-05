@@ -594,6 +594,31 @@ function exportFieldsFor(kind: ExportKind) {
   })
 }
 
+function orderedExportFields(kind: ExportKind) {
+  const fields = exportFieldsFor(kind)
+  const byKey = new Map(
+    fields.map(field => [field.key, field]),
+  )
+  const selected = exportColumns.value[kind]
+    .map(key => byKey.get(key))
+    .filter(
+      (
+        field,
+      ): field is ExportFieldDefinition =>
+        Boolean(field),
+    )
+  const selectedKeys = new Set(
+    selected.map(field => field.key),
+  )
+
+  return [
+    ...selected,
+    ...fields.filter(
+      field => !selectedKeys.has(field.key),
+    ),
+  ]
+}
+
 function defaultExportColumns(kind: ExportKind) {
   const preferred: Record<ExportKind, string[]> = {
     TOTAL: [
@@ -1734,7 +1759,7 @@ onBeforeUnmount(() => {
 
             <div class="export-field-list">
               <label
-                v-for="field in exportFieldsFor(kind)"
+                v-for="field in orderedExportFields(kind)"
                 :key="field.key"
                 class="export-field-row"
                 :class="{
