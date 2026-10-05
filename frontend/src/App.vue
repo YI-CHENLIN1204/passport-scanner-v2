@@ -5,13 +5,19 @@ import ToursPage from './views/ToursPage.vue'
 import TourDetailPage from './views/TourDetailPage.vue'
 import BatchScanPage from './views/BatchScanPage.vue'
 import TravelersPage from './views/TravelersPage.vue'
+import OcrQualityPage from './views/OcrQualityPage.vue'
 import { getHealth } from './services/api'
 
-type Section = 'tours' | 'scan' | 'travelers'
+type Section = 'tours' | 'scan' | 'travelers' | 'quality'
 
 interface AppRoute {
   section: Section
-  view: 'tours' | 'tour-detail' | 'scan' | 'travelers'
+  view:
+    | 'tours'
+    | 'tour-detail'
+    | 'scan'
+    | 'travelers'
+    | 'quality'
   tourId?: string
 }
 
@@ -54,6 +60,13 @@ function parseRoute(path: string): AppRoute {
     return {
       section: 'travelers',
       view: 'travelers',
+    }
+  }
+
+  if (/^\/ocr-quality\/?$/.test(path)) {
+    return {
+      section: 'quality',
+      view: 'quality',
     }
   }
 
@@ -149,6 +162,10 @@ onBeforeUnmount(() => {
 
       <TravelersPage
         v-else-if="route.view === 'travelers'"
+      />
+
+      <OcrQualityPage
+        v-else-if="route.view === 'quality'"
       />
     </main>
   </div>
