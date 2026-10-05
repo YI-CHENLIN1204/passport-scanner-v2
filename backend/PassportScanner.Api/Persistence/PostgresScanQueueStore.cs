@@ -134,6 +134,7 @@ public sealed class PostgresScanQueueStore(
                     ? "{}"
                     : request.OcrPayloadJson,
             ReviewStatus = Pending,
+            SavedDocumentVersionId = null,
             ReviewedAt = null,
             DeleteAfter = new DateTimeOffset(
                 tour.ReturnDate
@@ -279,6 +280,8 @@ public sealed class PostgresScanQueueStore(
         }
 
         item.ReviewStatus = Reviewed;
+        item.SavedDocumentVersionId =
+            saved.DocumentVersionId;
         item.ReviewedAt = now;
         item.UpdatedAt = now;
         db.SaveChanges();
