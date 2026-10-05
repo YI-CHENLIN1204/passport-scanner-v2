@@ -17,6 +17,7 @@ public sealed record CreateScanItemRequest(
     string ImageContentType,
     string ImageBase64,
     string NameZh,
+    string? NameZhOnDocument,
     string NameEn,
     string? BirthDate,
     string Gender,
@@ -28,6 +29,7 @@ public sealed record CreateScanItemRequest(
 
 public sealed record ReviewScanItemRequest(
     string NameZh,
+    string? NameZhOnDocument,
     string NameEn,
     string? BirthDate,
     string Gender,
@@ -45,6 +47,7 @@ public sealed record ScanItemResponse(
     string OriginalFileName,
     string ImageContentType,
     string NameZh,
+    string NameZhOnDocument,
     string NameEn,
     DateOnly? BirthDate,
     string Gender,
