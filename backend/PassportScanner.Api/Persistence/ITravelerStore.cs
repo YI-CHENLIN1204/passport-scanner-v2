@@ -1,3 +1,4 @@
+using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 
 namespace PassportScanner.Api.Persistence;
@@ -74,6 +75,11 @@ public interface ITravelerStore
         int limit);
 
     TravelerDetail? GetTraveler(Guid travelerId);
+
+    TravelerDetail? UpdateTraveler(
+        Guid travelerId,
+        UpdateTravelerRequest request,
+        DateTimeOffset now);
 
     int TravelerCount { get; }
     int DocumentVersionCount { get; }
