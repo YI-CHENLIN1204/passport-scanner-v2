@@ -153,7 +153,7 @@ jobs:
 
           curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
             -H 'Content-Type: application/json' \
-            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31"}' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
             > /tmp/permit-reviewed.json
 
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" \
