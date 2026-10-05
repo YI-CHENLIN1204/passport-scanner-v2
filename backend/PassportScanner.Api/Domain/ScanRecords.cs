@@ -42,6 +42,7 @@ public sealed class ScanItemRecord
     public DateOnly? ExpiryDate { get; set; }
     public required string OcrPayloadJson { get; set; }
     public required string ReviewStatus { get; set; }
+    public Guid? SavedDocumentVersionId { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
     public required DateTimeOffset DeleteAfter { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
