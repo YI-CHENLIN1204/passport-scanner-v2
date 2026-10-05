@@ -12,6 +12,7 @@ public static class TaiwanNationalIdReviewMapper
         return new ReviewedDocumentInput(
             DocumentType: "TAIWAN_NATIONAL_ID",
             ChineseName: request.ChineseName,
+            ChineseNameOnDocument: request.ChineseName,
             EnglishName: string.Empty,
             BirthDate: DateOnly.ParseExact(
                 request.BirthDate,
