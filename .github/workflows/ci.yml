@@ -144,7 +144,7 @@ jobs:
 
           curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
             -H 'Content-Type: application/json' \
-            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
             > /tmp/permit-scan-item.json
 
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
