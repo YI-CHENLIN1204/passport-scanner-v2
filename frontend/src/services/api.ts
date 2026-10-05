@@ -852,3 +852,29 @@ export async function downloadTrainingDataset() {
     URL.revokeObjectURL(url)
   }
 }
+
+
+export async function deletePendingScanItem(
+  scanItemId: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/scan-items/${encodeURIComponent(scanItemId)}`,
+    { method: 'DELETE' },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Delete scan item failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+}
