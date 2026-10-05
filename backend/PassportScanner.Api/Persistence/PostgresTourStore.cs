@@ -88,7 +88,11 @@ public sealed class PostgresTourStore(
                         new TourMemberDocumentResponse(
                             document.DocumentVersionId,
                             document.DocumentType,
+                            document.NameZhOnDocument,
+                            document.NameEnOnDocument,
                             document.DocumentNumber,
+                            document.IssuingCountry,
+                            document.Nationality,
                             document.ExpiryDate,
                             document.IsCurrent,
                             document.VerifiedAt))
@@ -102,6 +106,7 @@ public sealed class PostgresTourStore(
                     traveler.BirthDate,
                     traveler.Gender,
                     traveler.Nationality,
+                    traveler.NationalIdNumber,
                     memberDocuments);
             })
             .ToList();
