@@ -34,7 +34,8 @@ public sealed record ReviewScanItemRequest(
     string? Nationality,
     string DocumentNumber,
     string? IssuingCountry,
-    string? ExpiryDate);
+    string? ExpiryDate,
+    bool UseForTraining = false);
 
 public sealed record ScanItemResponse(
     Guid ScanItemId,
