@@ -12,6 +12,7 @@ public enum DocumentSaveAction
 public sealed record ReviewedDocumentInput(
     string DocumentType,
     string ChineseName,
+    string ChineseNameOnDocument,
     string EnglishName,
     DateOnly BirthDate,
     string Sex,
