@@ -23,6 +23,7 @@ public sealed class PostgresOcrBenchmarkStore(
                 "birthDate",
                 "gender",
                 "nationality",
+                "nationalIdNumber",
                 "documentNumber",
                 "issuingCountry",
                 "expiryDate"
@@ -336,6 +337,8 @@ public sealed class PostgresOcrBenchmarkStore(
                     CultureInfo.InvariantCulture),
             "gender" => item.Gender,
             "nationality" => item.Nationality,
+            "nationalIdNumber" =>
+                item.NationalIdNumber,
             "documentNumber" =>
                 item.DocumentNumber,
             "issuingCountry" =>
@@ -372,6 +375,7 @@ public sealed class PostgresOcrBenchmarkStore(
                         .Where(character =>
                             char.IsLetterOrDigit(
                                 character))),
+            "nationalIdNumber" or
             "documentNumber" =>
                 string.Concat(
                     text.ToUpperInvariant()
