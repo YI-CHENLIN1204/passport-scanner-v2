@@ -27,6 +27,23 @@ public sealed record TravelerDetailResponse(
     TravelerSummaryResponse Traveler,
     IReadOnlyList<DocumentVersionResponse> Documents);
 
+public sealed record UpdateTravelerDocumentRequest(
+    Guid DocumentVersionId,
+    string NameZhOnDocument,
+    string NameEnOnDocument,
+    string DocumentNumber,
+    string? IssuingCountry,
+    string? Nationality,
+    string? ExpiryDate);
+
+public sealed record UpdateTravelerRequest(
+    string NameZh,
+    string NameEn,
+    string BirthDate,
+    string Gender,
+    string? Nationality,
+    IReadOnlyList<UpdateTravelerDocumentRequest>? Documents);
+
 public sealed record DocumentStoreStatusResponse(
     string Persistence,
     int TravelerCount,
