@@ -24,6 +24,7 @@ builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
 builder.Services.AddScoped<ITourStore, PostgresTourStore>();
 builder.Services.AddScoped<IScanQueueStore, PostgresScanQueueStore>();
 builder.Services.AddScoped<IOcrBenchmarkStore, PostgresOcrBenchmarkStore>();
+builder.Services.AddScoped<ITrainingDatasetStore, PostgresTrainingDatasetStore>();
 
 builder.Services.AddCors(options =>
 {
@@ -144,6 +145,22 @@ using (var scope = app.Services.CreateScope())
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
+
+        CREATE TABLE IF NOT EXISTS training_samples (
+            training_sample_id uuid PRIMARY KEY,
+            source_scan_item_id uuid NOT NULL,
+            document_type varchar(40) NOT NULL,
+            image_content_type varchar(80) NOT NULL,
+            image_bytes bytea NOT NULL,
+            ocr_payload_json text NOT NULL,
+            ground_truth_json text NOT NULL,
+            selected_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            ux_training_samples_source_scan_item
+            ON training_samples (source_scan_item_id);
         """);
 }
 
@@ -309,6 +326,53 @@ app.MapPut(
             return Results.BadRequest(
                 new { message = ex.Message });
         }
+    });
+
+app.MapPut(
+    "/api/scan-items/{scanItemId:guid}/training-selection",
+    (
+        Guid scanItemId,
+        SetTrainingSampleRequest request,
+        ITrainingDatasetStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.SetSelection(
+                    scanItemId,
+                    request.Selected,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapGet(
+    "/api/ocr-training/summary",
+    (ITrainingDatasetStore store) =>
+        Results.Ok(
+            store.GetSummary(
+                DateTimeOffset.UtcNow)));
+
+app.MapGet(
+    "/api/ocr-training/export.zip",
+    (ITrainingDatasetStore store) =>
+    {
+        var export = store.ExportZip(
+            DateTimeOffset.UtcNow);
+
+        return Results.File(
+            export.Bytes,
+            export.ContentType,
+            export.FileName);
     });
 
 app.MapGet(
