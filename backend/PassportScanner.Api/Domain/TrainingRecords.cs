@@ -8,7 +8,7 @@ public sealed class TrainingSampleRecord
     public required string ImageContentType { get; init; }
     public required byte[] ImageBytes { get; init; }
     public required string OcrPayloadJson { get; init; }
-    public required string GroundTruthJson { get; init; }
+    public required string GroundTruthJson { get; set; }
     public required DateTimeOffset SelectedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
