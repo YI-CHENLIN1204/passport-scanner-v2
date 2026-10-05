@@ -91,24 +91,21 @@ public sealed class PostgresTrainingDatasetStore(
     public TrainingDatasetSummaryResponse GetSummary(
         DateTimeOffset generatedAt)
     {
-        var counts = db.TrainingSamples
+        var usableSamples = db.TrainingSamples
             .AsNoTracking()
-            .GroupBy(item => item.DocumentType)
-            .Select(group => new
-            {
-                DocumentType = group.Key,
-                SampleCount = group.Count()
-            })
+            .ToList()
+            .Where(IsUsableTrainingSample)
             .ToList();
 
-        var rows = counts
-            .OrderBy(
+        var rows = usableSamples
+            .GroupBy(
                 item => item.DocumentType,
                 StringComparer.Ordinal)
-            .Select(item =>
+            .OrderBy(group => group.Key)
+            .Select(group =>
                 new TrainingDatasetDocumentSummary(
-                    item.DocumentType,
-                    item.SampleCount))
+                    group.Key,
+                    group.Count()))
             .ToList();
 
         return new TrainingDatasetSummaryResponse(
@@ -124,6 +121,8 @@ public sealed class PostgresTrainingDatasetStore(
             .AsNoTracking()
             .OrderBy(item => item.DocumentType)
             .ThenBy(item => item.SelectedAt)
+            .ToList()
+            .Where(IsUsableTrainingSample)
             .ToList();
 
         using var stream = new MemoryStream();
@@ -257,6 +256,36 @@ public sealed class PostgresTrainingDatasetStore(
             "application/zip",
             $"ocr-training-dataset-" +
             $"{generatedAt:yyyyMMdd-HHmmss}.zip");
+    }
+
+    private static bool IsUsableTrainingSample(
+        TrainingSampleRecord sample)
+    {
+        if (
+            sample.DocumentType !=
+            "TAIWAN_COMPATRIOT_PERMIT")
+        {
+            return true;
+        }
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(
+                    sample.GroundTruthJson);
+
+            return document.RootElement.TryGetProperty(
+                    "nameZhOnDocument",
+                    out var name) &&
+                name.ValueKind ==
+                    JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(
+                    name.GetString());
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string BuildGroundTruthJson(
