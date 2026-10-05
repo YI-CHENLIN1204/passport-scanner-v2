@@ -63,6 +63,7 @@ const reviewDocumentIndex = ref(0)
 const reviewSaving = ref(false)
 const reviewError = ref('')
 const reviewZoom = ref(1)
+const reviewUseForTraining = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
   nameEn: '',
@@ -496,8 +497,10 @@ watch(
       documentNumber: document.documentNumber,
       issuingCountry: document.issuingCountry,
       expiryDate: document.expiryDate,
+      useForTraining: false,
     }
 
+    reviewUseForTraining.value = false
     resetReviewZoom()
     reviewError.value = ''
   },
@@ -543,7 +546,11 @@ async function saveReview(moveNext: boolean) {
   try {
     await reviewScanItem(
       document.scanItemId,
-      reviewForm.value,
+      {
+        ...reviewForm.value,
+        useForTraining:
+          reviewUseForTraining.value,
+      },
     )
 
     await reloadQueue()
@@ -1224,6 +1231,22 @@ onBeforeUnmount(() => {
                 "
                 type="date"
               />
+            </label>
+
+            <label class="training-option">
+              <input
+                v-model="reviewUseForTraining"
+                type="checkbox"
+              />
+              <span class="training-check" aria-hidden="true">
+                ✓
+              </span>
+              <span>
+                <strong>保留此樣本供 OCR 改善</strong>
+                <small>
+                  勾選後，這張證件與人工確認答案會獨立複製到私人訓練資料集；正式收件照片原本的刪除期限不變。
+                </small>
+              </span>
             </label>
 
             <div class="merge-note">
@@ -1938,6 +1961,58 @@ tbody tr:last-child td {
   grid-template-columns:
     repeat(2, 1fr);
   gap: 9px;
+}
+
+.training-option {
+  grid-template-columns: auto auto 1fr !important;
+  gap: 8px !important;
+  align-items: flex-start;
+  padding: 11px;
+  border: 1px solid #d7e5dc;
+  border-radius: 9px;
+  background: #f7fbf8;
+  cursor: pointer;
+}
+
+.training-option > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.training-check {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border: 1px solid #bfcfc5;
+  border-radius: 5px;
+  background: #fff;
+  color: transparent;
+  font-size: 11px;
+}
+
+.training-option:has(input:checked) .training-check {
+  border-color: #2f6e4b;
+  background: #2f6e4b;
+  color: #fff;
+}
+
+.training-option > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.training-option strong {
+  color: #31563f;
+  font-size: 10px;
+}
+
+.training-option small {
+  color: #718278;
+  font-size: 9px;
+  line-height: 1.55;
 }
 
 .merge-note {
