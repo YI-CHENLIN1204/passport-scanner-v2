@@ -294,6 +294,41 @@ public sealed class PostgresScanQueueStore(
         return ToItemResponse(item);
     }
 
+    public bool DeletePendingItem(
+        Guid scanItemId,
+        DateTimeOffset now)
+    {
+        var item = db.ScanItems.SingleOrDefault(
+            value => value.ScanItemId == scanItemId);
+
+        if (item is null)
+        {
+            return false;
+        }
+
+        if (item.ReviewStatus != Pending)
+        {
+            throw new InvalidOperationException(
+                "已完成人工審核的證件不能從待審核視窗刪除。");
+        }
+
+        var draftId = item.DraftPersonId;
+        var batch = db.ScanBatches.Single(
+            value => value.ScanBatchId == item.ScanBatchId);
+
+        db.ScanItems.Remove(item);
+        batch.ItemCount = Math.Max(
+            0,
+            batch.ItemCount - 1);
+        batch.UpdatedAt = now;
+        db.SaveChanges();
+
+        CleanupEmptyDraft(draftId);
+        db.SaveChanges();
+
+        return true;
+    }
+
     private static ReviewedDocumentInput BuildReviewedDocumentInput(
         ScanItemRecord item,
         DateTimeOffset now)
