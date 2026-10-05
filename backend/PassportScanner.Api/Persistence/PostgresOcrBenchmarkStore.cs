@@ -182,6 +182,17 @@ public sealed class PostgresOcrBenchmarkStore(
                         item,
                         field);
 
+                // Taiwan national ID is optional on non-Taiwan passports.
+                // Do not reward blank-vs-blank matches for an inapplicable
+                // field; only score it when there is reviewed ground truth.
+                if (
+                    field == "nationalIdNumber" &&
+                    string.IsNullOrWhiteSpace(
+                        reviewedValue))
+                {
+                    continue;
+                }
+
                 fieldCompared[field] += 1;
 
                 if (FieldEquals(
