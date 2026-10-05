@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import {
+  convertTraditionalNameToSimplified,
+} from '../services/nameScriptConversion'
+import {
   getTravelerDetail,
   searchTravelers,
   updateTraveler,
@@ -33,6 +36,18 @@ function documentLabel(type: string) {
   if (type === 'TAIWAN_COMPATRIOT_PERMIT') return '台胞證'
   if (type === 'TAIWAN_NATIONAL_ID') return '身分證'
   return type
+}
+
+function editingDocumentType(
+  documentVersionId: string,
+) {
+  return (
+    editingTraveler.value?.documents.find(
+      document =>
+        document.documentVersionId ===
+        documentVersionId,
+    )?.documentType ?? ''
+  )
 }
 
 async function openEdit(
@@ -121,9 +136,26 @@ async function saveEdit() {
   editSaving.value = true
 
   try {
+    const request: UpdateTravelerRequest = {
+      ...editForm.value,
+      documents: editForm.value.documents.map(
+        document => ({
+          ...document,
+          nameZhOnDocument:
+            editingDocumentType(
+              document.documentVersionId,
+            ) === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? convertTraditionalNameToSimplified(
+                  editForm.value.nameZh,
+                )
+              : document.nameZhOnDocument,
+        }),
+      ),
+    }
+
     await updateTraveler(
       editingTraveler.value.traveler.travelerId,
-      editForm.value,
+      request,
     )
     editOpen.value = false
     editingTraveler.value = null
@@ -365,13 +397,37 @@ onMounted(load)
               </strong>
 
               <div class="two-column">
-                <label>
+                <label
+                  v-if="
+                    editingDocumentType(
+                      document.documentVersionId,
+                    ) !==
+                    'TAIWAN_COMPATRIOT_PERMIT'
+                  "
+                >
                   <span>證件中文姓名</span>
                   <input
                     v-model="document.nameZhOnDocument"
                     type="text"
                   />
                 </label>
+
+                <div
+                  v-else
+                  class="derived-document-name"
+                >
+                  <span>台胞證中文姓名</span>
+                  <strong>
+                    {{
+                      convertTraditionalNameToSimplified(
+                        editForm.nameZh,
+                      )
+                    }}
+                  </strong>
+                  <small>
+                    由旅客主檔繁體姓名自動轉為簡體，不另外維護第二個姓名。
+                  </small>
+                </div>
 
                 <label>
                   <span>證件英文姓名</span>
@@ -726,6 +782,32 @@ tr:last-child td {
   border: 1px solid #e0e5ec;
   border-radius: 10px;
   background: #fafbfc;
+}
+
+.derived-document-name {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #f5f7fa;
+}
+
+.derived-document-name span {
+  color: #66748a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.derived-document-name strong {
+  color: #243249;
+  font-size: 12px;
+}
+
+.derived-document-name small {
+  color: #8692a3;
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .document-edit-card > strong {
