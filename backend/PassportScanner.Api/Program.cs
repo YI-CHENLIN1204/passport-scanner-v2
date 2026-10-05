@@ -138,6 +138,7 @@ using (var scope = app.Services.CreateScope())
             expiry_date date NULL,
             ocr_payload_json text NOT NULL,
             review_status varchar(20) NOT NULL,
+            saved_document_version_id uuid NULL,
             reviewed_at timestamptz NULL,
             delete_after timestamptz NOT NULL,
             created_at timestamptz NOT NULL,
@@ -153,6 +154,9 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE scan_items
             ALTER COLUMN name_zh_on_document SET NOT NULL;
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS saved_document_version_id uuid NULL;
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
