@@ -142,7 +142,7 @@ jobs:
 
           curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
             -H 'Content-Type: application/json' \
-            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
             > /tmp/permit-scan-item.json
 
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" \
@@ -159,6 +159,10 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" \
             > /tmp/review-queue-after.json
           python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows; assert {item['documentType'] for item in rows[0]['documents']} == {'PASSPORT', 'TAIWAN_COMPATRIOT_PERMIT'}, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" \
+            > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=next(item for item in data['documents'] if item['documentType'] == 'TAIWAN_COMPATRIOT_PERMIT'); assert doc['manualCorrectionCount'] == 1, doc; assert doc['manualCorrectionRate'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc; name=next(item for item in doc['fields'] if item['field'] == 'nameZh'); assert name['exactMatchCount'] == 0, name"
 
       - name: Restart backend and verify API reconnects
         run: |
