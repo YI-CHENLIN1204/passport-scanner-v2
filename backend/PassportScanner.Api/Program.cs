@@ -158,6 +158,40 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE scan_items
             ADD COLUMN IF NOT EXISTS saved_document_version_id uuid NULL;
 
+        UPDATE scan_items AS scan
+        SET saved_document_version_id = (
+            SELECT document.document_version_id
+            FROM document_versions AS document
+            WHERE
+                document.document_type = scan.document_type
+                AND document.document_number = scan.document_number
+                AND (
+                    scan.document_type <> 'PASSPORT'
+                    OR COALESCE(document.issuing_country, '') =
+                       COALESCE(scan.issuing_country, '')
+                )
+            ORDER BY
+                document.is_current DESC,
+                document.verified_at DESC,
+                document.created_at DESC
+            LIMIT 1
+        )
+        WHERE
+            scan.review_status = 'REVIEWED'
+            AND scan.saved_document_version_id IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM document_versions AS document
+                WHERE
+                    document.document_type = scan.document_type
+                    AND document.document_number = scan.document_number
+                    AND (
+                        scan.document_type <> 'PASSPORT'
+                        OR COALESCE(document.issuing_country, '') =
+                           COALESCE(scan.issuing_country, '')
+                    )
+            );
+
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
 
