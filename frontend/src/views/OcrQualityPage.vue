@@ -68,12 +68,71 @@ const errorAnalysisCards = computed(() =>
 
       const weakest = fields.slice(0, 3)
       const signals: string[] = []
+      const diagnostic = new Map(
+        (card.benchmark?.signals ?? []).map(
+          signal => [signal.signal, signal],
+        ),
+      )
 
-      const attempts =
-        card.benchmark?.averageOrientationAttempts
-      if (attempts && attempts > 1.05) {
+      const orientationRetry =
+        diagnostic.get('orientationRetry')
+      if (
+        orientationRetry &&
+        orientationRetry.positiveRate > 0.05
+      ) {
         signals.push(
-          `方向平均嘗試 ${attempts.toFixed(1)} 次`,
+          `方向需重試 ${rate(
+            orientationRetry.positiveRate,
+          )}`,
+        )
+      }
+
+      const structureComplete =
+        diagnostic.get('structureComplete')
+      if (
+        structureComplete &&
+        structureComplete.positiveRate < 0.9
+      ) {
+        signals.push(
+          `MRZ 結構完整率 ${rate(
+            structureComplete.positiveRate,
+          )}`,
+        )
+      }
+
+      const line1Valid =
+        diagnostic.get('line1Valid')
+      if (
+        line1Valid &&
+        line1Valid.positiveRate < 0.9
+      ) {
+        signals.push(
+          `MRZ Line 1 有效率 ${rate(
+            line1Valid.positiveRate,
+          )}`,
+        )
+      }
+
+      const idChecksum =
+        diagnostic.get('idChecksumValid')
+      if (
+        idChecksum &&
+        idChecksum.positiveRate < 0.95
+      ) {
+        signals.push(
+          `身分證檢查碼通過率 ${rate(
+            idChecksum.positiveRate,
+          )}`,
+        )
+      }
+
+      const mrzUsed =
+        diagnostic.get('mrzUsed')
+      if (mrzUsed) {
+        signals.push(
+          `台胞證 MRZ 使用率 ${rate(
+            mrzUsed.positiveRate,
+          )}`,
         )
       }
 
