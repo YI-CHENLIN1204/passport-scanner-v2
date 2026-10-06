@@ -300,17 +300,40 @@ public sealed class PostgresTrainingDatasetStore(
 
         try
         {
-            using var document =
+            using var groundTruth =
                 JsonDocument.Parse(
                     sample.GroundTruthJson);
+            using var ocrPayload =
+                JsonDocument.Parse(
+                    string.IsNullOrWhiteSpace(
+                        sample.OcrPayloadJson)
+                        ? "{}"
+                        : sample.OcrPayloadJson);
 
-            return document.RootElement.TryGetProperty(
-                    "nameZhOnDocument",
-                    out var name) &&
-                name.ValueKind ==
+            var hasCanonicalName =
+                groundTruth.RootElement.TryGetProperty(
+                    "businessNameZh",
+                    out var businessName) &&
+                businessName.ValueKind ==
                     JsonValueKind.String &&
                 !string.IsNullOrWhiteSpace(
-                    name.GetString());
+                    businessName.GetString());
+
+            var hasNormalizedOriginal =
+                ocrPayload.RootElement.TryGetProperty(
+                    "originalFields",
+                    out var originalFields) &&
+                originalFields.ValueKind ==
+                    JsonValueKind.Object &&
+                originalFields.TryGetProperty(
+                    "nameZhTraditional",
+                    out var normalizedName) &&
+                normalizedName.ValueKind ==
+                    JsonValueKind.String;
+
+            return
+                hasCanonicalName &&
+                hasNormalizedOriginal;
         }
         catch (JsonException)
         {
