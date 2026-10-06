@@ -23,6 +23,11 @@ public interface ITrainingDatasetStore
     TrainingDatasetSampleImage? GetSampleImage(
         Guid trainingSampleId);
 
+    EvaluationBaselineResponse SaveEvaluationBaseline(
+        Guid trainingSampleId,
+        string resultJson,
+        DateTimeOffset now);
+
     TrainingDatasetExport ExportZip(
         DateTimeOffset generatedAt);
 }
