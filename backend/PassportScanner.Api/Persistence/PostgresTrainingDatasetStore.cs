@@ -171,6 +171,68 @@ public sealed class PostgresTrainingDatasetStore(
             generatedAt);
     }
 
+    public IReadOnlyList<TrainingEvaluationSampleResponse>
+        ListEvaluationSamples(
+            string split)
+    {
+        var normalizedSplit =
+            split.Trim().ToLowerInvariant();
+
+        if (
+            normalizedSplit is not
+            ("train" or "validation" or "test"))
+        {
+            throw new ArgumentException(
+                "split 必須是 train、validation 或 test。",
+                nameof(split));
+        }
+
+        var usableSamples = db.TrainingSamples
+            .AsNoTracking()
+            .OrderBy(item => item.DocumentType)
+            .ThenBy(item => item.SelectedAt)
+            .ToList()
+            .Where(IsUsableTrainingSample)
+            .ToList();
+
+        var splitBySample =
+            BuildSplitAssignments(usableSamples);
+
+        return usableSamples
+            .Where(sample =>
+                splitBySample[sample.TrainingSampleId] ==
+                    normalizedSplit)
+            .Select(sample =>
+                new TrainingEvaluationSampleResponse(
+                    sample.TrainingSampleId,
+                    sample.DocumentType,
+                    normalizedSplit,
+                    sample.GroundTruthJson))
+            .ToList();
+    }
+
+    public TrainingDatasetSampleImage? GetSampleImage(
+        Guid trainingSampleId)
+    {
+        var sample = db.TrainingSamples
+            .AsNoTracking()
+            .SingleOrDefault(item =>
+                item.TrainingSampleId ==
+                    trainingSampleId);
+
+        if (sample is null)
+        {
+            return null;
+        }
+
+        return new TrainingDatasetSampleImage(
+            sample.ImageBytes,
+            sample.ImageContentType,
+            $"training-sample-{trainingSampleId:N}" +
+            ExtensionFromContentType(
+                sample.ImageContentType));
+    }
+
     public TrainingDatasetExport ExportZip(
         DateTimeOffset generatedAt)
     {
