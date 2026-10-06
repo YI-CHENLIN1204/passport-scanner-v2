@@ -220,6 +220,14 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS
             ux_training_samples_source_scan_item
             ON training_samples (source_scan_item_id);
+
+        CREATE TABLE IF NOT EXISTS ocr_evaluation_baselines (
+            training_sample_id uuid PRIMARY KEY
+                REFERENCES training_samples(training_sample_id)
+                ON DELETE CASCADE,
+            result_json text NOT NULL,
+            captured_at timestamptz NOT NULL
+        );
         """);
 }
 
