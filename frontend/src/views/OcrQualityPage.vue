@@ -4,10 +4,20 @@ import {
   downloadTrainingDataset,
   getOcrBenchmarkSummary,
   getTrainingDatasetSummary,
+  getTrainingEvaluationSamples,
+  getTrainingSampleImageFile,
   type OcrBenchmarkDocumentSummary,
+  type TrainingEvaluationSampleResponse,
   type OcrBenchmarkSummaryResponse,
   type TrainingDatasetSummaryResponse,
 } from '../services/api'
+import {
+  recognizePassportWithPaddle,
+  recognizeTaiwanCompatriotPermitWithPaddle,
+  recognizeTaiwanNationalIdWithPaddle,
+  validateTaiwanNationalId,
+  warmupPaddleOcr,
+} from '../services/paddleOcr'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -15,6 +25,13 @@ const training =
   ref<TrainingDatasetSummaryResponse | null>(null)
 const loading = ref(true)
 const exporting = ref(false)
+const retesting = ref(false)
+const retestProgress = ref({
+  completed: 0,
+  total: 0,
+  message: '',
+})
+const retestResult = ref<RetestRunSummary | null>(null)
 const error = ref('')
 
 const documentOrder = [
@@ -22,6 +39,615 @@ const documentOrder = [
   'TAIWAN_COMPATRIOT_PERMIT',
   'TAIWAN_NATIONAL_ID',
 ]
+
+const fieldsByDocumentType: Record<string, string[]> = {
+  PASSPORT: [
+    'nameZh',
+    'nameEn',
+    'birthDate',
+    'gender',
+    'nationality',
+    'nationalIdNumber',
+    'documentNumber',
+    'issuingCountry',
+    'expiryDate',
+  ],
+  TAIWAN_COMPATRIOT_PERMIT: [
+    'nameZh',
+    'birthDate',
+    'gender',
+    'documentNumber',
+    'expiryDate',
+  ],
+  TAIWAN_NATIONAL_ID: [
+    'nameZh',
+    'birthDate',
+    'gender',
+    'documentNumber',
+  ],
+}
+
+interface RetestSampleOutcome {
+  documentType: string
+  baselineFields: Record<string, string | null>
+  currentFields: Record<string, string | null>
+  groundTruth: Record<string, string | null>
+  totalMs: number
+  orientationAttempts: number
+}
+
+interface RetestFieldSummary {
+  field: string
+  comparedCount: number
+  baselineExactRate: number
+  currentExactRate: number
+  delta: number
+}
+
+interface RetestDocumentSummary {
+  documentType: string
+  sampleCount: number
+  baselineFullExactRate: number
+  currentFullExactRate: number
+  fields: RetestFieldSummary[]
+  medianTotalMs: number | null
+  p90TotalMs: number | null
+  orientationRetryRate: number
+}
+
+interface RetestRunSummary {
+  generatedAt: string
+  sampleCount: number
+  failedCount: number
+  documents: RetestDocumentSummary[]
+}
+
+function parseJsonRecord(
+  value: string,
+): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object'
+      ? parsed as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function stringOrNull(value: unknown) {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  return String(value)
+}
+
+function normalizeEvalValue(
+  field: string,
+  value: string | null | undefined,
+) {
+  const text = value?.trim() ?? ''
+
+  if (field === 'nameZh') {
+    return text.replace(/\s+/g, '')
+  }
+
+  if (field === 'nameEn') {
+    return text
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+  }
+
+  if (
+    field === 'nationalIdNumber' ||
+    field === 'documentNumber'
+  ) {
+    return text
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+  }
+
+  if (
+    field === 'nationality' ||
+    field === 'issuingCountry' ||
+    field === 'gender'
+  ) {
+    return text.toUpperCase()
+  }
+
+  return text
+}
+
+function evalFieldEquals(
+  field: string,
+  actual: string | null | undefined,
+  expected: string | null | undefined,
+) {
+  return (
+    normalizeEvalValue(field, actual) ===
+    normalizeEvalValue(field, expected)
+  )
+}
+
+function formatIsoDate(
+  year: number,
+  month: number,
+  day: number,
+) {
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null
+  }
+
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
+}
+
+function mrzBirthDateToIso(value: string) {
+  if (!/^\d{6}$/.test(value)) return null
+
+  const yy = Number(value.slice(0, 2))
+  const month = Number(value.slice(2, 4))
+  const day = Number(value.slice(4, 6))
+  const currentYear = new Date().getUTCFullYear()
+  const currentTwoDigits = currentYear % 100
+  const year =
+    yy <= currentTwoDigits
+      ? 2000 + yy
+      : 1900 + yy
+
+  return formatIsoDate(year, month, day)
+}
+
+function mrzExpiryDateToIso(value: string) {
+  if (!/^\d{6}$/.test(value)) return null
+
+  const yy = Number(value.slice(0, 2))
+  const month = Number(value.slice(2, 4))
+  const day = Number(value.slice(4, 6))
+  const currentYear = new Date().getUTCFullYear()
+  const currentCentury =
+    Math.floor(currentYear / 100) * 100
+  let year = currentCentury + yy
+
+  if (year < currentYear - 20) {
+    year += 100
+  }
+
+  return formatIsoDate(year, month, day)
+}
+
+function passportNationalIdFromMrz(
+  personalNumber: string,
+  issuingState: string,
+  nationality: string,
+) {
+  if (
+    issuingState !== 'TWN' &&
+    nationality !== 'TWN'
+  ) {
+    return null
+  }
+
+  const candidate = personalNumber
+    .replace(/</g, '')
+    .trim()
+    .toUpperCase()
+
+  return validateTaiwanNationalId(candidate)
+    ? candidate
+    : null
+}
+
+function baselineFieldsForSample(
+  sample: TrainingEvaluationSampleResponse,
+) {
+  const payload =
+    parseJsonRecord(sample.originalOcrJson)
+  const original =
+    payload.originalFields &&
+    typeof payload.originalFields === 'object'
+      ? payload.originalFields as Record<string, unknown>
+      : {}
+
+  return Object.fromEntries(
+    (fieldsByDocumentType[sample.documentType] ?? [])
+      .map(field => [
+        field,
+        stringOrNull(original[field]),
+      ]),
+  )
+}
+
+function groundTruthForSample(
+  sample: TrainingEvaluationSampleResponse,
+) {
+  const ground =
+    parseJsonRecord(sample.groundTruthJson)
+
+  return Object.fromEntries(
+    (fieldsByDocumentType[sample.documentType] ?? [])
+      .map(field => [
+        field,
+        stringOrNull(ground[field]),
+      ]),
+  )
+}
+
+async function currentFieldsForSample(
+  sample: TrainingEvaluationSampleResponse,
+  file: File,
+) {
+  if (sample.documentType === 'PASSPORT') {
+    const result =
+      await recognizePassportWithPaddle(file)
+    const parsed = result.parsedMrz
+
+    return {
+      fields: {
+        nameZh: result.chineseName ?? '',
+        nameEn: parsed
+          ? [parsed.surname, parsed.givenNames]
+              .filter(Boolean)
+              .join(', ')
+          : '',
+        birthDate: parsed
+          ? mrzBirthDateToIso(parsed.birthDate)
+          : null,
+        gender: parsed?.sex ?? '',
+        nationality: parsed?.nationality ?? null,
+        nationalIdNumber: parsed
+          ? passportNationalIdFromMrz(
+              parsed.personalNumber,
+              parsed.issuingState,
+              parsed.nationality,
+            )
+          : null,
+        documentNumber:
+          parsed?.documentNumber ?? '',
+        issuingCountry:
+          parsed?.issuingState ?? null,
+        expiryDate: parsed
+          ? mrzExpiryDateToIso(parsed.expiryDate)
+          : null,
+      },
+      totalMs: result.totalMs,
+      orientationAttempts:
+        result.orientationAttempts ?? 1,
+    }
+  }
+
+  if (
+    sample.documentType ===
+    'TAIWAN_COMPATRIOT_PERMIT'
+  ) {
+    const result =
+      await recognizeTaiwanCompatriotPermitWithPaddle(
+        file,
+      )
+
+    return {
+      fields: {
+        nameZh: result.chineseName || '',
+        birthDate: result.birthDate || null,
+        gender: result.sex || '',
+        documentNumber:
+          result.permitNumber || '',
+        expiryDate: result.expiryDate || null,
+      },
+      totalMs: result.totalMs,
+      orientationAttempts:
+        result.orientationAttempts ?? 1,
+    }
+  }
+
+  if (
+    sample.documentType ===
+    'TAIWAN_NATIONAL_ID'
+  ) {
+    const result =
+      await recognizeTaiwanNationalIdWithPaddle(
+        file,
+      )
+
+    return {
+      fields: {
+        nameZh: result.chineseName || '',
+        birthDate: result.birthDate || null,
+        gender: result.sex || '',
+        documentNumber:
+          result.nationalId || '',
+      },
+      totalMs: result.totalMs,
+      orientationAttempts:
+        result.orientationAttempts ?? 1,
+    }
+  }
+
+  throw new Error(
+    `不支援的 Test set 證件類型：${sample.documentType}`,
+  )
+}
+
+function percentile(
+  values: number[],
+  fraction: number,
+) {
+  if (!values.length) return null
+
+  const ordered = [...values].sort(
+    (a, b) => a - b,
+  )
+  const index = Math.max(
+    0,
+    Math.min(
+      ordered.length - 1,
+      Math.ceil(ordered.length * fraction) - 1,
+    ),
+  )
+
+  return ordered[index]
+}
+
+function summarizeRetest(
+  outcomes: RetestSampleOutcome[],
+): RetestDocumentSummary[] {
+  return documentOrder
+    .map(documentType => {
+      const samples = outcomes.filter(
+        item =>
+          item.documentType === documentType,
+      )
+
+      if (!samples.length) return null
+
+      const fields =
+        fieldsByDocumentType[documentType] ?? []
+      const fieldSummaries =
+        fields.map(field => {
+          let compared = 0
+          let baselineExact = 0
+          let currentExact = 0
+
+          for (const sample of samples) {
+            const expected =
+              sample.groundTruth[field] ?? null
+
+            if (
+              field === 'nationalIdNumber' &&
+              documentType === 'PASSPORT' &&
+              !normalizeEvalValue(
+                field,
+                expected,
+              )
+            ) {
+              continue
+            }
+
+            compared += 1
+
+            if (
+              evalFieldEquals(
+                field,
+                sample.baselineFields[field],
+                expected,
+              )
+            ) {
+              baselineExact += 1
+            }
+
+            if (
+              evalFieldEquals(
+                field,
+                sample.currentFields[field],
+                expected,
+              )
+            ) {
+              currentExact += 1
+            }
+          }
+
+          const baselineRate =
+            compared
+              ? baselineExact / compared
+              : 0
+          const currentRate =
+            compared
+              ? currentExact / compared
+              : 0
+
+          return {
+            field,
+            comparedCount: compared,
+            baselineExactRate: baselineRate,
+            currentExactRate: currentRate,
+            delta:
+              currentRate - baselineRate,
+          }
+        })
+        .filter(field => field.comparedCount > 0)
+
+      let baselineFull = 0
+      let currentFull = 0
+
+      for (const sample of samples) {
+        const applicableFields =
+          fields.filter(field => {
+            if (
+              field === 'nationalIdNumber' &&
+              documentType === 'PASSPORT'
+            ) {
+              return Boolean(
+                normalizeEvalValue(
+                  field,
+                  sample.groundTruth[field],
+                ),
+              )
+            }
+
+            return true
+          })
+
+        if (
+          applicableFields.every(field =>
+            evalFieldEquals(
+              field,
+              sample.baselineFields[field],
+              sample.groundTruth[field],
+            ),
+          )
+        ) {
+          baselineFull += 1
+        }
+
+        if (
+          applicableFields.every(field =>
+            evalFieldEquals(
+              field,
+              sample.currentFields[field],
+              sample.groundTruth[field],
+            ),
+          )
+        ) {
+          currentFull += 1
+        }
+      }
+
+      const times = samples.map(
+        sample => sample.totalMs,
+      )
+      const retryCount = samples.filter(
+        sample => sample.orientationAttempts > 1,
+      ).length
+
+      return {
+        documentType,
+        sampleCount: samples.length,
+        baselineFullExactRate:
+          baselineFull / samples.length,
+        currentFullExactRate:
+          currentFull / samples.length,
+        fields: fieldSummaries,
+        medianTotalMs:
+          percentile(times, 0.5),
+        p90TotalMs:
+          percentile(times, 0.9),
+        orientationRetryRate:
+          retryCount / samples.length,
+      }
+    })
+    .filter(
+      (
+        item,
+      ): item is RetestDocumentSummary =>
+        item !== null,
+    )
+}
+
+async function rerunTestSet() {
+  if (
+    retesting.value ||
+    !training.value?.testCount
+  ) {
+    return
+  }
+
+  retesting.value = true
+  error.value = ''
+  retestResult.value = null
+  retestProgress.value = {
+    completed: 0,
+    total: training.value.testCount,
+    message: '正在載入固定 Test set…',
+  }
+
+  const outcomes: RetestSampleOutcome[] = []
+  let failed = 0
+
+  try {
+    const samples =
+      await getTrainingEvaluationSamples('test')
+
+    retestProgress.value.total = samples.length
+
+    await warmupPaddleOcr()
+
+    for (
+      let index = 0;
+      index < samples.length;
+      index += 1
+    ) {
+      const sample = samples[index]
+
+      retestProgress.value = {
+        completed: index,
+        total: samples.length,
+        message:
+          `正在重測 ${documentLabel(
+            sample.documentType,
+          )} ${index + 1} / ${samples.length}`,
+      }
+
+      try {
+        const file =
+          await getTrainingSampleImageFile(
+            sample.trainingSampleId,
+          )
+        const current =
+          await currentFieldsForSample(
+            sample,
+            file,
+          )
+
+        outcomes.push({
+          documentType: sample.documentType,
+          baselineFields:
+            baselineFieldsForSample(sample),
+          currentFields: current.fields,
+          groundTruth:
+            groundTruthForSample(sample),
+          totalMs: current.totalMs,
+          orientationAttempts:
+            current.orientationAttempts,
+        })
+      } catch {
+        failed += 1
+      }
+
+      retestProgress.value.completed =
+        index + 1
+    }
+
+    retestResult.value = {
+      generatedAt: new Date().toISOString(),
+      sampleCount: outcomes.length,
+      failedCount: failed,
+      documents: summarizeRetest(outcomes),
+    }
+
+    retestProgress.value.message =
+      failed
+        ? `Test set 重測完成；${failed} 張失敗。`
+        : 'Test set 重測完成。'
+  } catch (err) {
+    error.value =
+      err instanceof Error
+        ? err.message
+        : 'Test set 重測失敗。'
+  } finally {
+    retesting.value = false
+  }
+}
+
 
 const documentCards = computed(() =>
   documentOrder.map(type => {
@@ -405,6 +1031,188 @@ onMounted(load)
               }}
             </small>
           </div>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">
+            CURRENT TEST BENCHMARK
+          </p>
+          <h2>用最新版 OCR 重跑固定 Test set</h2>
+          <p>
+            不建立旅客、不修改人工答案，也不把 Test 資料拿去訓練。
+            會直接用目前程式重新辨識保留的 Test 圖片，
+            並和同一批樣本當初的 OCR 結果比較。
+          </p>
+          <small>
+            保留資料中的圖片是人工審核用的標準化影像，
+            因此這裡適合驗證 recognition / parser 回歸；
+            速度與原始拍攝方向仍要用新的實際上傳照片驗證。
+          </small>
+        </div>
+
+        <div class="retest-action">
+          <button
+            type="button"
+            class="primary-action"
+            :disabled="
+              retesting ||
+              !training?.testCount
+            "
+            @click="rerunTestSet"
+          >
+            {{
+              retesting
+                ? '重測中…'
+                : `重跑 Test ${training?.testCount ?? 0} 張`
+            }}
+          </button>
+
+          <div
+            v-if="
+              retesting ||
+              retestProgress.completed
+            "
+            class="retest-progress"
+          >
+            <div>
+              <span>
+                {{ retestProgress.message }}
+              </span>
+              <strong>
+                {{ retestProgress.completed }}
+                /
+                {{ retestProgress.total }}
+              </strong>
+            </div>
+            <progress
+              :max="Math.max(1, retestProgress.total)"
+              :value="retestProgress.completed"
+            ></progress>
+          </div>
+        </div>
+
+        <div
+          v-if="retestResult"
+          class="retest-results"
+        >
+          <article
+            v-for="result in retestResult.documents"
+            :key="result.documentType"
+          >
+            <header>
+              <div>
+                <strong>
+                  {{ documentLabel(result.documentType) }}
+                </strong>
+                <span>
+                  Test n={{ result.sampleCount }}
+                </span>
+              </div>
+              <div class="retest-full-rate">
+                <small>整張完全正確</small>
+                <span>
+                  {{
+                    rate(
+                      result.baselineFullExactRate,
+                    )
+                  }}
+                  →
+                  <strong>
+                    {{
+                      rate(
+                        result.currentFullExactRate,
+                      )
+                    }}
+                  </strong>
+                </span>
+              </div>
+            </header>
+
+            <div class="retest-field-list">
+              <div
+                v-for="field in result.fields"
+                :key="field.field"
+              >
+                <span>
+                  {{ fieldLabel(field.field) }}
+                </span>
+                <span>
+                  {{
+                    rate(
+                      field.baselineExactRate,
+                    )
+                  }}
+                  →
+                  <strong>
+                    {{
+                      rate(
+                        field.currentExactRate,
+                      )
+                    }}
+                  </strong>
+                </span>
+                <em
+                  :class="{
+                    positive: field.delta > 0,
+                    negative: field.delta < 0,
+                  }"
+                >
+                  {{
+                    field.delta > 0
+                      ? '+'
+                      : ''
+                  }}{{
+                    Math.round(
+                      field.delta * 100,
+                    )
+                  }}%
+                </em>
+              </div>
+            </div>
+
+            <footer>
+              <span>
+                標準化影像 Median
+                <strong>
+                  {{
+                    seconds(
+                      result.medianTotalMs,
+                    )
+                  }}
+                </strong>
+              </span>
+              <span>
+                P90
+                <strong>
+                  {{
+                    seconds(
+                      result.p90TotalMs,
+                    )
+                  }}
+                </strong>
+              </span>
+              <span>
+                方向重試
+                <strong>
+                  {{
+                    rate(
+                      result.orientationRetryRate,
+                    )
+                  }}
+                </strong>
+              </span>
+            </footer>
+          </article>
+
+          <p
+            v-if="retestResult.failedCount"
+            class="retest-failed"
+          >
+            有 {{ retestResult.failedCount }} 張 Test
+            圖片未完成重測，未納入本次結果。
+          </p>
         </div>
       </section>
 
@@ -1053,6 +1861,180 @@ onMounted(load)
   color: #8490a1;
   font-size: 9px;
   line-height: 1.55;
+}
+
+.retest-card {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.35fr) minmax(300px, .65fr);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #d9e2eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.retest-copy h2 {
+  margin: 4px 0 7px;
+  color: #1d2a40;
+  font-size: 17px;
+}
+
+.retest-copy p {
+  margin: 0;
+  color: #748095;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.retest-copy > small {
+  display: block;
+  margin-top: 8px;
+  color: #9a7a45;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.retest-action {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+  justify-items: stretch;
+}
+
+.retest-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.retest-progress > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: #7a8799;
+  font-size: 9px;
+}
+
+.retest-progress strong {
+  color: #43516a;
+}
+
+.retest-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+.retest-results {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.retest-results article {
+  overflow: hidden;
+  border: 1px solid #dde4ed;
+  border-radius: 11px;
+  background: #fafbfc;
+}
+
+.retest-results article > header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px;
+  border-bottom: 1px solid #e8edf2;
+  background: #fff;
+}
+
+.retest-results article > header > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.retest-results article > header strong {
+  color: #26354c;
+  font-size: 11px;
+}
+
+.retest-results article > header span,
+.retest-results article > header small {
+  color: #7f8a9b;
+  font-size: 8px;
+}
+
+.retest-full-rate {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.retest-full-rate span {
+  color: #68768a;
+  font-size: 9px;
+}
+
+.retest-full-rate strong {
+  color: #1f6d4a;
+}
+
+.retest-field-list {
+  display: grid;
+}
+
+.retest-field-list > div {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto 42px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 11px;
+  border-bottom: 1px solid #edf1f4;
+  color: #6e7a8e;
+  font-size: 8px;
+}
+
+.retest-field-list strong {
+  color: #26354c;
+}
+
+.retest-field-list em {
+  font-style: normal;
+  text-align: right;
+  color: #8792a3;
+  font-size: 8px;
+}
+
+.retest-field-list em.positive {
+  color: #1f7a50;
+}
+
+.retest-field-list em.negative {
+  color: #b14a42;
+}
+
+.retest-results article > footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  color: #8792a3;
+  font-size: 8px;
+}
+
+.retest-results article > footer strong {
+  color: #4c5c72;
+}
+
+.retest-failed {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a25a38;
+  font-size: 9px;
 }
 
 .document-grid {
