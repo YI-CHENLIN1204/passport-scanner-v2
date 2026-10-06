@@ -12,3 +12,11 @@ public sealed class TrainingSampleRecord
     public required DateTimeOffset SelectedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
+
+
+public sealed class OcrEvaluationBaselineRecord
+{
+    public required Guid TrainingSampleId { get; init; }
+    public required string ResultJson { get; set; }
+    public required DateTimeOffset CapturedAt { get; set; }
+}
