@@ -24,17 +24,88 @@ const documentOrder = [
 ]
 
 const documentCards = computed(() =>
-  documentOrder.map(type => ({
-    type,
-    benchmark:
-      benchmark.value?.documents.find(
-        item => item.documentType === type,
-      ) ?? null,
-    trainingCount:
+  documentOrder.map(type => {
+    const trainingSummary =
       training.value?.documents.find(
         item => item.documentType === type,
-      )?.sampleCount ?? 0,
-  })),
+      ) ?? null
+
+    return {
+      type,
+      benchmark:
+        benchmark.value?.documents.find(
+          item => item.documentType === type,
+        ) ?? null,
+      trainingCount:
+        trainingSummary?.sampleCount ?? 0,
+      trainCount:
+        trainingSummary?.trainCount ?? 0,
+      validationCount:
+        trainingSummary?.validationCount ?? 0,
+      testCount:
+        trainingSummary?.testCount ?? 0,
+    }
+  }),
+)
+
+const errorAnalysisCards = computed(() =>
+  documentCards.value
+    .filter(
+      card =>
+        (card.benchmark?.scoredSampleCount ?? 0) >
+        0,
+    )
+    .map(card => {
+      const fields =
+        card.benchmark?.fields
+          .filter(field => field.comparedCount > 0)
+          .slice()
+          .sort(
+            (a, b) =>
+              a.exactMatchRate -
+              b.exactMatchRate,
+          ) ?? []
+
+      const weakest = fields.slice(0, 3)
+      const signals: string[] = []
+
+      const attempts =
+        card.benchmark?.averageOrientationAttempts
+      if (attempts && attempts > 1.05) {
+        signals.push(
+          `方向平均嘗試 ${attempts.toFixed(1)} 次`,
+        )
+      }
+
+      const fallback =
+        card.benchmark?.fallbackRate
+      if (fallback && fallback > 0) {
+        signals.push(
+          `Fallback 使用率 ${rate(fallback)}`,
+        )
+      }
+
+      const median =
+        card.benchmark?.medianTotalMs
+      const p90 =
+        card.benchmark?.p90TotalMs
+
+      if (
+        median &&
+        p90 &&
+        p90 >= median * 1.8
+      ) {
+        signals.push(
+          `尾端耗時偏高：P90 ${seconds(p90)}`,
+        )
+      }
+
+      return {
+        type: card.type,
+        weakest,
+        signals,
+      }
+    }),
 )
 
 function documentLabel(type: string) {
@@ -91,6 +162,14 @@ function sampleStatus(
   if (count >= 50) return '可做中期分析'
   if (count >= 20) return '正在累積'
   return '樣本不足'
+}
+
+function splitPercent(
+  count: number | null | undefined,
+  total: number | null | undefined,
+) {
+  if (!count || !total) return '0%'
+  return `${Math.round((count / total) * 100)}%`
 }
 
 async function load() {
@@ -212,6 +291,61 @@ onMounted(load)
         </div>
       </section>
 
+      <section class="split-card">
+        <div class="split-copy">
+          <p class="page-kicker">
+            DATASET SPLIT
+          </p>
+          <h2>固定資料切分</h2>
+          <p>
+            以旅客為群組做穩定 70 / 15 / 15 切分。
+            同一位旅客的護照、台胞證與多張照片不會跨到不同資料集，
+            避免 Train 看過同一個人後又在 Test 被重複計分。
+          </p>
+        </div>
+
+        <div class="split-stats">
+          <div>
+            <span>Train</span>
+            <strong>{{ training?.trainCount ?? 0 }}</strong>
+            <small>
+              {{
+                splitPercent(
+                  training?.trainCount,
+                  training?.sampleCount,
+                )
+              }}
+            </small>
+          </div>
+          <div>
+            <span>Validation</span>
+            <strong>
+              {{ training?.validationCount ?? 0 }}
+            </strong>
+            <small>
+              {{
+                splitPercent(
+                  training?.validationCount,
+                  training?.sampleCount,
+                )
+              }}
+            </small>
+          </div>
+          <div>
+            <span>Test</span>
+            <strong>{{ training?.testCount ?? 0 }}</strong>
+            <small>
+              {{
+                splitPercent(
+                  training?.testCount,
+                  training?.sampleCount,
+                )
+              }}
+            </small>
+          </div>
+        </div>
+      </section>
+
       <section class="document-grid">
         <article
           v-for="card in documentCards"
@@ -294,8 +428,26 @@ onMounted(load)
           </div>
 
           <div class="training-count">
-            <span>已選訓練樣本</span>
+            <span>已選 OCR 改善樣本</span>
             <strong>{{ card.trainingCount }}</strong>
+          </div>
+
+          <div
+            v-if="card.trainingCount"
+            class="document-split"
+          >
+            <span>
+              Train
+              <strong>{{ card.trainCount }}</strong>
+            </span>
+            <span>
+              Val
+              <strong>{{ card.validationCount }}</strong>
+            </span>
+            <span>
+              Test
+              <strong>{{ card.testCount }}</strong>
+            </span>
           </div>
 
           <div
@@ -341,6 +493,69 @@ onMounted(load)
         </article>
       </section>
 
+      <section
+        v-if="errorAnalysisCards.length"
+        class="analysis-section"
+      >
+        <header>
+          <div>
+            <p class="page-kicker">
+              FIRST-PASS ERROR ANALYSIS
+            </p>
+            <h2>第一輪錯誤分析</h2>
+            <p>
+              先用實際 benchmark 找最弱欄位與方向／fallback／耗時訊號，
+              再決定要改 recognition、欄位擷取或前處理，不直接盲目重訓整套 OCR。
+            </p>
+          </div>
+        </header>
+
+        <div class="analysis-grid">
+          <article
+            v-for="card in errorAnalysisCards"
+            :key="card.type"
+          >
+            <header>
+              <strong>
+                {{ documentLabel(card.type) }}
+              </strong>
+              <span>優先檢查</span>
+            </header>
+
+            <div class="weak-fields">
+              <div
+                v-for="field in card.weakest"
+                :key="field.field"
+              >
+                <span>
+                  {{ fieldLabel(field.field) }}
+                </span>
+                <strong>
+                  {{ rate(field.exactMatchRate) }}
+                </strong>
+              </div>
+            </div>
+
+            <div
+              v-if="card.signals.length"
+              class="analysis-signals"
+            >
+              <span
+                v-for="signal in card.signals"
+                :key="signal"
+              >
+                {{ signal }}
+              </span>
+            </div>
+
+            <p v-else>
+              目前沒有額外方向／fallback／尾端耗時警訊；
+              第一輪先從最低準確率欄位開始分析。
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section class="dataset-card">
         <div class="dataset-copy">
           <p class="page-kicker">
@@ -351,6 +566,8 @@ onMounted(load)
             只有審核時勾選「保留此樣本供 OCR 改善」
             的證件會被獨立複製到這裡。
             Production 照片原本的刪除期限不會改變。
+            匯出的 manifest 會包含固定 split，
+            並另外產生 train / validation / test 三份清單。
           </p>
 
           <div class="privacy-note">
@@ -485,6 +702,163 @@ onMounted(load)
   color: #8994a4;
   font-size: 9px;
   line-height: 1.5;
+}
+
+.split-card {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.5fr) minmax(360px, .9fr);
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid #d9e2eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.split-copy h2,
+.analysis-section h2 {
+  margin: 4px 0 7px;
+  color: #1d2a40;
+  font-size: 17px;
+}
+
+.split-copy > p:not(.page-kicker),
+.analysis-section > header p:not(.page-kicker) {
+  margin: 0;
+  color: #748095;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.split-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.split-stats > div {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  background: #f8fafb;
+}
+
+.split-stats span,
+.split-stats small {
+  color: #7a8799;
+  font-size: 9px;
+}
+
+.split-stats strong {
+  color: #26354c;
+  font-size: 19px;
+}
+
+.document-split {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  border-bottom: 1px solid #edf1f5;
+  background: #edf1f5;
+}
+
+.document-split > span {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  justify-content: center;
+  padding: 7px 5px;
+  background: #fafbfc;
+  color: #8490a1;
+  font-size: 8px;
+}
+
+.document-split strong {
+  color: #42536c;
+  font-size: 10px;
+}
+
+.analysis-section {
+  display: grid;
+  gap: 12px;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analysis-grid article {
+  overflow: hidden;
+  border: 1px solid #dde4ed;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.analysis-grid article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.analysis-grid article > header strong {
+  color: #26354c;
+  font-size: 12px;
+}
+
+.analysis-grid article > header span {
+  color: #8b651c;
+  font-size: 9px;
+}
+
+.weak-fields {
+  display: grid;
+}
+
+.weak-fields > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid #f0f3f6;
+  color: #6d7a8e;
+  font-size: 9px;
+}
+
+.weak-fields strong {
+  color: #25344b;
+  font-size: 12px;
+}
+
+.analysis-signals {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+}
+
+.analysis-signals span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff4dc;
+  color: #8f6418;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.analysis-grid article > p {
+  margin: 0;
+  padding: 11px 14px;
+  color: #8490a1;
+  font-size: 9px;
+  line-height: 1.55;
 }
 
 .document-grid {
