@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
+using PassportScanner.Api.Text;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -147,40 +148,30 @@ public sealed class PostgresOcrBenchmarkStore(
                 continue;
             }
 
-            // Permit OCR reads Mainland simplified characters, while the
-            // canonical traveler master stores Traditional Chinese. Only new
-            // samples that saved a normalized Traditional OCR value are
-            // comparable without penalizing script conversion.
-            if (
-                item.DocumentType ==
-                    "TAIWAN_COMPATRIOT_PERMIT" &&
-                !original.TryGetProperty(
-                    "nameZhTraditional",
-                    out _))
-            {
-                continue;
-            }
-
             scored += 1;
             var allExact = true;
 
             foreach (var field in fieldNames)
             {
-                var originalField =
-                    item.DocumentType ==
-                        "TAIWAN_COMPATRIOT_PERMIT" &&
-                    field == "nameZh"
-                        ? "nameZhTraditional"
-                        : field;
-
                 var originalValue =
                     ReadJsonString(
                         original,
-                        originalField);
+                        field);
                 var reviewedValue =
                     ReadReviewedField(
                         item,
                         field);
+
+                if (
+                    item.DocumentType ==
+                        "TAIWAN_COMPATRIOT_PERMIT" &&
+                    field == "nameZh")
+                {
+                    reviewedValue =
+                        ChineseScriptConverter
+                            .TraditionalToSimplified(
+                                reviewedValue);
+                }
 
                 // Taiwan national ID is optional on non-Taiwan passports.
                 // Do not reward blank-vs-blank matches for an inapplicable
