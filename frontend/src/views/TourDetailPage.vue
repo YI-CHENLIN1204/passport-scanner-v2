@@ -420,6 +420,19 @@ const rowCounts = computed(() => ({
   ).length,
 }))
 
+const hasAdvancedFilters = computed(
+  () =>
+    documentTypeFilter.value !== 'all' ||
+    documentStatusFilter.value !== 'all' ||
+    genderFilter.value !== 'all',
+)
+
+function clearAdvancedFilters() {
+  documentTypeFilter.value = 'all'
+  documentStatusFilter.value = 'all'
+  genderFilter.value = 'all'
+}
+
 const filteredRows = computed(() => {
   const query = tableSearch.value
     .trim()
@@ -1763,7 +1776,7 @@ onBeforeUnmount(() => {
             <input
               v-model="tableSearch"
               type="search"
-              placeholder="搜尋姓名、生日"
+              placeholder="搜尋姓名、英文名、生日、證件號碼"
             />
           </div>
 
@@ -1812,6 +1825,58 @@ onBeforeUnmount(() => {
               <span>{{ rowCounts.complete }}</span>
             </button>
           </div>
+        </div>
+
+        <div
+          v-if="rows.length"
+          class="advanced-filters"
+        >
+          <label>
+            <span>證件類別</span>
+            <select v-model="documentTypeFilter">
+              <option value="all">全部證件</option>
+              <option
+                v-for="type in detail.tour.requiredDocumentTypes"
+                :key="type"
+                :value="type"
+              >
+                {{ documentLabel(type) }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            <span>證件狀態</span>
+            <select v-model="documentStatusFilter">
+              <option value="all">全部狀態</option>
+              <option value="reviewed">已審核</option>
+              <option value="pending">待審核</option>
+              <option value="missing">未收到</option>
+            </select>
+          </label>
+
+          <label>
+            <span>性別</span>
+            <select v-model="genderFilter">
+              <option value="all">全部</option>
+              <option value="M">M</option>
+              <option value="F">F</option>
+              <option value="X">X</option>
+            </select>
+          </label>
+
+          <button
+            v-if="hasAdvancedFilters"
+            type="button"
+            class="clear-filter-button"
+            @click="clearAdvancedFilters"
+          >
+            清除條件
+          </button>
+
+          <small>
+            可搭配上方「待審核／缺件／完成」一起篩選。
+          </small>
         </div>
 
         <div
@@ -3156,6 +3221,65 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+.advanced-filters {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 10px 13px;
+  border-bottom: 1px solid #e7ecf2;
+  background: #f7f9fb;
+}
+
+.advanced-filters label {
+  display: grid;
+  gap: 4px;
+  min-width: 145px;
+}
+
+.advanced-filters label > span {
+  color: #788497;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.advanced-filters select {
+  min-height: 34px;
+  padding: 0 30px 0 9px;
+  border: 1px solid #d7dfe9;
+  border-radius: 8px;
+  outline: 0;
+  background: #fff;
+  color: #344158;
+  font: inherit;
+  font-size: 10px;
+}
+
+.advanced-filters select:focus {
+  border-color: #9ba9ba;
+  box-shadow: 0 0 0 3px rgb(40 54 75 / 5%);
+}
+
+.clear-filter-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d7dfe9;
+  border-radius: 8px;
+  background: #fff;
+  color: #5e6b7f;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.advanced-filters > small {
+  margin-left: auto;
+  align-self: center;
+  color: #8a95a5;
+  font-size: 9px;
+}
+
 .filter-tabs {
   display: flex;
   gap: 4px;
@@ -3765,6 +3889,19 @@ button:disabled {
 
   .filter-tabs {
     overflow-x: auto;
+  }
+
+  .advanced-filters {
+    align-items: stretch;
+  }
+
+  .advanced-filters label {
+    min-width: min(170px, 48%);
+  }
+
+  .advanced-filters > small {
+    width: 100%;
+    margin-left: 0;
   }
 
   .review-layout {
