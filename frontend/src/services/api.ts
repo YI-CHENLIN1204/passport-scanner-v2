@@ -822,6 +822,10 @@ export interface OcrBenchmarkFieldMetric {
   missingPredictionRate: number
   wrongPredictionCount: number
   wrongPredictionRate: number
+  directOrientationComparedCount: number
+  directOrientationExactRate: number
+  retriedOrientationComparedCount: number
+  retriedOrientationExactRate: number
 }
 
 export interface OcrBenchmarkSignalMetric {
