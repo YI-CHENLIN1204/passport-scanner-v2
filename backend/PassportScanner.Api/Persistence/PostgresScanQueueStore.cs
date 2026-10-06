@@ -185,6 +185,16 @@ public sealed class PostgresScanQueueStore(
             .OrderBy(item => item.CreatedAt)
             .ToList();
 
+        var itemIds = items
+            .Select(item => item.ScanItemId)
+            .ToList();
+
+        var selectedTrainingIds = db.TrainingSamples
+            .AsNoTracking()
+            .Where(item => itemIds.Contains(item.SourceScanItemId))
+            .Select(item => item.SourceScanItemId)
+            .ToHashSet();
+
         return drafts
             .Select(draft =>
                 new ReviewQueuePersonResponse(
@@ -196,7 +206,11 @@ public sealed class PostgresScanQueueStore(
                         .Where(item =>
                             item.DraftPersonId ==
                             draft.DraftPersonId)
-                        .Select(ToItemResponse)
+                        .Select(item =>
+                            ToItemResponse(
+                                item,
+                                selectedTrainingIds.Contains(
+                                    item.ScanItemId)))
                         .ToList()))
             .ToList();
     }
@@ -300,15 +314,14 @@ public sealed class PostgresScanQueueStore(
         item.UpdatedAt = now;
         db.SaveChanges();
 
-        if (request.UseForTraining)
-        {
-            trainingDatasetStore.SetSelection(
-                item.ScanItemId,
-                true,
-                now);
-        }
+        trainingDatasetStore.SetSelection(
+            item.ScanItemId,
+            request.UseForTraining,
+            now);
 
-        return ToItemResponse(item);
+        return ToItemResponse(
+            item,
+            request.UseForTraining);
     }
 
     public bool DeletePendingItem(
@@ -642,7 +655,8 @@ public sealed class PostgresScanQueueStore(
             batch.UpdatedAt);
 
     private static ScanItemResponse ToItemResponse(
-        ScanItemRecord item) =>
+        ScanItemRecord item,
+        bool trainingSelected = false) =>
         new(
             item.ScanItemId,
             item.ScanBatchId,
@@ -661,6 +675,7 @@ public sealed class PostgresScanQueueStore(
             item.IssuingCountry,
             item.ExpiryDate,
             item.ReviewStatus,
+            trainingSelected,
             item.ReviewedAt,
             item.DeleteAfter,
             item.CreatedAt,
