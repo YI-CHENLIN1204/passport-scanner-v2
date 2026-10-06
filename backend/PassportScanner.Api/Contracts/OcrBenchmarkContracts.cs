@@ -8,7 +8,11 @@ public sealed record OcrBenchmarkFieldMetric(
     int MissingPredictionCount,
     double MissingPredictionRate,
     int WrongPredictionCount,
-    double WrongPredictionRate);
+    double WrongPredictionRate,
+    int DirectOrientationComparedCount,
+    double DirectOrientationExactRate,
+    int RetriedOrientationComparedCount,
+    double RetriedOrientationExactRate);
 
 public sealed record OcrBenchmarkSignalMetric(
     string Signal,
