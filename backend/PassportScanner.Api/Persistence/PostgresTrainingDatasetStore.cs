@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -128,19 +129,44 @@ public sealed class PostgresTrainingDatasetStore(
             .Where(IsUsableTrainingSample)
             .ToList();
 
+        var splitBySample =
+            BuildSplitAssignments(usableSamples);
+
         var rows = usableSamples
             .GroupBy(
                 item => item.DocumentType,
                 StringComparer.Ordinal)
             .OrderBy(group => group.Key)
             .Select(group =>
-                new TrainingDatasetDocumentSummary(
+            {
+                var samples = group.ToList();
+
+                return new TrainingDatasetDocumentSummary(
                     group.Key,
-                    group.Count()))
+                    samples.Count,
+                    samples.Count(sample =>
+                        splitBySample[sample.TrainingSampleId] ==
+                            "train"),
+                    samples.Count(sample =>
+                        splitBySample[sample.TrainingSampleId] ==
+                            "validation"),
+                    samples.Count(sample =>
+                        splitBySample[sample.TrainingSampleId] ==
+                            "test"));
+            })
             .ToList();
 
         return new TrainingDatasetSummaryResponse(
-            rows.Sum(item => item.SampleCount),
+            usableSamples.Count,
+            usableSamples.Count(sample =>
+                splitBySample[sample.TrainingSampleId] ==
+                    "train"),
+            usableSamples.Count(sample =>
+                splitBySample[sample.TrainingSampleId] ==
+                    "validation"),
+            usableSamples.Count(sample =>
+                splitBySample[sample.TrainingSampleId] ==
+                    "test"),
             rows,
             generatedAt);
     }
@@ -156,6 +182,9 @@ public sealed class PostgresTrainingDatasetStore(
             .Where(IsUsableTrainingSample)
             .ToList();
 
+        var splitBySample =
+            BuildSplitAssignments(samples);
+
         using var stream = new MemoryStream();
 
         using (
@@ -165,6 +194,14 @@ public sealed class PostgresTrainingDatasetStore(
                 leaveOpen: true))
         {
             var manifest = new StringBuilder();
+            var splitManifests =
+                new Dictionary<string, StringBuilder>(
+                    StringComparer.Ordinal)
+                {
+                    ["train"] = new StringBuilder(),
+                    ["validation"] = new StringBuilder(),
+                    ["test"] = new StringBuilder()
+                };
 
             foreach (var sample in samples)
             {
@@ -197,6 +234,10 @@ public sealed class PostgresTrainingDatasetStore(
                         labelPath,
                         CompressionLevel.Optimal);
 
+                var split =
+                    splitBySample[
+                        sample.TrainingSampleId];
+
                 var labelDocument =
                     JsonSerializer.Serialize(
                         new
@@ -207,6 +248,7 @@ public sealed class PostgresTrainingDatasetStore(
                                 sample.SourceScanItemId,
                             documentType =
                                 sample.DocumentType,
+                            split,
                             selectedAt =
                                 sample.SelectedAt,
                             image = imagePath,
@@ -232,7 +274,7 @@ public sealed class PostgresTrainingDatasetStore(
                         labelDocument);
                 }
 
-                manifest.AppendLine(
+                var manifestLine =
                     JsonSerializer.Serialize(
                         new
                         {
@@ -240,9 +282,14 @@ public sealed class PostgresTrainingDatasetStore(
                                 sample.TrainingSampleId,
                             documentType =
                                 sample.DocumentType,
+                            split,
                             image = imagePath,
                             label = labelPath
-                        }));
+                        });
+
+                manifest.AppendLine(manifestLine);
+                splitManifests[split]
+                    .AppendLine(manifestLine);
             }
 
             var manifestEntry =
@@ -260,6 +307,24 @@ public sealed class PostgresTrainingDatasetStore(
                     manifest.ToString());
             }
 
+            foreach (
+                var (split, splitManifest) in
+                splitManifests)
+            {
+                var splitEntry =
+                    archive.CreateEntry(
+                        $"splits/{split}.jsonl",
+                        CompressionLevel.Optimal);
+
+                using var splitWriter =
+                    new StreamWriter(
+                        splitEntry.Open(),
+                        Encoding.UTF8);
+
+                splitWriter.Write(
+                    splitManifest.ToString());
+            }
+
             var readmeEntry =
                 archive.CreateEntry(
                     "README.txt",
@@ -274,7 +339,12 @@ public sealed class PostgresTrainingDatasetStore(
                 readmeWriter.Write(
                     "Private OCR training export\n" +
                     $"Generated: {generatedAt:O}\n" +
-                    $"Samples: {samples.Count}\n\n" +
+                    $"Samples: {samples.Count}\n" +
+                    $"Train: {samples.Count(sample => splitBySample[sample.TrainingSampleId] == "train")}\n" +
+                    $"Validation: {samples.Count(sample => splitBySample[sample.TrainingSampleId] == "validation")}\n" +
+                    $"Test: {samples.Count(sample => splitBySample[sample.TrainingSampleId] == "test")}\n\n" +
+                    "Split policy: deterministic 70/15/15 by traveler identity. " +
+                    "All retained documents from the same traveler stay in one split.\n\n" +
                     "This ZIP contains real identity-document images " +
                     "and reviewed ground truth. Keep it outside Git.\n" +
                     "The production photo-retention rule is unchanged. " +
@@ -287,6 +357,114 @@ public sealed class PostgresTrainingDatasetStore(
             "application/zip",
             $"ocr-training-dataset-" +
             $"{generatedAt:yyyyMMdd-HHmmss}.zip");
+    }
+
+    private Dictionary<Guid, string>
+        BuildSplitAssignments(
+            IReadOnlyList<TrainingSampleRecord> samples)
+    {
+        if (samples.Count == 0)
+        {
+            return [];
+        }
+
+        var sourceIds = samples
+            .Select(sample =>
+                sample.SourceScanItemId)
+            .Distinct()
+            .ToList();
+
+        var scanItems = db.ScanItems
+            .AsNoTracking()
+            .Where(item =>
+                sourceIds.Contains(
+                    item.ScanItemId))
+            .Select(item => new
+            {
+                item.ScanItemId,
+                item.DraftPersonId,
+                item.SavedDocumentVersionId
+            })
+            .ToList();
+
+        var documentIds = scanItems
+            .Where(item =>
+                item.SavedDocumentVersionId.HasValue)
+            .Select(item =>
+                item.SavedDocumentVersionId!.Value)
+            .Distinct()
+            .ToList();
+
+        var travelerByDocument = db.DocumentVersions
+            .AsNoTracking()
+            .Where(document =>
+                documentIds.Contains(
+                    document.DocumentVersionId))
+            .Select(document => new
+            {
+                document.DocumentVersionId,
+                document.TravelerId
+            })
+            .ToDictionary(
+                item => item.DocumentVersionId,
+                item => item.TravelerId);
+
+        var sourceGroups = scanItems
+            .ToDictionary(
+                item => item.ScanItemId,
+                item =>
+                {
+                    if (
+                        item.SavedDocumentVersionId.HasValue &&
+                        travelerByDocument.TryGetValue(
+                            item.SavedDocumentVersionId.Value,
+                            out var travelerId))
+                    {
+                        return $"traveler:{travelerId:N}";
+                    }
+
+                    return $"draft:{item.DraftPersonId:N}";
+                });
+
+        return samples.ToDictionary(
+            sample => sample.TrainingSampleId,
+            sample =>
+            {
+                var groupKey =
+                    sourceGroups.TryGetValue(
+                        sample.SourceScanItemId,
+                        out var key)
+                        ? key
+                        : $"scan:{sample.SourceScanItemId:N}";
+
+                return StableSplit(groupKey);
+            });
+    }
+
+    private static string StableSplit(
+        string groupKey)
+    {
+        var bytes = Encoding.UTF8.GetBytes(
+            $"passport-scanner-v1|{groupKey}");
+        var hash = SHA256.HashData(bytes);
+        var bucket =
+            ((uint)hash[0] << 24 |
+             (uint)hash[1] << 16 |
+             (uint)hash[2] << 8 |
+             hash[3]) %
+            10_000;
+
+        if (bucket < 7_000)
+        {
+            return "train";
+        }
+
+        if (bucket < 8_500)
+        {
+            return "validation";
+        }
+
+        return "test";
     }
 
     private static bool IsUsableTrainingSample(
