@@ -444,3 +444,6 @@ training/checkpoints/
 training/output/
 training/private-models/
 training/benchmarks/private/
+
+# Frontend build output
+frontend/dist/
