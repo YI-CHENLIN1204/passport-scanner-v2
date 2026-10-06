@@ -586,12 +586,37 @@ onMounted(load)
                 v-for="field in card.weakest"
                 :key="field.field"
               >
-                <span>
-                  {{ fieldLabel(field.field) }}
-                </span>
-                <strong>
-                  {{ rate(field.exactMatchRate) }}
-                </strong>
+                <div class="weak-field-main">
+                  <span>
+                    {{ fieldLabel(field.field) }}
+                  </span>
+                  <strong>
+                    {{ rate(field.exactMatchRate) }}
+                  </strong>
+                </div>
+
+                <div class="weak-field-breakdown">
+                  <span>
+                    漏抓
+                    <strong>
+                      {{
+                        rate(
+                          field.missingPredictionRate,
+                        )
+                      }}
+                    </strong>
+                  </span>
+                  <span>
+                    認錯
+                    <strong>
+                      {{
+                        rate(
+                          field.wrongPredictionRate,
+                        )
+                      }}
+                    </strong>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -882,18 +907,45 @@ onMounted(load)
 }
 
 .weak-fields > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  gap: 6px;
   padding: 9px 14px;
   border-bottom: 1px solid #f0f3f6;
   color: #6d7a8e;
   font-size: 9px;
 }
 
-.weak-fields strong {
+.weak-field-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weak-field-main > strong {
   color: #25344b;
   font-size: 12px;
+}
+
+.weak-field-breakdown {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.weak-field-breakdown > span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #f4f6f8;
+  color: #7c8798;
+  font-size: 8px;
+}
+
+.weak-field-breakdown strong {
+  color: #49586f;
+  font-size: 8px;
 }
 
 .analysis-signals {
