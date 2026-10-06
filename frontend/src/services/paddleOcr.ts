@@ -4362,6 +4362,20 @@ async function rotateImageFile(
   )
 }
 
+function isPermitOrientationConfident(
+  result: TaiwanCompatriotPermitOcrResult,
+) {
+  // Orientation confidence must depend on page geometry / semantic order,
+  // not on whether every business field was successfully extracted.
+  // Otherwise an upright card with a missed name/expiry field wastes time
+  // retrying 90 / -90 / 180 degree full-page OCR.
+  return (
+    result.detectedItems >= 4 &&
+    result.textHorizontalScore >= 0.72 &&
+    result.uprightSemanticScore >= 0.67
+  )
+}
+
 function permitResultQuality(
   result: TaiwanCompatriotPermitOcrResult,
 ) {
@@ -4860,32 +4874,8 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
 
   const original = await tryRotation(0, 0.16)
 
-  const strongEnough =
-    (
-      original.parsedMrz?.validation.requiredValid === true ||
-      (
-        original.extractedFieldCount >= 4 &&
-        Boolean(original.chineseName) &&
-        Boolean(original.permitNumber)
-      )
-    ) &&
-    original.uprightSemanticScore >= 0.6
-
-  const isStrongPermit = (
-    result: TaiwanCompatriotPermitOcrResult,
-  ) =>
-    (
-      result.parsedMrz?.validation.requiredValid === true ||
-      (
-        result.extractedFieldCount >= 4 &&
-        Boolean(result.chineseName) &&
-        Boolean(result.permitNumber)
-      )
-    ) &&
-    result.uprightSemanticScore >= 0.6
-
   if (
-    !strongEnough &&
+    !isPermitOrientationConfident(original) &&
     withinBudget()
   ) {
     const plus90 = await tryRotation(
@@ -4894,7 +4884,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     )
 
     if (
-      !isStrongPermit(plus90) &&
+      !isPermitOrientationConfident(plus90) &&
       withinBudget()
     ) {
       const minus90 = await tryRotation(
@@ -4903,7 +4893,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       )
 
       if (
-        !isStrongPermit(minus90) &&
+        !isPermitOrientationConfident(minus90) &&
         withinBudget()
       ) {
         const currentBest = [...attempts].sort(
@@ -4912,14 +4902,13 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
             permitResultQuality(a.result),
         )[0]
 
+        // 180° is only worth another full pass when the page orientation
+        // itself is still uncertain. Missing business fields are handled by
+        // targeted field retries after orientation has been selected.
         if (
           withinBudget() &&
-          (
-            (
-              currentBest.result.parsedMrz?.validation.requiredValid !== true &&
-              currentBest.result.extractedFieldCount < 4
-            ) ||
-            !currentBest.result.chineseName
+          !isPermitOrientationConfident(
+            currentBest.result,
           )
         ) {
           await tryRotation(180, 0.66)
