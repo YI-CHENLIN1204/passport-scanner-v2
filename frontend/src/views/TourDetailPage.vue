@@ -107,14 +107,26 @@ const reviewDocumentIndex = ref(0)
 const reviewSaving = ref(false)
 const reviewError = ref('')
 const reviewZoom = ref(1)
+const reviewRotation = ref(0)
+const reviewPan = ref({ x: 0, y: 0 })
 const reviewImagePanel = ref<HTMLElement | null>(null)
+const reviewImageElement = ref<HTMLImageElement | null>(null)
+const reviewImageNaturalSize = ref({
+  width: 1,
+  height: 1,
+})
+const reviewViewportSize = ref({
+  width: 1,
+  height: 1,
+})
 const reviewDragging = ref(false)
 const reviewDragStart = ref({
   x: 0,
   y: 0,
-  scrollLeft: 0,
-  scrollTop: 0,
+  panX: 0,
+  panY: 0,
 })
+let reviewResizeObserver: ResizeObserver | null = null
 const reviewUseForTraining = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
@@ -1005,13 +1017,30 @@ async function exportConfiguredCsv() {
   }
 }
 
+function syncReviewViewportSize() {
+  const panel = reviewImagePanel.value
+
+  if (!panel) return
+
+  reviewViewportSize.value = {
+    width: panel.clientWidth,
+    height: panel.clientHeight,
+  }
+}
+
+function resetReviewPosition() {
+  reviewPan.value = { x: 0, y: 0 }
+}
+
 function resetReviewZoom() {
   reviewZoom.value = 1
+  resetReviewPosition()
+}
 
-  if (reviewImagePanel.value) {
-    reviewImagePanel.value.scrollLeft = 0
-    reviewImagePanel.value.scrollTop = 0
-  }
+function resetReviewViewer() {
+  reviewZoom.value = 1
+  reviewRotation.value = 0
+  resetReviewPosition()
 }
 
 function setReviewZoom(value: number) {
@@ -1031,6 +1060,28 @@ function zoomReviewIn() {
 
 function zoomReviewOut() {
   setReviewZoom(reviewZoom.value - 0.25)
+}
+
+function rotateReviewLeft() {
+  reviewRotation.value -= 90
+  resetReviewPosition()
+}
+
+function rotateReviewRight() {
+  reviewRotation.value += 90
+  resetReviewPosition()
+}
+
+function onReviewImageLoad(event: Event) {
+  const image = event.target as HTMLImageElement
+
+  reviewImageNaturalSize.value = {
+    width: Math.max(1, image.naturalWidth),
+    height: Math.max(1, image.naturalHeight),
+  }
+
+  syncReviewViewportSize()
+  resetReviewPosition()
 }
 
 function onReviewWheel(event: WheelEvent) {
@@ -1053,25 +1104,26 @@ function startReviewPan(event: PointerEvent) {
   reviewDragStart.value = {
     x: event.clientX,
     y: event.clientY,
-    scrollLeft: panel.scrollLeft,
-    scrollTop: panel.scrollTop,
+    panX: reviewPan.value.x,
+    panY: reviewPan.value.y,
   }
 
   panel.setPointerCapture(event.pointerId)
 }
 
 function moveReviewPan(event: PointerEvent) {
-  const panel = reviewImagePanel.value
-  if (!panel || !reviewDragging.value) return
+  if (!reviewDragging.value) return
 
   event.preventDefault()
 
-  panel.scrollLeft =
-    reviewDragStart.value.scrollLeft -
-    (event.clientX - reviewDragStart.value.x)
-  panel.scrollTop =
-    reviewDragStart.value.scrollTop -
-    (event.clientY - reviewDragStart.value.y)
+  reviewPan.value = {
+    x:
+      reviewDragStart.value.panX +
+      (event.clientX - reviewDragStart.value.x),
+    y:
+      reviewDragStart.value.panY +
+      (event.clientY - reviewDragStart.value.y),
+  }
 }
 
 function stopReviewPan(event?: PointerEvent) {
@@ -1104,7 +1156,7 @@ function openReview(
       : Math.max(0, person.documents.length - 1)
 
   reviewError.value = ''
-  resetReviewZoom()
+  resetReviewViewer()
 }
 
 function closeReview() {
@@ -1112,7 +1164,7 @@ function closeReview() {
 
   reviewPerson.value = null
   reviewError.value = ''
-  resetReviewZoom()
+  resetReviewViewer()
 }
 
 const currentDocument = computed(() =>
@@ -1184,6 +1236,58 @@ const reviewFormErrors = computed(() => {
   }
 
   return errors
+})
+
+const normalizedReviewRotation = computed(() =>
+  ((reviewRotation.value % 360) + 360) % 360,
+)
+
+const reviewImageFitScale = computed(() => {
+  const natural = reviewImageNaturalSize.value
+  const viewport = reviewViewportSize.value
+
+  if (
+    natural.width <= 1 ||
+    natural.height <= 1 ||
+    viewport.width <= 1 ||
+    viewport.height <= 1
+  ) {
+    return 1
+  }
+
+  const quarterTurn =
+    normalizedReviewRotation.value % 180 !== 0
+  const rotatedWidth = quarterTurn
+    ? natural.height
+    : natural.width
+  const rotatedHeight = quarterTurn
+    ? natural.width
+    : natural.height
+  const padding = 24
+
+  return Math.min(
+    Math.max(
+      1,
+      viewport.width - padding,
+    ) / rotatedWidth,
+    Math.max(
+      1,
+      viewport.height - padding,
+    ) / rotatedHeight,
+  )
+})
+
+const reviewImageTransform = computed(() => {
+  const scale =
+    reviewImageFitScale.value *
+    reviewZoom.value
+
+  return [
+    'translate(-50%, -50%)',
+    `translate(${reviewPan.value.x}px, ${reviewPan.value.y}px)`,
+    `rotate(${normalizedReviewRotation.value}deg)`,
+    `scale(${scale})`,
+  ].join(' ')
 })
 
 const canSaveReview = computed(
@@ -1259,7 +1363,7 @@ watch(
 function selectReviewDocument(index: number) {
   reviewDocumentIndex.value = index
   reviewError.value = ''
-  resetReviewZoom()
+  resetReviewViewer()
 }
 
 function firstPendingPerson(
@@ -1414,13 +1518,31 @@ onMounted(() => {
     'keydown',
     handleKeydown,
   )
+
+  reviewResizeObserver =
+    new ResizeObserver(() => {
+      syncReviewViewportSize()
+    })
 })
+
+watch(
+  reviewImagePanel,
+  panel => {
+    reviewResizeObserver?.disconnect()
+
+    if (panel) {
+      reviewResizeObserver?.observe(panel)
+      syncReviewViewportSize()
+    }
+  },
+)
 
 onBeforeUnmount(() => {
   window.removeEventListener(
     'keydown',
     handleKeydown,
   )
+  reviewResizeObserver?.disconnect()
 })
 </script>
 
@@ -2123,38 +2245,60 @@ onBeforeUnmount(() => {
                 原始覆核圖
               </span>
 
-              <div>
-                <button
-                  type="button"
-                  :disabled="
-                    reviewZoom <= 1
-                  "
-                  aria-label="縮小"
-                  @click="zoomReviewOut"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  class="zoom-value"
-                  @click="resetReviewZoom"
-                >
-                  {{
-                    Math.round(
-                      reviewZoom * 100,
-                    )
-                  }}%
-                </button>
-                <button
-                  type="button"
-                  :disabled="
-                    reviewZoom >= 3
-                  "
-                  aria-label="放大"
-                  @click="zoomReviewIn"
-                >
-                  ＋
-                </button>
+              <div class="image-controls">
+                <div class="rotation-controls">
+                  <button
+                    type="button"
+                    aria-label="向左旋轉 90 度"
+                    title="向左旋轉 90°"
+                    @click="rotateReviewLeft"
+                  >
+                    ↶
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="向右旋轉 90 度"
+                    title="向右旋轉 90°"
+                    @click="rotateReviewRight"
+                  >
+                    ↷
+                  </button>
+                </div>
+
+                <div class="zoom-controls">
+                  <button
+                    type="button"
+                    :disabled="
+                      reviewZoom <= 1
+                    "
+                    aria-label="縮小"
+                    @click="zoomReviewOut"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    class="zoom-value"
+                    title="回到 100% 並置中"
+                    @click="resetReviewZoom"
+                  >
+                    {{
+                      Math.round(
+                        reviewZoom * 100,
+                      )
+                    }}%
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="
+                      reviewZoom >= 3
+                    "
+                    aria-label="放大"
+                    @click="zoomReviewIn"
+                  >
+                    ＋
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2174,21 +2318,27 @@ onBeforeUnmount(() => {
               "
             >
               <img
+                ref="reviewImageElement"
                 :src="currentImageUrl"
                 draggable="false"
                 :style="{
                   width:
-                    `${reviewZoom * 100}%`,
+                    `${reviewImageNaturalSize.width}px`,
+                  height:
+                    `${reviewImageNaturalSize.height}px`,
+                  transform:
+                    reviewImageTransform,
                 }"
                 :alt="`${documentLabel(
                   currentDocument.documentType,
                 )}證件照片`"
+                @load="onReviewImageLoad"
               />
             </div>
 
             <small class="zoom-help">
-              可使用按鈕放大；Ctrl / ⌘
-              + 滾輪也可以縮放。放大後可直接按住照片拖曳查看。
+              外框固定不動；可左右旋轉 90°、縮放，
+              並直接按住照片用滑鼠左鍵自由拖曳查看。
             </small>
           </div>
 
@@ -3269,14 +3419,14 @@ tbody tr:last-child td {
 }
 
 .review-image-panel {
-  min-height: 470px;
-  overflow: auto;
-  display: flex;
-  align-items: flex-start;
+  position: relative;
+  width: 100%;
+  height: clamp(470px, 62vh, 720px);
+  min-height: 0;
+  overflow: hidden;
   cursor: grab;
   touch-action: none;
   user-select: none;
-  justify-content: flex-start;
   border: 1px solid #273347;
   border-radius: 10px;
   background:
@@ -3298,14 +3448,37 @@ tbody tr:last-child td {
 }
 
 .review-image-panel img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
-  flex: 0 0 auto;
-  height: auto;
-  min-width: 100%;
   max-width: none;
-  object-fit: contain;
+  max-height: none;
+  transform-origin: center center;
   pointer-events: none;
-  transition: width .12s ease;
+  will-change: transform;
+  transition: transform .12s ease;
+}
+
+.review-image-panel.dragging img {
+  transition: none;
+}
+
+.image-controls,
+.rotation-controls,
+.zoom-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.image-controls {
+  gap: 8px;
+}
+
+.rotation-controls {
+  padding-right: 8px;
+  border-right: 1px solid #334156;
 }
 
 .readonly-ocr-field {
