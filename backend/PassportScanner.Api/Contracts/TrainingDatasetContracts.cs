@@ -34,6 +34,7 @@ public sealed record TrainingEvaluationSampleResponse(
     Guid TrainingSampleId,
     string DocumentType,
     string Split,
+    string OriginalOcrJson,
     string GroundTruthJson);
 
 public sealed record TrainingDatasetSampleImage(
