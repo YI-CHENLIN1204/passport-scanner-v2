@@ -59,6 +59,7 @@ public sealed record ScanItemResponse(
     string? IssuingCountry,
     DateOnly? ExpiryDate,
     string ReviewStatus,
+    bool TrainingSelected,
     DateTimeOffset? ReviewedAt,
     DateTimeOffset DeleteAfter,
     DateTimeOffset CreatedAt,
