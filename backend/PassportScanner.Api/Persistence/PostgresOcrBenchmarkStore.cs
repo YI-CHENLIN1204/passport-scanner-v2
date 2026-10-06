@@ -102,6 +102,11 @@ public sealed class PostgresOcrBenchmarkStore(
             new List<double>();
         var fallbackCount = 0;
         var fallbackObserved = 0;
+        var signalCounters =
+            new Dictionary<
+                string,
+                (int Observed, int Positive)>(
+                    StringComparer.Ordinal);
 
         foreach (var item in items)
         {
@@ -124,6 +129,38 @@ public sealed class PostgresOcrBenchmarkStore(
                 root,
                 "orientationAttempts",
                 orientationAttempts);
+
+            if (
+                root.TryGetProperty(
+                    "orientationAttempts",
+                    out var orientationElement) &&
+                orientationElement.ValueKind ==
+                    JsonValueKind.Number &&
+                orientationElement.TryGetDouble(
+                    out var orientationCount))
+            {
+                AddSignal(
+                    signalCounters,
+                    "orientationRetry",
+                    orientationCount > 1);
+            }
+
+            AddBooleanSignal(
+                root,
+                "structureComplete",
+                signalCounters);
+            AddBooleanSignal(
+                root,
+                "line1Valid",
+                signalCounters);
+            AddBooleanSignal(
+                root,
+                "mrzUsed",
+                signalCounters);
+            AddBooleanSignal(
+                root,
+                "idChecksumValid",
+                signalCounters);
 
             if (TryGetBoolean(
                 root,
@@ -209,6 +246,18 @@ public sealed class PostgresOcrBenchmarkStore(
             }
         }
 
+        var signalMetrics = signalCounters
+            .OrderBy(item => item.Key)
+            .Select(item =>
+                new OcrBenchmarkSignalMetric(
+                    item.Key,
+                    item.Value.Observed,
+                    item.Value.Positive,
+                    Rate(
+                        item.Value.Positive,
+                        item.Value.Observed)))
+            .ToList();
+
         var fieldMetrics = fieldNames
             .Select(field =>
             {
@@ -241,6 +290,7 @@ public sealed class PostgresOcrBenchmarkStore(
                 : Rate(
                     fallbackCount,
                     fallbackObserved),
+            signalMetrics,
             fieldMetrics);
     }
 
@@ -272,6 +322,44 @@ public sealed class PostgresOcrBenchmarkStore(
         {
             target.Add(parsed);
         }
+    }
+
+    private static void AddBooleanSignal(
+        JsonElement root,
+        string signal,
+        IDictionary<
+            string,
+            (int Observed, int Positive)> counters)
+    {
+        if (!TryGetBoolean(
+            root,
+            signal,
+            out var value))
+        {
+            return;
+        }
+
+        AddSignal(
+            counters,
+            signal,
+            value);
+    }
+
+    private static void AddSignal(
+        IDictionary<
+            string,
+            (int Observed, int Positive)> counters,
+        string signal,
+        bool positive)
+    {
+        counters.TryGetValue(
+            signal,
+            out var current);
+
+        counters[signal] = (
+            current.Observed + 1,
+            current.Positive +
+                (positive ? 1 : 0));
     }
 
     private static bool TryGetBoolean(
