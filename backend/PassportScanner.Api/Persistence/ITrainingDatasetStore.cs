@@ -16,6 +16,13 @@ public interface ITrainingDatasetStore
     TrainingDatasetSummaryResponse GetSummary(
         DateTimeOffset generatedAt);
 
+    IReadOnlyList<TrainingEvaluationSampleResponse>
+        ListEvaluationSamples(
+            string split);
+
+    TrainingDatasetSampleImage? GetSampleImage(
+        Guid trainingSampleId);
+
     TrainingDatasetExport ExportZip(
         DateTimeOffset generatedAt);
 }
