@@ -820,6 +820,13 @@ export interface OcrBenchmarkFieldMetric {
   exactMatchRate: number
 }
 
+export interface OcrBenchmarkSignalMetric {
+  signal: string
+  observedCount: number
+  positiveCount: number
+  positiveRate: number
+}
+
 export interface OcrBenchmarkDocumentSummary {
   documentType: string
   reviewedSampleCount: number
@@ -833,6 +840,7 @@ export interface OcrBenchmarkDocumentSummary {
   p90TotalMs: number | null
   averageOrientationAttempts: number | null
   fallbackRate: number | null
+  signals: OcrBenchmarkSignalMetric[]
   fields: OcrBenchmarkFieldMetric[]
 }
 
