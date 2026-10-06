@@ -94,6 +94,16 @@ public sealed class PostgresOcrBenchmarkStore(
             _ => 0,
             StringComparer.Ordinal);
 
+        var fieldMissing = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        var fieldWrong = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
         var scored = 0;
         var fullExact = 0;
         var corrected = 0;
@@ -233,6 +243,23 @@ public sealed class PostgresOcrBenchmarkStore(
                 else
                 {
                     allExact = false;
+
+                    if (
+                        string.IsNullOrWhiteSpace(
+                            NormalizeField(
+                                field,
+                                originalValue)) &&
+                        !string.IsNullOrWhiteSpace(
+                            NormalizeField(
+                                field,
+                                reviewedValue)))
+                    {
+                        fieldMissing[field] += 1;
+                    }
+                    else
+                    {
+                        fieldWrong[field] += 1;
+                    }
                 }
             }
 
@@ -265,11 +292,20 @@ public sealed class PostgresOcrBenchmarkStore(
                     fieldCompared[field];
                 var exact = fieldExact[field];
 
+                var missing =
+                    fieldMissing[field];
+                var wrong =
+                    fieldWrong[field];
+
                 return new OcrBenchmarkFieldMetric(
                     field,
                     compared,
                     exact,
-                    Rate(exact, compared));
+                    Rate(exact, compared),
+                    missing,
+                    Rate(missing, compared),
+                    wrong,
+                    Rate(wrong, compared));
             })
             .ToList();
 
