@@ -319,7 +319,7 @@ async function currentFieldsForSample(
         expiryDate: parsed
           ? mrzExpiryDateToIso(parsed.expiryDate)
           : null,
-      },
+      } as Record<string, string | null>,
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -343,7 +343,7 @@ async function currentFieldsForSample(
         documentNumber:
           result.permitNumber || '',
         expiryDate: result.expiryDate || null,
-      },
+      } as Record<string, string | null>,
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -366,7 +366,7 @@ async function currentFieldsForSample(
         gender: result.sex || '',
         documentNumber:
           result.nationalId || '',
-      },
+      } as Record<string, string | null>,
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
