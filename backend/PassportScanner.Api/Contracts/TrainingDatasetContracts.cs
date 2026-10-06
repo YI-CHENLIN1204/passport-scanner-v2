@@ -35,7 +35,16 @@ public sealed record TrainingEvaluationSampleResponse(
     string DocumentType,
     string Split,
     string OriginalOcrJson,
+    string? EvaluationBaselineJson,
     string GroundTruthJson);
+
+public sealed record SaveEvaluationBaselineRequest(
+    string ResultJson);
+
+public sealed record EvaluationBaselineResponse(
+    Guid TrainingSampleId,
+    string ResultJson,
+    DateTimeOffset CapturedAt);
 
 public sealed record TrainingDatasetSampleImage(
     byte[] Bytes,
