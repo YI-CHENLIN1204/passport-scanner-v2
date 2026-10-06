@@ -668,6 +668,7 @@ export interface ScanItemResponse {
   issuingCountry: string | null
   expiryDate: string | null
   reviewStatus: 'PENDING' | 'REVIEWED'
+  trainingSelected: boolean
   reviewedAt: string | null
   deleteAfter: string
   createdAt: string
