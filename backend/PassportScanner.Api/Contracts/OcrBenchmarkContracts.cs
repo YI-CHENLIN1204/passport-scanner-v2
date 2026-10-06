@@ -4,7 +4,11 @@ public sealed record OcrBenchmarkFieldMetric(
     string Field,
     int ComparedCount,
     int ExactMatchCount,
-    double ExactMatchRate);
+    double ExactMatchRate,
+    int MissingPredictionCount,
+    double MissingPredictionRate,
+    int WrongPredictionCount,
+    double WrongPredictionRate);
 
 public sealed record OcrBenchmarkSignalMetric(
     string Signal,
