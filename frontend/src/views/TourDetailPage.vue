@@ -16,6 +16,7 @@ import {
   getScanItemImageUrl,
   getTourDetail,
   reviewScanItem,
+  setTrainingSampleSelection,
   updateTour,
   type ReviewQueuePersonResponse,
   type ReviewScanItemRequest,
@@ -144,6 +145,7 @@ const reviewDragStart = ref({
 })
 let reviewResizeObserver: ResizeObserver | null = null
 const reviewUseForTraining = ref(false)
+const trainingSelectionSaving = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
   nameZh: '',
   nameZhOnDocument: '',
@@ -1461,6 +1463,48 @@ function firstPendingPerson(
   )
 }
 
+async function onTrainingSelectionChange(
+  event: Event,
+) {
+  const input = event.target as HTMLInputElement
+  const document = currentDocument.value
+
+  if (!document || trainingSelectionSaving.value) {
+    input.checked = reviewUseForTraining.value
+    return
+  }
+
+  const selected = input.checked
+  const previous = reviewUseForTraining.value
+
+  reviewUseForTraining.value = selected
+  reviewError.value = ''
+
+  if (document.reviewStatus === 'PENDING') {
+    return
+  }
+
+  trainingSelectionSaving.value = true
+
+  try {
+    await setTrainingSampleSelection(
+      document.scanItemId,
+      selected,
+    )
+
+    document.trainingSelected = selected
+  } catch (err) {
+    reviewUseForTraining.value = previous
+    input.checked = previous
+    reviewError.value =
+      err instanceof Error
+        ? err.message
+        : '訓練樣本設定失敗。'
+  } finally {
+    trainingSelectionSaving.value = false
+  }
+}
+
 async function deleteCurrentReviewItem() {
   const document = currentDocument.value
 
@@ -2667,18 +2711,38 @@ onBeforeUnmount(() => {
               />
             </label>
 
-            <label class="training-option">
+            <label
+              class="training-option"
+              :class="{
+                saving: trainingSelectionSaving,
+              }"
+            >
               <input
-                v-model="reviewUseForTraining"
                 type="checkbox"
+                :checked="reviewUseForTraining"
+                :disabled="trainingSelectionSaving"
+                @change="onTrainingSelectionChange"
               />
               <span class="training-check" aria-hidden="true">
                 ✓
               </span>
               <span>
-                <strong>保留此樣本供 OCR 改善</strong>
-                <small>
-                  勾選後，這張證件與人工確認答案會獨立複製到私人訓練資料集；正式收件照片原本的刪除期限不變。
+                <strong>
+                  保留此樣本供 OCR 改善
+                  <template v-if="trainingSelectionSaving">
+                    · 同步中…
+                  </template>
+                </strong>
+                <small
+                  v-if="
+                    currentDocument.reviewStatus ===
+                    'REVIEWED'
+                  "
+                >
+                  已審核資料會在勾選／取消時立即同步到私人訓練資料集，不需再按「儲存修改」；正式收件照片原本的刪除期限不變。
+                </small>
+                <small v-else>
+                  勾選後會在完成審核時，把這張證件與人工確認答案獨立複製到私人訓練資料集；正式收件照片原本的刪除期限不變。
                 </small>
               </span>
             </label>
@@ -3778,6 +3842,11 @@ tbody tr:last-child td {
   border-radius: 9px;
   background: #f7fbf8;
   cursor: pointer;
+}
+
+.training-option.saving {
+  opacity: .72;
+  cursor: progress;
 }
 
 .training-option > input {
