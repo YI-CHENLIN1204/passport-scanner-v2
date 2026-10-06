@@ -38,6 +38,18 @@ type RowFilter =
   | 'missing'
   | 'complete'
 
+type DocumentStatusFilter =
+  | 'all'
+  | 'reviewed'
+  | 'pending'
+  | 'missing'
+
+type GenderFilter =
+  | 'all'
+  | 'M'
+  | 'F'
+  | 'X'
+
 type ExportKind =
   | 'TOTAL'
   | 'PASSPORT'
@@ -100,6 +112,10 @@ const documentOptions = [
 
 const tableSearch = ref('')
 const rowFilter = ref<RowFilter>('all')
+const documentTypeFilter = ref('all')
+const documentStatusFilter =
+  ref<DocumentStatusFilter>('all')
+const genderFilter = ref<GenderFilter>('all')
 
 const reviewPerson =
   ref<ReviewQueuePersonResponse | null>(null)
@@ -419,13 +435,61 @@ const filteredRows = computed(() => {
       return false
     }
 
+    if (
+      genderFilter.value !== 'all' &&
+      row.gender.toUpperCase() !==
+        genderFilter.value
+    ) {
+      return false
+    }
+
+    const selectedDocumentType =
+      documentTypeFilter.value
+
+    if (selectedDocumentType !== 'all') {
+      const cell =
+        row.documents[selectedDocumentType]
+
+      if (!cell) {
+        return false
+      }
+
+      if (
+        documentStatusFilter.value !== 'all' &&
+        cell.status !== documentStatusFilter.value
+      ) {
+        return false
+      }
+    } else if (
+      documentStatusFilter.value !== 'all'
+    ) {
+      const hasMatchingDocument =
+        detail.value?.tour.requiredDocumentTypes
+          .some(type =>
+            row.documents[type]?.status ===
+              documentStatusFilter.value,
+          ) ?? false
+
+      if (!hasMatchingDocument) {
+        return false
+      }
+    }
+
     if (!query) return true
+
+    const scanDocumentNumbers =
+      Object.values(row.documents)
+        .map(cell =>
+          cell.item?.documentNumber ?? '',
+        )
+        .join(' ')
 
     return [
       row.nameZh,
       row.nameEn,
       row.birthDate ?? '',
       row.gender,
+      scanDocumentNumbers,
     ]
       .join(' ')
       .toLowerCase()
@@ -1298,8 +1362,9 @@ const canSaveReview = computed(
 )
 
 watch(
-  currentDocument,
-  document => {
+  () => currentDocument.value?.scanItemId,
+  () => {
+    const document = currentDocument.value
     if (!document) return
 
     const printedName =
@@ -1340,7 +1405,8 @@ watch(
       useForTraining: false,
     }
 
-    reviewUseForTraining.value = false
+    reviewUseForTraining.value =
+      document.trainingSelected
     resetReviewZoom()
     reviewError.value = ''
   },
