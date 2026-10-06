@@ -6,6 +6,12 @@ public sealed record OcrBenchmarkFieldMetric(
     int ExactMatchCount,
     double ExactMatchRate);
 
+public sealed record OcrBenchmarkSignalMetric(
+    string Signal,
+    int ObservedCount,
+    int PositiveCount,
+    double PositiveRate);
+
 public sealed record OcrBenchmarkDocumentSummary(
     string DocumentType,
     int ReviewedSampleCount,
@@ -19,6 +25,7 @@ public sealed record OcrBenchmarkDocumentSummary(
     double? P90TotalMs,
     double? AverageOrientationAttempts,
     double? FallbackRate,
+    IReadOnlyList<OcrBenchmarkSignalMetric> Signals,
     IReadOnlyList<OcrBenchmarkFieldMetric> Fields);
 
 public sealed record OcrBenchmarkSummaryResponse(
