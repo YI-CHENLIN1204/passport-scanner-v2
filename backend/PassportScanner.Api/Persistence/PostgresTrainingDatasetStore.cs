@@ -198,16 +198,38 @@ public sealed class PostgresTrainingDatasetStore(
         var splitBySample =
             BuildSplitAssignments(usableSamples);
 
-        return usableSamples
+        var selectedSamples = usableSamples
             .Where(sample =>
                 splitBySample[sample.TrainingSampleId] ==
                     normalizedSplit)
+            .ToList();
+
+        var selectedIds = selectedSamples
+            .Select(sample => sample.TrainingSampleId)
+            .ToList();
+
+        var baselineBySample =
+            db.OcrEvaluationBaselines
+                .AsNoTracking()
+                .Where(item =>
+                    selectedIds.Contains(
+                        item.TrainingSampleId))
+                .ToDictionary(
+                    item => item.TrainingSampleId,
+                    item => item.ResultJson);
+
+        return selectedSamples
             .Select(sample =>
                 new TrainingEvaluationSampleResponse(
                     sample.TrainingSampleId,
                     sample.DocumentType,
                     normalizedSplit,
                     sample.OcrPayloadJson,
+                    baselineBySample.TryGetValue(
+                        sample.TrainingSampleId,
+                        out var baselineJson)
+                        ? baselineJson
+                        : null,
                     sample.GroundTruthJson))
             .ToList();
     }
@@ -232,6 +254,62 @@ public sealed class PostgresTrainingDatasetStore(
             $"training-sample-{trainingSampleId:N}" +
             ExtensionFromContentType(
                 sample.ImageContentType));
+    }
+
+    public EvaluationBaselineResponse SaveEvaluationBaseline(
+        Guid trainingSampleId,
+        string resultJson,
+        DateTimeOffset now)
+    {
+        var sampleExists = db.TrainingSamples
+            .AsNoTracking()
+            .Any(item =>
+                item.TrainingSampleId ==
+                    trainingSampleId);
+
+        if (!sampleExists)
+        {
+            throw new KeyNotFoundException(
+                "找不到指定訓練樣本。");
+        }
+
+        try
+        {
+            using var _ =
+                JsonDocument.Parse(resultJson);
+        }
+        catch (JsonException)
+        {
+            throw new ArgumentException(
+                "Baseline resultJson 必須是有效 JSON。",
+                nameof(resultJson));
+        }
+
+        var existing =
+            db.OcrEvaluationBaselines
+                .SingleOrDefault(item =>
+                    item.TrainingSampleId ==
+                        trainingSampleId);
+
+        if (existing is null)
+        {
+            existing =
+                new OcrEvaluationBaselineRecord
+                {
+                    TrainingSampleId =
+                        trainingSampleId,
+                    ResultJson = resultJson,
+                    CapturedAt = now
+                };
+
+            db.OcrEvaluationBaselines.Add(existing);
+            db.SaveChanges();
+        }
+
+        return new EvaluationBaselineResponse(
+            existing.TrainingSampleId,
+            existing.ResultJson,
+            existing.CapturedAt);
     }
 
     public TrainingDatasetExport ExportZip(
