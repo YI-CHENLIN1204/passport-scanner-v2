@@ -890,6 +890,71 @@ export async function getOcrBenchmarkSummary() {
   return response.json() as Promise<OcrBenchmarkSummaryResponse>
 }
 
+export interface TrainingEvaluationSampleResponse {
+  trainingSampleId: string
+  documentType: string
+  split: 'train' | 'validation' | 'test'
+  originalOcrJson: string
+  groundTruthJson: string
+}
+
+export async function getTrainingEvaluationSamples(
+  split: 'train' | 'validation' | 'test' = 'test',
+) {
+  const params = new URLSearchParams({ split })
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/evaluation-samples?${params.toString()}`,
+  )
+
+  if (!response.ok) {
+    let message =
+      `Evaluation samples failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<
+    TrainingEvaluationSampleResponse[]
+  >
+}
+
+export async function getTrainingSampleImageFile(
+  trainingSampleId: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/samples/${encodeURIComponent(
+      trainingSampleId,
+    )}/image`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Training sample image failed: ${response.status}`,
+    )
+  }
+
+  const blob = await response.blob()
+  const type =
+    blob.type ||
+    response.headers.get('Content-Type') ||
+    'image/jpeg'
+
+  return new File(
+    [blob],
+    `training-sample-${trainingSampleId}`,
+    { type },
+  )
+}
+
 export async function getTrainingDatasetSummary() {
   const response = await fetch(
     `${apiBaseUrl}/api/ocr-training/summary`,
