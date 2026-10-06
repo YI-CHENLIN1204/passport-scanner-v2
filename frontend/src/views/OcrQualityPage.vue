@@ -128,9 +128,12 @@ const errorAnalysisCards = computed(() =>
 
       const mrzUsed =
         diagnostic.get('mrzUsed')
-      if (mrzUsed) {
+      if (
+        mrzUsed &&
+        mrzUsed.positiveRate > 0
+      ) {
         signals.push(
-          `台胞證 MRZ 使用率 ${rate(
+          `MRZ 輔助使用率 ${rate(
             mrzUsed.positiveRate,
           )}`,
         )
