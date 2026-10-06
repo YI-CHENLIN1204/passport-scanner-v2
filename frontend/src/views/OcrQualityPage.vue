@@ -6,6 +6,7 @@ import {
   getTrainingDatasetSummary,
   getTrainingEvaluationSamples,
   getTrainingSampleImageFile,
+  saveTrainingEvaluationBaseline,
   type OcrBenchmarkDocumentSummary,
   type TrainingEvaluationSampleResponse,
   type OcrBenchmarkSummaryResponse,
@@ -99,6 +100,7 @@ interface RetestRunSummary {
   generatedAt: string
   sampleCount: number
   failedCount: number
+  baselineCreatedCount: number
   documents: RetestDocumentSummary[]
 }
 
@@ -248,22 +250,26 @@ function passportNationalIdFromMrz(
     : null
 }
 
-function baselineFieldsForSample(
+function evaluationBaselineFieldsForSample(
   sample: TrainingEvaluationSampleResponse,
 ) {
+  if (!sample.evaluationBaselineJson) {
+    return null
+  }
+
   const payload =
-    parseJsonRecord(sample.originalOcrJson)
-  const original =
-    payload.originalFields &&
-    typeof payload.originalFields === 'object'
-      ? payload.originalFields as Record<string, unknown>
+    parseJsonRecord(sample.evaluationBaselineJson)
+  const fields =
+    payload.fields &&
+    typeof payload.fields === 'object'
+      ? payload.fields as Record<string, unknown>
       : {}
 
   return Object.fromEntries(
     (fieldsByDocumentType[sample.documentType] ?? [])
       .map(field => [
         field,
-        stringOrNull(original[field]),
+        stringOrNull(fields[field]),
       ]),
   )
 }
@@ -572,6 +578,7 @@ async function rerunTestSet() {
 
   const outcomes: RetestSampleOutcome[] = []
   let failed = 0
+  let baselineCreated = 0
 
   try {
     const samples =
@@ -608,10 +615,29 @@ async function rerunTestSet() {
             file,
           )
 
+        let baselineFields =
+          evaluationBaselineFieldsForSample(sample)
+
+        if (!baselineFields) {
+          const baselineJson = JSON.stringify({
+            fields: current.fields,
+            totalMs: current.totalMs,
+            orientationAttempts:
+              current.orientationAttempts,
+          })
+
+          await saveTrainingEvaluationBaseline(
+            sample.trainingSampleId,
+            baselineJson,
+          )
+
+          baselineFields = current.fields
+          baselineCreated += 1
+        }
+
         outcomes.push({
           documentType: sample.documentType,
-          baselineFields:
-            baselineFieldsForSample(sample),
+          baselineFields,
           currentFields: current.fields,
           groundTruth:
             groundTruthForSample(sample),
@@ -631,13 +657,19 @@ async function rerunTestSet() {
       generatedAt: new Date().toISOString(),
       sampleCount: outcomes.length,
       failedCount: failed,
+      baselineCreatedCount: baselineCreated,
       documents: summarizeRetest(outcomes),
     }
 
-    retestProgress.value.message =
-      failed
-        ? `Test set 重測完成；${failed} 張失敗。`
-        : 'Test set 重測完成。'
+    if (baselineCreated > 0) {
+      retestProgress.value.message =
+        `已建立 ${baselineCreated} 張固定 Test 基準；之後重跑才會顯示公平版本差異。`
+    } else {
+      retestProgress.value.message =
+        failed
+          ? `Test set 重測完成；${failed} 張失敗。`
+          : 'Test set 重測完成。'
+    }
   } catch (err) {
     error.value =
       err instanceof Error
@@ -1042,12 +1074,12 @@ onMounted(load)
           <h2>用最新版 OCR 重跑固定 Test set</h2>
           <p>
             不建立旅客、不修改人工答案，也不把 Test 資料拿去訓練。
-            會直接用目前程式重新辨識保留的 Test 圖片，
-            並和同一批樣本當初的 OCR 結果比較。
+            第一次會用這批固定圖片建立不可覆寫的 Test 基準；
+            之後每次都用完全相同圖片比較「固定基準 → 最新版」。
           </p>
           <small>
-            保留資料中的圖片是人工審核用的標準化影像，
-            因此這裡適合驗證 recognition / parser 回歸；
+            固定基準與新版都使用同一份人工審核標準化影像，
+            因此 recognition / parser 的版本比較才是公平的。
             速度與原始拍攝方向仍要用新的實際上傳照片驗證。
           </small>
         </div>
@@ -1091,6 +1123,21 @@ onMounted(load)
               :value="retestProgress.completed"
             ></progress>
           </div>
+        </div>
+
+        <div
+          v-if="
+            retestResult?.baselineCreatedCount
+          "
+          class="baseline-created-note"
+        >
+          這次已建立
+          <strong>
+            {{ retestResult.baselineCreatedCount }}
+          </strong>
+          張固定 Test 基準。因為「固定基準」就是這次的最新版結果，
+          第一次看到的差異會是 0%；從下一次修改 OCR 後重跑，
+          才會開始顯示公平的版本進步／退步。
         </div>
 
         <div
@@ -1923,6 +1970,21 @@ onMounted(load)
 .retest-progress progress {
   width: 100%;
   height: 8px;
+}
+
+.baseline-created-note {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid #cfe2d6;
+  border-radius: 9px;
+  background: #f4faf6;
+  color: #577063;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.baseline-created-note strong {
+  color: #1f6d4a;
 }
 
 .retest-results {
