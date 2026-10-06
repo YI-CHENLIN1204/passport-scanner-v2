@@ -468,6 +468,44 @@ app.MapGet(
                 DateTimeOffset.UtcNow)));
 
 app.MapGet(
+    "/api/ocr-training/evaluation-samples",
+    (
+        string? split,
+        ITrainingDatasetStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.ListEvaluationSamples(
+                    string.IsNullOrWhiteSpace(split)
+                        ? "test"
+                        : split));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapGet(
+    "/api/ocr-training/samples/{trainingSampleId:guid}/image",
+    (
+        Guid trainingSampleId,
+        ITrainingDatasetStore store) =>
+    {
+        var image = store.GetSampleImage(
+            trainingSampleId);
+
+        return image is null
+            ? Results.NotFound()
+            : Results.File(
+                image.Bytes,
+                image.ContentType,
+                image.FileName);
+    });
+
+app.MapGet(
     "/api/ocr-training/export.zip",
     (ITrainingDatasetStore store) =>
     {
