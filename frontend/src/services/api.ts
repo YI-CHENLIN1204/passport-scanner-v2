@@ -818,6 +818,10 @@ export interface OcrBenchmarkFieldMetric {
   comparedCount: number
   exactMatchCount: number
   exactMatchRate: number
+  missingPredictionCount: number
+  missingPredictionRate: number
+  wrongPredictionCount: number
+  wrongPredictionRate: number
 }
 
 export interface OcrBenchmarkSignalMetric {
