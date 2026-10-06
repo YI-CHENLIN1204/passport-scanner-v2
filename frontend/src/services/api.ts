@@ -846,10 +846,16 @@ export interface OcrBenchmarkSummaryResponse {
 export interface TrainingDatasetDocumentSummary {
   documentType: string
   sampleCount: number
+  trainCount: number
+  validationCount: number
+  testCount: number
 }
 
 export interface TrainingDatasetSummaryResponse {
   sampleCount: number
+  trainCount: number
+  validationCount: number
+  testCount: number
   documents: TrainingDatasetDocumentSummary[]
   generatedAt: string
 }
