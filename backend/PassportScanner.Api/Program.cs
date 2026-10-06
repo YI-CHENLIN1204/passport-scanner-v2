@@ -496,6 +496,33 @@ app.MapGet(
         }
     });
 
+app.MapPut(
+    "/api/ocr-training/samples/{trainingSampleId:guid}/evaluation-baseline",
+    (
+        Guid trainingSampleId,
+        SaveEvaluationBaselineRequest request,
+        ITrainingDatasetStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.SaveEvaluationBaseline(
+                    trainingSampleId,
+                    request.ResultJson,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
 app.MapGet(
     "/api/ocr-training/samples/{trainingSampleId:guid}/image",
     (
