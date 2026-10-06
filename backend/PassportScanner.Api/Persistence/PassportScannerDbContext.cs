@@ -18,6 +18,9 @@ public sealed class PassportScannerDbContext(
     public DbSet<ScanItemRecord> ScanItems => Set<ScanItemRecord>();
     public DbSet<TrainingSampleRecord> TrainingSamples =>
         Set<TrainingSampleRecord>();
+    public DbSet<OcrEvaluationBaselineRecord>
+        OcrEvaluationBaselines =>
+            Set<OcrEvaluationBaselineRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -510,5 +513,34 @@ public sealed class PassportScannerDbContext(
             .IsUnique()
             .HasDatabaseName(
                 "ux_training_samples_source_scan_item");
+
+        var evaluationBaseline =
+            modelBuilder.Entity<OcrEvaluationBaselineRecord>();
+
+        evaluationBaseline.ToTable(
+            "ocr_evaluation_baselines");
+        evaluationBaseline.HasKey(item =>
+            item.TrainingSampleId);
+
+        evaluationBaseline.Property(item =>
+                item.TrainingSampleId)
+            .HasColumnName("training_sample_id");
+
+        evaluationBaseline.Property(item =>
+                item.ResultJson)
+            .HasColumnName("result_json")
+            .HasColumnType("text")
+            .IsRequired();
+
+        evaluationBaseline.Property(item =>
+                item.CapturedAt)
+            .HasColumnName("captured_at")
+            .IsRequired();
+
+        evaluationBaseline.HasOne<TrainingSampleRecord>()
+            .WithOne()
+            .HasForeignKey<OcrEvaluationBaselineRecord>(
+                item => item.TrainingSampleId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
