@@ -207,6 +207,7 @@ public sealed class PostgresTrainingDatasetStore(
                     sample.TrainingSampleId,
                     sample.DocumentType,
                     normalizedSplit,
+                    sample.OcrPayloadJson,
                     sample.GroundTruthJson))
             .ToList();
     }
