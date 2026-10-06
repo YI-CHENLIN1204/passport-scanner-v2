@@ -104,6 +104,26 @@ public sealed class PostgresOcrBenchmarkStore(
             _ => 0,
             StringComparer.Ordinal);
 
+        var fieldDirectCompared = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        var fieldDirectExact = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        var fieldRetriedCompared = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        var fieldRetriedExact = fieldNames.ToDictionary(
+            field => field,
+            _ => 0,
+            StringComparer.Ordinal);
+
         var scored = 0;
         var fullExact = 0;
         var corrected = 0;
@@ -139,6 +159,22 @@ public sealed class PostgresOcrBenchmarkStore(
                 root,
                 "orientationAttempts",
                 orientationAttempts);
+
+            bool? orientationRetried = null;
+
+            if (
+                root.TryGetProperty(
+                    "orientationAttempts",
+                    out var orientationElementForField) &&
+                orientationElementForField.ValueKind ==
+                    JsonValueKind.Number &&
+                orientationElementForField.TryGetDouble(
+                    out var orientationCountForField))
+            {
+                orientationRetried =
+                    orientationCountForField > 1;
+            }
+
 
             if (
                 root.TryGetProperty(
@@ -233,12 +269,30 @@ public sealed class PostgresOcrBenchmarkStore(
 
                 fieldCompared[field] += 1;
 
+                if (orientationRetried == true)
+                {
+                    fieldRetriedCompared[field] += 1;
+                }
+                else if (orientationRetried == false)
+                {
+                    fieldDirectCompared[field] += 1;
+                }
+
                 if (FieldEquals(
                     field,
                     originalValue,
                     reviewedValue))
                 {
                     fieldExact[field] += 1;
+
+                    if (orientationRetried == true)
+                    {
+                        fieldRetriedExact[field] += 1;
+                    }
+                    else if (orientationRetried == false)
+                    {
+                        fieldDirectExact[field] += 1;
+                    }
                 }
                 else
                 {
@@ -297,6 +351,11 @@ public sealed class PostgresOcrBenchmarkStore(
                 var wrong =
                     fieldWrong[field];
 
+                var directCompared =
+                    fieldDirectCompared[field];
+                var retriedCompared =
+                    fieldRetriedCompared[field];
+
                 return new OcrBenchmarkFieldMetric(
                     field,
                     compared,
@@ -305,7 +364,15 @@ public sealed class PostgresOcrBenchmarkStore(
                     missing,
                     Rate(missing, compared),
                     wrong,
-                    Rate(wrong, compared));
+                    Rate(wrong, compared),
+                    directCompared,
+                    Rate(
+                        fieldDirectExact[field],
+                        directCompared),
+                    retriedCompared,
+                    Rate(
+                        fieldRetriedExact[field],
+                        retriedCompared));
             })
             .ToList();
 
