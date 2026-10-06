@@ -489,14 +489,27 @@ function chooseTaiwanChineseName(
   const best = eligible
     .sort((a, b) => b.rank - a.rank)[0]
 
-  // Precision is more important than recall here. If MRZ exists, only
-  // phonetic-compatible Chinese names are allowed to auto-fill; unknown
-  // romanization systems fall back to manual entry rather than guessing.
   if (!best || best.score < 0.65) return null
 
   if (
     parsedMrz &&
-    best.romanizationStatus !== 'compatible'
+    best.romanizationStatus === 'conflict'
+  ) {
+    return null
+  }
+
+  // Taiwan passports legitimately use multiple romanization systems.
+  // When the OCR candidate is spatially strong but our phonetic helper
+  // cannot prove compatibility, keep it as a review suggestion instead of
+  // turning a visible Chinese name into a blank field. Human review remains
+  // mandatory, while explicit romanization conflicts are still rejected.
+  if (
+    parsedMrz &&
+    best.romanizationStatus === 'unknown' &&
+    (
+      best.score < 0.78 ||
+      best.rank < 1.35
+    )
   ) {
     return null
   }
@@ -3896,8 +3909,19 @@ function extractPermitExpiryFromRows(
     )
   }
 
+  const validityPairAfterLabel =
+    /(?:有效期限|有效期|PERIODOFVALIDITY|VALIDUNTIL|EXPIRY)[:：]?((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\s*[-~～至]\s*((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})/i.exec(
+      compact,
+    )
+
+  if (validityPairAfterLabel?.[2]) {
+    return extractSinglePermitDate(
+      validityPairAfterLabel[2],
+    )
+  }
+
   const dateAfterLabel =
-    /(?:有效期限|有效期|VALIDUNTIL|EXPIRY)[:：]?((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})/i.exec(
+    /(?:有效期限|有效期|PERIODOFVALIDITY|VALIDUNTIL|EXPIRY)[:：]?((?:19|20)\d{2}[./\-]\d{1,2}[./\-]\d{1,2})/i.exec(
       compact,
     )
 
