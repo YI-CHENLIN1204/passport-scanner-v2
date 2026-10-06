@@ -11,10 +11,16 @@ public sealed record TrainingSampleSelectionResponse(
 
 public sealed record TrainingDatasetDocumentSummary(
     string DocumentType,
-    int SampleCount);
+    int SampleCount,
+    int TrainCount,
+    int ValidationCount,
+    int TestCount);
 
 public sealed record TrainingDatasetSummaryResponse(
     int SampleCount,
+    int TrainCount,
+    int ValidationCount,
+    int TestCount,
     IReadOnlyList<TrainingDatasetDocumentSummary> Documents,
     DateTimeOffset GeneratedAt);
 
