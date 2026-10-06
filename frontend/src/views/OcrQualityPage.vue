@@ -617,6 +617,54 @@ onMounted(load)
                     </strong>
                   </span>
                 </div>
+
+                <div
+                  v-if="
+                    field.directOrientationComparedCount ||
+                    field.retriedOrientationComparedCount
+                  "
+                  class="orientation-field-breakdown"
+                >
+                  <span
+                    v-if="
+                      field.directOrientationComparedCount
+                    "
+                  >
+                    原方向樣本
+                    <strong>
+                      {{
+                        rate(
+                          field.directOrientationExactRate,
+                        )
+                      }}
+                    </strong>
+                    <small>
+                      n={{
+                        field.directOrientationComparedCount
+                      }}
+                    </small>
+                  </span>
+
+                  <span
+                    v-if="
+                      field.retriedOrientationComparedCount
+                    "
+                  >
+                    方向重試樣本
+                    <strong>
+                      {{
+                        rate(
+                          field.retriedOrientationExactRate,
+                        )
+                      }}
+                    </strong>
+                    <small>
+                      n={{
+                        field.retriedOrientationComparedCount
+                      }}
+                    </small>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -946,6 +994,38 @@ onMounted(load)
 .weak-field-breakdown strong {
   color: #49586f;
   font-size: 8px;
+}
+
+.orientation-field-breakdown {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.orientation-field-breakdown > span {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  gap: 2px 6px;
+  align-items: center;
+  padding: 6px 7px;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  background: #fafbfc;
+  color: #748095;
+  font-size: 8px;
+}
+
+.orientation-field-breakdown strong {
+  color: #324158;
+  font-size: 10px;
+}
+
+.orientation-field-breakdown small {
+  grid-column: 1 / -1;
+  color: #9aa4b2;
+  font-size: 7px;
 }
 
 .analysis-signals {
