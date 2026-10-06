@@ -28,3 +28,15 @@ public sealed record TrainingDatasetExport(
     byte[] Bytes,
     string ContentType,
     string FileName);
+
+
+public sealed record TrainingEvaluationSampleResponse(
+    Guid TrainingSampleId,
+    string DocumentType,
+    string Split,
+    string GroundTruthJson);
+
+public sealed record TrainingDatasetSampleImage(
+    byte[] Bytes,
+    string ContentType,
+    string FileName);
