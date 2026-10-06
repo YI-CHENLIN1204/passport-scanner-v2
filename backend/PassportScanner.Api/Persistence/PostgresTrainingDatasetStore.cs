@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
+using PassportScanner.Api.Text;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -319,21 +320,19 @@ public sealed class PostgresTrainingDatasetStore(
                 !string.IsNullOrWhiteSpace(
                     businessName.GetString());
 
-            var hasNormalizedOriginal =
+            var hasRawOcrName =
                 ocrPayload.RootElement.TryGetProperty(
                     "originalFields",
                     out var originalFields) &&
                 originalFields.ValueKind ==
                     JsonValueKind.Object &&
                 originalFields.TryGetProperty(
-                    "nameZhTraditional",
-                    out var normalizedName) &&
-                normalizedName.ValueKind ==
-                    JsonValueKind.String;
+                    "nameZh",
+                    out _);
 
             return
                 hasCanonicalName &&
-                hasNormalizedOriginal;
+                hasRawOcrName;
         }
         catch (JsonException)
         {
@@ -348,7 +347,9 @@ public sealed class PostgresTrainingDatasetStore(
             {
                 nameZh =
                     item.DocumentType == "TAIWAN_COMPATRIOT_PERMIT"
-                        ? item.NameZhOnDocument
+                        ? ChineseScriptConverter
+                            .TraditionalToSimplified(
+                                item.NameZh)
                         : item.NameZh,
                 businessNameZh = item.NameZh,
                 nameZhOnDocument = item.NameZhOnDocument,
