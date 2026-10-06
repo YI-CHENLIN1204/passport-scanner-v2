@@ -895,6 +895,7 @@ export interface TrainingEvaluationSampleResponse {
   documentType: string
   split: 'train' | 'validation' | 'test'
   originalOcrJson: string
+  evaluationBaselineJson: string | null
   groundTruthJson: string
 }
 
@@ -925,6 +926,46 @@ export async function getTrainingEvaluationSamples(
   return response.json() as Promise<
     TrainingEvaluationSampleResponse[]
   >
+}
+
+export async function saveTrainingEvaluationBaseline(
+  trainingSampleId: string,
+  resultJson: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/samples/${encodeURIComponent(
+      trainingSampleId,
+    )}/evaluation-baseline`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ resultJson }),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Evaluation baseline save failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<{
+    trainingSampleId: string
+    resultJson: string
+    capturedAt: string
+  }>
 }
 
 export async function getTrainingSampleImageFile(
