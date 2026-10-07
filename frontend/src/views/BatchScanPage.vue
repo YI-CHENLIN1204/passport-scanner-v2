@@ -634,6 +634,8 @@ async function buildPassportItem(
     await prepareReviewImage(orientedImage)
   const imageBase64 =
     await fileToBase64(reviewImage)
+  const ocrInputImageBase64 =
+    await fileToBase64(file)
 
   return {
     originalFileName: sourceFile.name,
@@ -642,6 +644,9 @@ async function buildPassportItem(
       file.type ||
       'image/jpeg',
     imageBase64,
+    ocrInputImageContentType:
+      file.type || 'image/jpeg',
+    ocrInputImageBase64,
     nameZh: result.chineseName ?? '',
     nameZhOnDocument: result.chineseName ?? '',
     nameEn: parsed
@@ -741,6 +746,8 @@ async function buildPermitItem(
     await prepareReviewImage(orientedImage)
   const imageBase64 =
     await fileToBase64(reviewImage)
+  const ocrInputImageBase64 =
+    await fileToBase64(file)
 
   const printedChineseName =
     result.chineseName ?? ''
@@ -756,6 +763,9 @@ async function buildPermitItem(
       file.type ||
       'image/jpeg',
     imageBase64,
+    ocrInputImageContentType:
+      file.type || 'image/jpeg',
+    ocrInputImageBase64,
     nameZh: traditionalChineseName,
     nameZhOnDocument: printedChineseName,
     nameEn: '',
@@ -841,6 +851,8 @@ async function buildNationalIdItem(
     await prepareReviewImage(orientedImage)
   const imageBase64 =
     await fileToBase64(reviewImage)
+  const ocrInputImageBase64 =
+    await fileToBase64(file)
 
   return {
     originalFileName: sourceFile.name,
@@ -849,6 +861,9 @@ async function buildNationalIdItem(
       file.type ||
       'image/jpeg',
     imageBase64,
+    ocrInputImageContentType:
+      file.type || 'image/jpeg',
+    ocrInputImageBase64,
     nameZh: result.chineseName,
     nameZhOnDocument: result.chineseName,
     nameEn: '',
