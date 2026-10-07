@@ -385,6 +385,35 @@ public sealed class PostgresTrainingDatasetStore(
                         sample.ImageBytes);
                 }
 
+                string? ocrInputImagePath = null;
+
+                if (
+                    sample.OcrInputImageBytes is
+                        { Length: > 0 } &&
+                    !string.IsNullOrWhiteSpace(
+                        sample.OcrInputImageContentType))
+                {
+                    var ocrInputExtension =
+                        ExtensionFromContentType(
+                            sample.OcrInputImageContentType);
+
+                    ocrInputImagePath =
+                        $"ocr-inputs/{sample.DocumentType}/" +
+                        $"{sample.TrainingSampleId:N}" +
+                        ocrInputExtension;
+
+                    var ocrInputEntry =
+                        archive.CreateEntry(
+                            ocrInputImagePath,
+                            CompressionLevel.Fastest);
+
+                    using var ocrInputStream =
+                        ocrInputEntry.Open();
+
+                    ocrInputStream.Write(
+                        sample.OcrInputImageBytes);
+                }
+
                 var labelPath =
                     $"labels/{sample.DocumentType}/" +
                     $"{sample.TrainingSampleId:N}.json";
@@ -412,6 +441,8 @@ public sealed class PostgresTrainingDatasetStore(
                             selectedAt =
                                 sample.SelectedAt,
                             image = imagePath,
+                            ocrInputImage =
+                                ocrInputImagePath,
                             originalOcr =
                                 TryReadJson(
                                     sample.OcrPayloadJson),
@@ -444,6 +475,8 @@ public sealed class PostgresTrainingDatasetStore(
                                 sample.DocumentType,
                             split,
                             image = imagePath,
+                            ocrInputImage =
+                                ocrInputImagePath,
                             label = labelPath
                         });
 
@@ -507,6 +540,9 @@ public sealed class PostgresTrainingDatasetStore(
                     "All retained documents from the same traveler stay in one split.\n\n" +
                     "This ZIP contains real identity-document images " +
                     "and reviewed ground truth. Keep it outside Git.\n" +
+                    "Newer samples also include ocr-inputs/: the exact working " +
+                    "image fed to OCR before orientation/review rendering. " +
+                    "Legacy samples may not have this file.\n" +
                     "The production photo-retention rule is unchanged. " +
                     "Only explicitly selected samples are copied here.\n");
             }
