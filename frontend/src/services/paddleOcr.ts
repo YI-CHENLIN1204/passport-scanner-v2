@@ -41,6 +41,12 @@ interface PaddleItemGeometry {
   points: Array<[number, number]>
 }
 
+export interface PassportChineseNameDiagnostic {
+  source: 'name-field' | 'viz-crop'
+  rawTexts: string[]
+  candidateTexts: string[]
+}
+
 export interface PaddleBaselineResult {
   initializationMs: number
   predictMs: number
@@ -59,6 +65,7 @@ export interface PaddleBaselineResult {
   chineseNameScore: number | null
   chineseNameSource: 'name-field' | 'viz-crop' | null
   chineseNameRomanizationStatus: RomanizationCompatibility
+  chineseNameDiagnostics: PassportChineseNameDiagnostic[]
   structureComplete: boolean
   fallbackUsed: boolean
   fallbackCropRatio: number | null
@@ -996,6 +1003,7 @@ function buildBaselineResult(
     chineseNameScore: null,
     chineseNameSource: null,
     chineseNameRomanizationStatus: 'unknown',
+    chineseNameDiagnostics: [],
     structureComplete:
       line1Valid &&
       mrz.line2?.length === 44,
@@ -2791,6 +2799,34 @@ async function predictOne(
         | undefined
       const vizItems =
         (typedViz?.items ?? []) as PaddleItemLike[]
+      const rawTexts = Array.from(
+        new Set(
+          [
+            ...vizItems
+              .map(item =>
+                typeof item.text === 'string'
+                  ? item.text.trim()
+                  : '',
+              )
+              .filter(Boolean),
+            ...buildTextRows(vizItems),
+          ].filter(Boolean),
+        ),
+      )
+      const candidateTexts = Array.from(
+        new Set(
+          rawTexts
+            .map(normalizeChineseNameCandidate)
+            .filter(isPlausibleTaiwanChineseName),
+        ),
+      )
+
+      best.chineseNameDiagnostics.push({
+        source: crop.source,
+        rawTexts,
+        candidateTexts,
+      })
+
       const vizName = chooseTaiwanChineseName(
         vizItems,
         best.parsedMrz,
