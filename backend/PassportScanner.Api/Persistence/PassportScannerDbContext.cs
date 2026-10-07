@@ -363,6 +363,16 @@ public sealed class PassportScannerDbContext(
             .HasColumnType("bytea")
             .IsRequired();
 
+        scanItem.Property(item =>
+                item.OcrInputImageContentType)
+            .HasColumnName("ocr_input_image_content_type")
+            .HasMaxLength(80);
+
+        scanItem.Property(item =>
+                item.OcrInputImageBytes)
+            .HasColumnName("ocr_input_image_bytes")
+            .HasColumnType("bytea");
+
         scanItem.Property(item => item.NameZh)
             .HasColumnName("name_zh")
             .HasMaxLength(80)
@@ -485,6 +495,16 @@ public sealed class PassportScannerDbContext(
             .HasColumnName("image_bytes")
             .HasColumnType("bytea")
             .IsRequired();
+
+        trainingSample.Property(item =>
+                item.OcrInputImageContentType)
+            .HasColumnName("ocr_input_image_content_type")
+            .HasMaxLength(80);
+
+        trainingSample.Property(item =>
+                item.OcrInputImageBytes)
+            .HasColumnName("ocr_input_image_bytes")
+            .HasColumnType("bytea");
 
         trainingSample.Property(item =>
                 item.OcrPayloadJson)
