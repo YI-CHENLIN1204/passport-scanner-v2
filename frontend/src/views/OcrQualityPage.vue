@@ -70,6 +70,7 @@ const fieldsByDocumentType: Record<string, string[]> = {
 
 interface RetestSampleOutcome {
   documentType: string
+  hasExactOcrInput: boolean
   baselineFields: Record<string, string | null>
   currentFields: Record<string, string | null>
   groundTruth: Record<string, string | null>
@@ -88,6 +89,8 @@ interface RetestFieldSummary {
 interface RetestDocumentSummary {
   documentType: string
   sampleCount: number
+  exactInputCount: number
+  legacyInputCount: number
   baselineFullExactRate: number
   currentFullExactRate: number
   fields: RetestFieldSummary[]
@@ -538,6 +541,14 @@ function summarizeRetest(
       return {
         documentType,
         sampleCount: samples.length,
+        exactInputCount:
+          samples.filter(sample =>
+            sample.hasExactOcrInput,
+          ).length,
+        legacyInputCount:
+          samples.filter(sample =>
+            !sample.hasExactOcrInput,
+          ).length,
         baselineFullExactRate:
           baselineFull / samples.length,
         currentFullExactRate:
@@ -637,6 +648,8 @@ async function rerunTestSet() {
 
         outcomes.push({
           documentType: sample.documentType,
+          hasExactOcrInput:
+            sample.hasExactOcrInput,
           baselineFields,
           currentFields: current.fields,
           groundTruth:
@@ -1074,13 +1087,13 @@ onMounted(load)
           <h2>用最新版 OCR 重跑固定 Test set</h2>
           <p>
             不建立旅客、不修改人工答案，也不把 Test 資料拿去訓練。
-            第一次會用這批固定圖片建立不可覆寫的 Test 基準；
-            之後每次都用完全相同圖片比較「固定基準 → 最新版」。
+            每張樣本第一次重測會建立不可覆寫的固定基準，
+            後續都用同一份輸入影像比較「固定基準 → 最新版」。
           </p>
           <small>
-            固定基準與新版都使用同一份人工審核標準化影像，
-            因此 recognition / parser 的版本比較才是公平的。
-            速度與原始拍攝方向仍要用新的實際上傳照片驗證。
+            舊樣本當時沒有保存 OCR 工作圖片，只能用人工審核影像做
+            recognition / parser 回歸測試；從新版開始新增的樣本會保留
+            OCR 當下實際輸入，因此可做完整 pipeline 的公平比較。
           </small>
         </div>
 
@@ -1156,6 +1169,10 @@ onMounted(load)
                 <span>
                   Test n={{ result.sampleCount }}
                 </span>
+                <small>
+                  精確輸入 {{ result.exactInputCount }} ·
+                  舊版標準化 {{ result.legacyInputCount }}
+                </small>
               </div>
               <div class="retest-full-rate">
                 <small>整張完全正確</small>
@@ -1221,7 +1238,7 @@ onMounted(load)
 
             <footer>
               <span>
-                標準化影像 Median
+                重測輸入 Median
                 <strong>
                   {{
                     seconds(
