@@ -68,12 +68,18 @@ const fieldsByDocumentType: Record<string, string[]> = {
   ],
 }
 
+interface PassportNameDiagnosticSnapshot {
+  rawTexts: string[]
+  candidateTexts: string[]
+}
+
 interface RetestSampleOutcome {
   documentType: string
   hasExactOcrInput: boolean
   baselineFields: Record<string, string | null>
   currentFields: Record<string, string | null>
   groundTruth: Record<string, string | null>
+  passportNameDiagnostics: PassportNameDiagnosticSnapshot[]
   totalMs: number
   orientationAttempts: number
 }
@@ -84,6 +90,13 @@ interface RetestFieldSummary {
   baselineExactRate: number
   currentExactRate: number
   delta: number
+}
+
+interface PassportNameFailureSummary {
+  incorrectCount: number
+  selectorMissCount: number
+  recognitionWrongCount: number
+  notDetectedCount: number
 }
 
 interface RetestDocumentSummary {
@@ -97,6 +110,7 @@ interface RetestDocumentSummary {
   medianTotalMs: number | null
   p90TotalMs: number | null
   orientationRetryRate: number
+  passportNameFailures: PassportNameFailureSummary | null
 }
 
 interface RetestRunSummary {
@@ -329,6 +343,11 @@ async function currentFieldsForSample(
           ? mrzExpiryDateToIso(parsed.expiryDate)
           : null,
       } as Record<string, string | null>,
+      passportNameDiagnostics:
+        result.chineseNameDiagnostics.map(item => ({
+          rawTexts: item.rawTexts,
+          candidateTexts: item.candidateTexts,
+        })),
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -353,6 +372,7 @@ async function currentFieldsForSample(
           result.permitNumber || '',
         expiryDate: result.expiryDate || null,
       } as Record<string, string | null>,
+      passportNameDiagnostics: [],
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -376,6 +396,7 @@ async function currentFieldsForSample(
         documentNumber:
           result.nationalId || '',
       } as Record<string, string | null>,
+      passportNameDiagnostics: [],
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -405,6 +426,76 @@ function percentile(
   )
 
   return ordered[index]
+}
+
+function passportNameFailureSummary(
+  samples: RetestSampleOutcome[],
+): PassportNameFailureSummary {
+  const failures = samples.filter(sample =>
+    !evalFieldEquals(
+      'nameZh',
+      sample.currentFields.nameZh,
+      sample.groundTruth.nameZh,
+    ),
+  )
+
+  let selectorMissCount = 0
+  let recognitionWrongCount = 0
+  let notDetectedCount = 0
+
+  for (const sample of failures) {
+    const expected = normalizeEvalValue(
+      'nameZh',
+      sample.groundTruth.nameZh,
+    )
+
+    const rawTexts =
+      sample.passportNameDiagnostics.flatMap(
+        item => item.rawTexts,
+      )
+    const candidateTexts =
+      sample.passportNameDiagnostics.flatMap(
+        item => item.candidateTexts,
+      )
+
+    const normalizedRaw = rawTexts.map(text =>
+      text
+        .replace(/\s+/g, '')
+        .replace(
+          /[，,。．.：:；;()（）\[\]【】]/g,
+          '',
+        ),
+    )
+    const normalizedCandidates =
+      candidateTexts.map(text =>
+        normalizeEvalValue('nameZh', text),
+      )
+
+    const expectedWasRead =
+      Boolean(expected) &&
+      (
+        normalizedCandidates.includes(expected) ||
+        normalizedRaw.some(text =>
+          text === expected ||
+          text.includes(expected)
+        )
+      )
+
+    if (expectedWasRead) {
+      selectorMissCount += 1
+    } else if (normalizedCandidates.length > 0) {
+      recognitionWrongCount += 1
+    } else {
+      notDetectedCount += 1
+    }
+  }
+
+  return {
+    incorrectCount: failures.length,
+    selectorMissCount,
+    recognitionWrongCount,
+    notDetectedCount,
+  }
 }
 
 function summarizeRetest(
@@ -560,6 +651,10 @@ function summarizeRetest(
           percentile(times, 0.9),
         orientationRetryRate:
           retryCount / samples.length,
+        passportNameFailures:
+          documentType === 'PASSPORT'
+            ? passportNameFailureSummary(samples)
+            : null,
       }
     })
     .filter(
@@ -654,6 +749,8 @@ async function rerunTestSet() {
           currentFields: current.fields,
           groundTruth:
             groundTruthForSample(sample),
+          passportNameDiagnostics:
+            current.passportNameDiagnostics,
           totalMs: current.totalMs,
           orientationAttempts:
             current.orientationAttempts,
@@ -1234,6 +1331,28 @@ onMounted(load)
                   }}%
                 </em>
               </div>
+            </div>
+
+            <div
+              v-if="
+                result.documentType === 'PASSPORT' &&
+                result.passportNameFailures?.incorrectCount
+              "
+              class="passport-name-diagnosis"
+            >
+              <strong>中文姓名失敗原因</strong>
+              <span>
+                OCR 已讀到正確姓名，但 selector 未採用：
+                {{ result.passportNameFailures.selectorMissCount }} 張
+              </span>
+              <span>
+                OCR 有讀到姓名候選，但文字辨識錯：
+                {{ result.passportNameFailures.recognitionWrongCount }} 張
+              </span>
+              <span>
+                姓名裁切中沒有讀到可用姓名：
+                {{ result.passportNameFailures.notDetectedCount }} 張
+              </span>
             </div>
 
             <footer>
@@ -2059,6 +2178,19 @@ onMounted(load)
 
 .retest-full-rate strong {
   color: #1f6d4a;
+}
+
+.passport-name-diagnosis {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.04);
+  font-size: 0.9rem;
+}
+
+.passport-name-diagnosis strong {
+  margin-bottom: 0.15rem;
 }
 
 .retest-field-list {
