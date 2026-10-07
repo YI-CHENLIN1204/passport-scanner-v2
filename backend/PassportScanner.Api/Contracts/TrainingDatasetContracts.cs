@@ -36,7 +36,8 @@ public sealed record TrainingEvaluationSampleResponse(
     string Split,
     string OriginalOcrJson,
     string? EvaluationBaselineJson,
-    string GroundTruthJson);
+    string GroundTruthJson,
+    bool HasExactOcrInput);
 
 public sealed record SaveEvaluationBaselineRequest(
     string ResultJson);
