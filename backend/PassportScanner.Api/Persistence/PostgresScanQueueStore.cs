@@ -93,6 +93,51 @@ public sealed class PostgresScanQueueStore(
             throw new ArgumentException("單張圖片不可超過 15 MB。");
         }
 
+        byte[]? ocrInputImageBytes = null;
+        string? ocrInputImageContentType = null;
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                request.OcrInputImageBase64))
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    request.OcrInputImageContentType) ||
+                !request.OcrInputImageContentType.StartsWith(
+                    "image/",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "OCR 工作圖片格式錯誤。");
+            }
+
+            try
+            {
+                ocrInputImageBytes =
+                    Convert.FromBase64String(
+                        request.OcrInputImageBase64);
+            }
+            catch (FormatException)
+            {
+                throw new ArgumentException(
+                    "OCR 工作圖片資料格式錯誤。");
+            }
+
+            if (
+                ocrInputImageBytes.Length == 0 ||
+                ocrInputImageBytes.Length >
+                    15 * 1024 * 1024)
+            {
+                throw new ArgumentException(
+                    "OCR 工作圖片大小不合法。");
+            }
+
+            ocrInputImageContentType =
+                request.OcrInputImageContentType
+                    .Trim()
+                    .ToLowerInvariant();
+        }
+
         var identity = NormalizeIdentity(
             request.NameZh,
             request.BirthDate,
@@ -116,6 +161,10 @@ public sealed class PostgresScanQueueStore(
             ImageContentType =
                 request.ImageContentType.Trim().ToLowerInvariant(),
             ImageBytes = imageBytes,
+            OcrInputImageContentType =
+                ocrInputImageContentType,
+            OcrInputImageBytes =
+                ocrInputImageBytes,
             NameZh = identity.NameZh,
             NameZhOnDocument = NormalizeIdentityName(
                 string.IsNullOrWhiteSpace(request.NameZhOnDocument)
