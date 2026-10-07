@@ -16,6 +16,8 @@ public sealed record CreateScanItemRequest(
     string OriginalFileName,
     string ImageContentType,
     string ImageBase64,
+    string? OcrInputImageContentType,
+    string? OcrInputImageBase64,
     string NameZh,
     string? NameZhOnDocument,
     string NameEn,
