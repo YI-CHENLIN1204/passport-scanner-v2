@@ -64,6 +64,10 @@ public sealed class PostgresTrainingDatasetStore(
                     scanItem.ImageContentType,
                 ImageBytes =
                     scanItem.ImageBytes.ToArray(),
+                OcrInputImageContentType =
+                    scanItem.OcrInputImageContentType,
+                OcrInputImageBytes =
+                    scanItem.OcrInputImageBytes?.ToArray(),
                 OcrPayloadJson =
                     scanItem.OcrPayloadJson,
                 GroundTruthJson =
@@ -230,7 +234,9 @@ public sealed class PostgresTrainingDatasetStore(
                         out var baselineJson)
                         ? baselineJson
                         : null,
-                    sample.GroundTruthJson))
+                    sample.GroundTruthJson,
+                    sample.OcrInputImageBytes is
+                        { Length: > 0 }))
             .ToList();
     }
 
@@ -248,12 +254,25 @@ public sealed class PostgresTrainingDatasetStore(
             return null;
         }
 
+        var useExactOcrInput =
+            sample.OcrInputImageBytes is
+                { Length: > 0 } &&
+            !string.IsNullOrWhiteSpace(
+                sample.OcrInputImageContentType);
+
+        var bytes = useExactOcrInput
+            ? sample.OcrInputImageBytes!
+            : sample.ImageBytes;
+        var contentType = useExactOcrInput
+            ? sample.OcrInputImageContentType!
+            : sample.ImageContentType;
+
         return new TrainingDatasetSampleImage(
-            sample.ImageBytes,
-            sample.ImageContentType,
+            bytes,
+            contentType,
             $"training-sample-{trainingSampleId:N}" +
             ExtensionFromContentType(
-                sample.ImageContentType));
+                contentType));
     }
 
     public EvaluationBaselineResponse SaveEvaluationBaseline(
