@@ -637,6 +637,8 @@ export interface CreateScanItemRequest {
   originalFileName: string
   imageContentType: string
   imageBase64: string
+  ocrInputImageContentType: string | null
+  ocrInputImageBase64: string | null
   nameZh: string
   nameZhOnDocument: string
   nameEn: string
@@ -897,6 +899,7 @@ export interface TrainingEvaluationSampleResponse {
   originalOcrJson: string
   evaluationBaselineJson: string | null
   groundTruthJson: string
+  hasExactOcrInput: boolean
 }
 
 export async function getTrainingEvaluationSamples(
