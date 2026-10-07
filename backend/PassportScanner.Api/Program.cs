@@ -133,6 +133,8 @@ using (var scope = app.Services.CreateScope())
             original_file_name varchar(255) NOT NULL,
             image_content_type varchar(80) NOT NULL,
             image_bytes bytea NOT NULL,
+            ocr_input_image_content_type varchar(80) NULL,
+            ocr_input_image_bytes bytea NULL,
             name_zh varchar(80) NOT NULL,
             name_zh_on_document varchar(80) NOT NULL DEFAULT '',
             name_en varchar(160) NOT NULL,
@@ -157,6 +159,12 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE scan_items
             ADD COLUMN IF NOT EXISTS national_id_number varchar(20) NULL;
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS ocr_input_image_content_type varchar(80) NULL;
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS ocr_input_image_bytes bytea NULL;
 
         UPDATE scan_items
             SET name_zh_on_document = ''
@@ -211,11 +219,19 @@ using (var scope = app.Services.CreateScope())
             document_type varchar(40) NOT NULL,
             image_content_type varchar(80) NOT NULL,
             image_bytes bytea NOT NULL,
+            ocr_input_image_content_type varchar(80) NULL,
+            ocr_input_image_bytes bytea NULL,
             ocr_payload_json text NOT NULL,
             ground_truth_json text NOT NULL,
             selected_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
+
+        ALTER TABLE training_samples
+            ADD COLUMN IF NOT EXISTS ocr_input_image_content_type varchar(80) NULL;
+
+        ALTER TABLE training_samples
+            ADD COLUMN IF NOT EXISTS ocr_input_image_bytes bytea NULL;
 
         CREATE UNIQUE INDEX IF NOT EXISTS
             ux_training_samples_source_scan_item
