@@ -35,11 +35,37 @@ public sealed class PostgresTravelerStore(
         var issuingCountry = NormalizeNullable(input.IssuingCountry);
         var sex = Normalize(input.Sex);
 
-        if (
-            string.IsNullOrWhiteSpace(nationalIdNumber) &&
-            documentType == "TAIWAN_NATIONAL_ID")
+        if (documentType == "TAIWAN_NATIONAL_ID")
         {
+            if (!TaiwanNationalIdReviewValidator
+                .IsValidNationalId(
+                    documentNumber))
+            {
+                throw new ArgumentException(
+                    "身分證證件號碼格式或檢查碼不正確。");
+            }
+
+            if (
+                !string.IsNullOrWhiteSpace(
+                    nationalIdNumber) &&
+                nationalIdNumber !=
+                    documentNumber)
+            {
+                throw new ArgumentException(
+                    "旅客主檔身分證字號與身分證證件號碼不一致。");
+            }
+
             nationalIdNumber = documentNumber;
+        }
+        else if (
+            !string.IsNullOrWhiteSpace(
+                nationalIdNumber) &&
+            !TaiwanNationalIdReviewValidator
+                .IsValidNationalId(
+                    nationalIdNumber))
+        {
+            throw new ArgumentException(
+                "身分證字號格式或檢查碼不正確。");
         }
 
         using var transaction = db.Database.BeginTransaction();
