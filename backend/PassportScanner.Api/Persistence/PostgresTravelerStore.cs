@@ -829,6 +829,8 @@ public sealed class PostgresTravelerStore(
             effectiveNationalIdNumber;
         traveler.UpdatedAt = now;
 
+        ReconcileCurrentDocuments(
+            travelerId);
         db.SaveChanges();
 
         var travelerDocumentIds = db.DocumentVersions
@@ -1608,6 +1610,8 @@ public sealed class PostgresTravelerStore(
                 item.IsCurrent)
             .OrderByDescending(item => item.VerifiedAt)
             .ThenByDescending(item => item.CreatedAt)
+            .ThenByDescending(item =>
+                item.DocumentVersionId)
             .ToList();
 
         foreach (var group in currentDocuments.GroupBy(
@@ -1619,6 +1623,31 @@ public sealed class PostgresTravelerStore(
                 oldDocument.IsCurrent = false;
             }
         }
+
+        var primaryDocument = currentDocuments
+            .Where(item => item.IsCurrent)
+            .OrderByDescending(item =>
+                item.VerifiedAt)
+            .ThenByDescending(item =>
+                item.CreatedAt)
+            .ThenByDescending(item =>
+                item.DocumentVersionId)
+            .FirstOrDefault();
+
+        if (primaryDocument is null)
+        {
+            return;
+        }
+
+        var traveler = db.Travelers.Single(
+            item =>
+                item.TravelerId ==
+                    travelerId);
+
+        traveler.PersonalIdType =
+            primaryDocument.DocumentType;
+        traveler.PersonalIdNumber =
+            primaryDocument.DocumentNumber;
     }
 
     private DocumentSaveResult BuildResult(
