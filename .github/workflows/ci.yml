@@ -94,7 +94,9 @@ jobs:
           grep -q '^ocr_evaluation_baselines$' /tmp/tables.txt
           grep -q '^scan_batches$' /tmp/tables.txt
           grep -q '^scan_items$' /tmp/tables.txt
-          grep -q '^tour_members
+          grep -Fxq 'tour_members' /tmp/tables.txt
+          grep -Fxq 'tour_member_documents' /tmp/tables.txt
+          grep -Fxq 'tour_person_drafts' /tmp/tables.txt
           grep -q '^tours$' /tmp/tables.txt
           grep -q '^training_samples$' /tmp/tables.txt
           grep -q '^travelers$' /tmp/tables.txt
