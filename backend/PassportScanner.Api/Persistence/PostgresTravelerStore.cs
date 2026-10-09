@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
+using PassportScanner.Api.Validation;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -446,16 +447,23 @@ public sealed class PostgresTravelerStore(
                 "旅客性別不可空白。");
         }
 
-        traveler.NameZh = nameZh;
-        traveler.NameEn = Normalize(
-            request.NameEn ?? string.Empty);
-        traveler.BirthDate = birthDate;
-        traveler.Gender = gender;
-        traveler.Nationality =
-            NormalizeNullable(request.Nationality);
-        traveler.NationalIdNumber =
-            NormalizeNullable(request.NationalIdNumber);
-        traveler.UpdatedAt = now;
+        var effectiveNationalIdNumber =
+            NormalizeNullable(
+                request.NationalIdNumber);
+
+        if (
+            effectiveNationalIdNumber is not null &&
+            !TaiwanNationalIdReviewValidator
+                .IsValidNationalId(
+                    effectiveNationalIdNumber))
+        {
+            throw new ArgumentException(
+                "身分證字號格式或檢查碼不正確。");
+        }
+
+        var requestedDocumentKeys =
+            new HashSet<string>(
+                StringComparer.Ordinal);
 
         foreach (var update in request.Documents ??
             Array.Empty<UpdateTravelerDocumentRequest>())
@@ -473,12 +481,89 @@ public sealed class PostgresTravelerStore(
             }
 
             var documentNumber = Normalize(
-                update.DocumentNumber ?? string.Empty);
+                update.DocumentNumber ??
+                    string.Empty);
 
-            if (string.IsNullOrWhiteSpace(documentNumber))
+            if (string.IsNullOrWhiteSpace(
+                documentNumber))
             {
                 throw new ArgumentException(
                     "證件號碼不可空白。");
+            }
+
+            var issuingCountry =
+                NormalizeNullable(
+                    update.IssuingCountry);
+
+            if (
+                document.DocumentType ==
+                    "TAIWAN_NATIONAL_ID")
+            {
+                if (
+                    !TaiwanNationalIdReviewValidator
+                        .IsValidNationalId(
+                            documentNumber))
+                {
+                    throw new ArgumentException(
+                        "身分證證件號碼格式或檢查碼不正確。");
+                }
+
+                if (
+                    effectiveNationalIdNumber is not null &&
+                    effectiveNationalIdNumber !=
+                        documentNumber)
+                {
+                    throw new ArgumentException(
+                        "旅客主檔身分證字號與目前身分證證件號碼不一致。");
+                }
+
+                effectiveNationalIdNumber =
+                    documentNumber;
+            }
+
+            var requestedKey =
+                document.DocumentType ==
+                    "PASSPORT"
+                    ? $"{document.DocumentType}|{documentNumber}|{issuingCountry ?? string.Empty}"
+                    : $"{document.DocumentType}|{documentNumber}";
+
+            if (!requestedDocumentKeys.Add(
+                requestedKey))
+            {
+                throw new ArgumentException(
+                    "同一次修改中出現重複的證件號碼。");
+            }
+
+            var conflictingDocument =
+                db.DocumentVersions
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.DocumentVersionId !=
+                            document.DocumentVersionId &&
+                        item.DocumentType ==
+                            document.DocumentType &&
+                        item.DocumentNumber ==
+                            documentNumber &&
+                        (
+                            document.DocumentType !=
+                                "PASSPORT" ||
+                            item.IssuingCountry ==
+                                issuingCountry
+                        ))
+                    .Select(item => new
+                    {
+                        item.TravelerId,
+                        item.DocumentVersionId
+                    })
+                    .FirstOrDefault();
+
+            if (conflictingDocument is not null)
+            {
+                throw new ArgumentException(
+                    conflictingDocument.TravelerId ==
+                        travelerId
+                        ? "此證件號碼已存在於同一旅客的另一個證件版本，請先確認歷史版本。"
+                        : "此證件號碼已屬於另一位旅客，請先確認是否應使用「旅客合併」。");
             }
 
             DateOnly? expiryDate = null;
@@ -511,8 +596,7 @@ public sealed class PostgresTravelerStore(
             document.DocumentNumber =
                 documentNumber;
             document.IssuingCountry =
-                NormalizeNullable(
-                    update.IssuingCountry);
+                issuingCountry;
             document.Nationality =
                 NormalizeNullable(
                     update.Nationality);
@@ -528,6 +612,36 @@ public sealed class PostgresTravelerStore(
                     documentNumber;
             }
         }
+
+        if (
+            effectiveNationalIdNumber is not null)
+        {
+            var duplicateNationalId =
+                db.Travelers
+                    .AsNoTracking()
+                    .Any(item =>
+                        item.TravelerId != travelerId &&
+                        item.NationalIdNumber ==
+                            effectiveNationalIdNumber);
+
+            if (duplicateNationalId)
+            {
+                throw new ArgumentException(
+                    "此身分證字號已屬於另一位旅客，請先確認是否應使用「旅客合併」。");
+            }
+        }
+
+        traveler.NameZh = nameZh;
+        traveler.NameEn = Normalize(
+            request.NameEn ?? string.Empty);
+        traveler.BirthDate = birthDate;
+        traveler.Gender = gender;
+        traveler.Nationality =
+            NormalizeNullable(
+                request.Nationality);
+        traveler.NationalIdNumber =
+            effectiveNationalIdNumber;
+        traveler.UpdatedAt = now;
 
         db.SaveChanges();
 
@@ -565,7 +679,8 @@ public sealed class PostgresTravelerStore(
                 continue;
             }
 
-            scanItem.NameZh = traveler.NameZh;
+            scanItem.NameZh =
+                traveler.NameZh;
             scanItem.NameZhOnDocument =
                 document.NameZhOnDocument;
             scanItem.NameEn =
