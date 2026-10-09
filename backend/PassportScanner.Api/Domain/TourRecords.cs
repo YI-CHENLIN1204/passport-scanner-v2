@@ -25,6 +25,24 @@ public sealed class TourMemberDocumentRecord
     public required Guid TourMemberId { get; set; }
     public required Guid DocumentVersionId { get; set; }
     public required string DocumentType { get; init; }
+
+    // Immutable-per-tour business/document snapshot. It is refreshed only
+    // when this tour explicitly links/re-reviews a document, not when the
+    // global Traveler or current DocumentVersion is edited later.
+    public required string SnapshotNameZh { get; set; }
+    public required string SnapshotNameEn { get; set; }
+    public required DateOnly SnapshotBirthDate { get; set; }
+    public required string SnapshotGender { get; set; }
+    public string? SnapshotNationality { get; set; }
+    public string? SnapshotNationalIdNumber { get; set; }
+    public required string SnapshotNameZhOnDocument { get; set; }
+    public required string SnapshotNameEnOnDocument { get; set; }
+    public required string SnapshotDocumentNumber { get; set; }
+    public string? SnapshotIssuingCountry { get; set; }
+    public string? SnapshotDocumentNationality { get; set; }
+    public DateOnly? SnapshotExpiryDate { get; set; }
+    public required DateTimeOffset SnapshotVerifiedAt { get; set; }
+
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
