@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
+using PassportScanner.Api.Services;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -201,12 +202,10 @@ public sealed class PostgresScanQueueStore(
             ReviewStatus = Pending,
             SavedDocumentVersionId = null,
             ReviewedAt = null,
-            DeleteAfter = new DateTimeOffset(
-                tour.ReturnDate
-                    .AddDays(8)
-                    .ToDateTime(
-                        TimeOnly.MinValue,
-                        DateTimeKind.Utc)),
+            DeleteAfter =
+                BusinessDate
+                    .ProductionPhotoDeleteAfter(
+                        tour.ReturnDate),
             CreatedAt = now,
             UpdatedAt = now
         };
