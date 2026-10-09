@@ -950,3 +950,15 @@ D-047 已將非 current 的歷史證件版本定義為唯讀顯示；backend API
 - 使用者明確決定重新開啟 OCR 改善階段後，才解除目前凍結。
 
 因此目前新資料的優先用途是：收集 → 人工覆核 → 建立 ground truth → 維持 split integrity → 累積 benchmark；V2 系統本體與資料正確性仍優先於 OCR 調參。
+
+### D-073：強識別相同仍不得忽略明顯身份衝突
+
+D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自動整理重複 Traveler」，但強識別不是覆蓋一切矛盾資料的理由。
+
+- 找到相同合法身分證字號 Traveler 時，先確認既有 Traveler 的出生日期與性別是否和本次人工覆核資料一致。
+- 若任一相同字號 Traveler 的出生日期或性別互相衝突，視為資料完整性異常，不自動 consolidate。
+- Review API 回 `409 ambiguousTravelerMatch`，提示操作人員到「旅客資料」人工確認／修正。
+- 衝突發生於正式 review transaction 中時，前面對 Traveler / DocumentVersion 的暫時修改必須 rollback。
+- 姓名不同本身不構成阻擋條件，因姓名可能有更名、OCR 修正或中英文表記差異；出生日期與性別則屬明顯 identity conflict。
+
+目的：強識別可降低重複資料，但不能把歷史誤填的身分證字號轉化成不可逆的錯誤合併。
