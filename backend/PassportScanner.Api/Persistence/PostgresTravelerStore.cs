@@ -37,9 +37,12 @@ public sealed class PostgresTravelerStore(
 
         ValidateFormalIdentity(
             nameZh,
+            nameEn,
             input.BirthDate,
             sex,
             nationality,
+            documentType,
+            issuingCountry,
             now);
 
         ValidateDocumentFields(
@@ -489,12 +492,8 @@ public sealed class PostgresTravelerStore(
 
         var nameZh = NormalizeIdentityName(
             request.NameZh ?? string.Empty);
-
-        if (string.IsNullOrWhiteSpace(nameZh))
-        {
-            throw new ArgumentException(
-                "旅客中文姓名不可空白。");
-        }
+        var nameEn = Normalize(
+            request.NameEn ?? string.Empty);
 
         if (!DateOnly.TryParseExact(
             request.BirthDate?.Trim(),
@@ -512,9 +511,12 @@ public sealed class PostgresTravelerStore(
 
         ValidateFormalIdentity(
             nameZh,
+            nameEn,
             birthDate,
             gender,
             NormalizeNullable(request.Nationality),
+            null,
+            null,
             now);
 
         var effectiveNationalIdNumber =
@@ -720,8 +722,7 @@ public sealed class PostgresTravelerStore(
         }
 
         traveler.NameZh = nameZh;
-        traveler.NameEn = Normalize(
-            request.NameEn ?? string.Empty);
+        traveler.NameEn = nameEn;
         traveler.BirthDate = birthDate;
         traveler.Gender = gender;
         traveler.Nationality =
@@ -1476,15 +1477,40 @@ public sealed class PostgresTravelerStore(
 
     private static void ValidateFormalIdentity(
         string nameZh,
+        string nameEn,
         DateOnly birthDate,
         string gender,
         string? nationality,
+        string? documentType,
+        string? issuingCountry,
         DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(nameZh))
+        if (
+            string.IsNullOrWhiteSpace(nameZh) &&
+            string.IsNullOrWhiteSpace(nameEn))
         {
             throw new ArgumentException(
-                "旅客中文姓名不可空白。");
+                "旅客中文姓名與英文姓名不可同時空白。");
+        }
+
+        var requiresChineseName =
+            documentType is
+                "TAIWAN_COMPATRIOT_PERMIT" or
+                "TAIWAN_NATIONAL_ID" ||
+            (
+                documentType == "PASSPORT" &&
+                (
+                    nationality == "TWN" ||
+                    issuingCountry == "TWN"
+                )
+            );
+
+        if (
+            requiresChineseName &&
+            string.IsNullOrWhiteSpace(nameZh))
+        {
+            throw new ArgumentException(
+                "此證件流程必須確認旅客中文姓名。");
         }
 
         if (
