@@ -36,7 +36,9 @@ OCR 結果需經人工核對／修正，不採完全自動入庫。
 
 ### D-008：Google Sheets
 
-V2 以人工按鈕觸發匯出 Google Sheets；不是 OCR 完成後即時同步。
+> **歷史決策，已被 D-035 / D-037 與目前 CSV 匯出流程取代。**
+
+早期規劃曾考慮由人工按鈕觸發 Google Sheets 匯出。現行 V2 不做 Google Sheets 寫入；正式匯出為團別頁手動 CSV，支援依證件類型選表、欄位勾選與順序調整。
 
 ### D-009：ERP
 
@@ -56,7 +58,7 @@ V2 第一版開發骨架採：
 - Backend 開發 port：5080。
 - 前後端透過 HTTP / JSON API 溝通。
 
-此決策只鎖定應用程式骨架；OCR runtime 與正式資料庫仍需依 PoC / schema 階段決定。
+此段最後一句屬早期階段狀態，已由 D-002、D-034 與後續 OCR 決策取代。現行實作固定為瀏覽器端 PaddleOCR / parser pipeline + PostgreSQL 16；應用骨架仍為 Vue 3 + TypeScript + Vite / ASP.NET Core Web API (.NET 10)。
 
 ## 現行規則，但需要持續評估
 
@@ -95,19 +97,15 @@ V2 第一版開發骨架採：
 
 ### O-003：照片訓練資料政策
 
-若真的要把原始照片／人工校正結果用作訓練資料，需要另外決定：
+> **此項主要內容已由 D-041、D-043、D-046、D-068 與 D-072 定案；保留此段作早期待辦歷史。**
 
-- 保存多久。
-- 是否與一般覆核照片分開。
-- 哪些資料可進訓練集。
-- 如何刪除。
-- 如何避免將不必要的敏感欄位納入訓練。
+現行規則是 production 覆核照片與私人 Training Dataset 分離；只有人工明確選入且完成審核的樣本才複製至 `training_samples`。production 圖片仍依回國日後 7 天清除；Training sample 保留獨立 image / OCR input / ground truth，並以 source scan item FK 保持可追溯。
 
 ### O-004：OCR runtime 與正式資料庫
 
-應用程式骨架已確定為 Vue 3 + TypeScript + Vite / ASP.NET Core Web API (.NET 10)。
+> **已定案，不再屬於「尚未定案」。**
 
-瀏覽器 OCR runtime 與正式資料庫仍需依 PoC 與資料模型階段決定；核心限制是 OCR 必須維持在瀏覽器端。
+現行為 Vue 3 + TypeScript + Vite / ASP.NET Core Web API (.NET 10)，OCR 在瀏覽器端使用 PaddleOCR / MRZ / parser pipeline；正式資料庫為 PostgreSQL 16。OCR 不搬到雲端常駐推論，資料庫細節見 D-034。
 
 
 ### D-012：護照人工覆核第一版
@@ -126,7 +124,7 @@ V2 第一版開發骨架採：
 
 MRZ check digit 可驗證的護照號碼、出生日期、有效期限標記驗證狀態；英文姓名始終保留人工覆核。
 
-目前按下「確認資料」只更新前端覆核狀態，不直接入庫、不建立旅客主檔／證件版本，也不自動匯出 Google Sheets。後端持久化需在資料模型與 API 契約確認後另行接入。
+此段描述的是第一版 PoC 歷史狀態。現行正式批次流程在人工審核後會以 transaction 寫入 Traveler / DocumentVersion 與本團 TourMemberDocument；匯出為 CSV，不再使用 Google Sheets。
 
 
 ### D-013：人工覆核畫面優先於技術診斷
@@ -159,7 +157,7 @@ Tesseract Baseline A、TD3 細節、runtime、批次泛化測試等資訊全部�
 - 按下確認後記錄 reviewedAt。
 - 確認後再次修改任一欄位，確認狀態與 draft 立即失效。
 
-確認時建立 typed PassportReviewDraft，但目前只存在瀏覽器記憶體，不送 API、不入庫。Payload 格式見 `docs/PASSPORT_REVIEW_CONTRACT.md`。
+typed PassportReviewDraft 為早期 PoC 契約；現行正式批次流程會把 OCR 結果寫入 scan staging，人工審核後才持久化 Traveler / DocumentVersion。舊 contract 仍保留作 validate-only / 技術歷史參考。
 
 
 ### D-016：人工覆核後先做後端第二層驗證
@@ -170,15 +168,7 @@ Tesseract Baseline A、TD3 細節、runtime、批次泛化測試等資訊全部�
 
 後端重新驗證姓名／護照號碼／國家代碼／日期／性別／OCR metadata 等格式。
 
-此 endpoint **只驗證、不持久化**：
-
-- 不建立 traveler_master。
-- 不建立 document_versions。
-- 不保存圖片。
-- 不寫 Google Sheets。
-- 回應不 echo 姓名、護照號碼等敏感值。
-
-等 API contract 穩定後，再新增真正的資料庫 transaction。
+此 validate endpoint 本身仍維持「只驗證、不持久化」語意，但它已不是正式批次收件的唯一流程。現行系統另有正式 persistence / scan review endpoints，人工審核後以 PostgreSQL transaction 寫入 Traveler / DocumentVersion 與團別關聯。
 
 ### D-017：原圖縮放與拖曳列為覆核 UX 強化
 
@@ -187,7 +177,9 @@ Tesseract Baseline A、TD3 細節、runtime、批次泛化測試等資訊全部�
 
 ### D-018：資料庫未定案前以 ITravelerStore 驗證版本邏輯
 
-正式資料庫尚未鎖定，因此後端先以 `ITravelerStore` 作為資料層邊界，開發環境使用 `InMemoryTravelerStore`。
+> **歷史 PoC 決策，正式 persistence 已由 D-034 取代。**
+
+早期在資料庫尚未鎖定時，以 `ITravelerStore` 作為資料層邊界並用 InMemory 實作驗證版本邏輯；目前 `ITravelerStore` abstraction 仍保留，但正式實作為 PostgreSQL。
 
 目的不是把記憶體儲存當正式資料庫，而是先把以下業務規則跑通：
 
@@ -299,7 +291,7 @@ MRZ 不含中文姓名，但 CRM 需要台灣旅客中文姓名，因此護照�
 
 主畫面開始從 OCR PoC 轉為實際工作台：
 
-- 證件掃描：護照、台胞證；身分證暫緩。
+- 證件掃描：護照、台胞證；此處「身分證暫緩」為當時階段狀態，已由 D-030 取代，現行三類證件皆為 V2 正式證件。
 - 旅客資料：搜尋 traveler_master 並查看 document_versions。
 - Tesseract 與舊泛化測試仍保留在開發診斷區，不放進主要操作流程。
 
@@ -486,7 +478,9 @@ scan_items 的圖片只供內部人工覆核使用；辨識仍在瀏覽器執行
 
 ### D-039：跨證件人物比對採共同欄位完全相同自動合併
 
-目前護照、台胞證、台灣身分證三種證件之間共同存在的核心人物欄位為：
+> **早期策略已被 D-052、D-053、D-060、D-063、D-064 取代。現行不再把「姓名 + 出生日期 + 性別」視為足以強制合併的唯一身份鍵，且已提供人工 Traveler merge。**
+
+早期曾以三種證件共同欄位作為自動歸組基礎：
 
 - 中文姓名
 - 出生日期
@@ -524,7 +518,7 @@ OCR 模型改善資料不得透過取消 production 照片刪除期限來累積�
 - `scan_items` 的覆核照片仍遵守該團回國日後 7 天的 production 保存規則。
 - 人工審核畫面提供「保留此樣本供 OCR 改善」選項，預設不勾選。
 - 只有操作人員明確勾選且完成審核後，系統才把該證件圖片、OCR 原始輸出與人工 ground truth 複製到獨立 `training_samples`。
-- `training_samples` 不依賴 `scan_items` 外鍵刪除，因此 production 圖片到期不會意外刪除已明確選入的訓練樣本。
+- `training_samples` 現在以 FK 追溯 source scan item（D-068），但 production retention 只清除 `scan_items` 的圖片 bytes、不刪 scan row，因此不會因 production 圖片到期而刪除已選入的訓練樣本；Training Dataset 影像仍為獨立副本。
 - 不可因為要訓練模型，就自動把所有旅客證件永久保存。
 
 ### D-042：OCR Benchmark 同時衡量準確率與速度
@@ -542,7 +536,7 @@ Benchmark 以 `ocrPayloadJson.originalFields` 對人工審核後欄位做 exact-
 - 平均 orientation attempts。
 - fallback 使用率。
 
-每種證件約 30–50 張可先做中期分析；約 100 張可做第一輪較穩定的正式分析，再決定 fine-tune 優先順序。
+每種證件約 30–50 張可先做中期分析；約 100 張可做第一輪較穩定的正式分析。這些數量只作分析成熟度參考，不是自動解除 OCR 凍結的門檻；是否重新進入 fine-tune / parser 改善仍必須符合 D-072 的 Dataset 與評估 gate。
 
 ### D-043：訓練資料匯出為私人 Dataset ZIP
 
