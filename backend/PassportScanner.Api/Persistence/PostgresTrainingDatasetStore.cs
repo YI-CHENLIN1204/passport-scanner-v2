@@ -50,6 +50,14 @@ public sealed class PostgresTrainingDatasetStore(
                 now);
         }
 
+        if (
+            existing is null &&
+            scanItem.ImageBytes.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "正式收件照片已依保存期限刪除，無法再加入 OCR 訓練資料集。");
+        }
+
         var groundTruthJson =
             BuildGroundTruthJson(scanItem);
 
