@@ -64,6 +64,12 @@ public sealed class AmbiguousTravelerMatchException : Exception
         : base("找到多位可能相同的旅客，系統不會自動合併；請先到「旅客資料」確認並人工合併。")
     {
     }
+
+    public AmbiguousTravelerMatchException(
+        string message)
+        : base(message)
+    {
+    }
 }
 
 public interface ITravelerStore
