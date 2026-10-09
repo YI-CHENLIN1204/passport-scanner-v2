@@ -532,7 +532,7 @@ public sealed class PostgresScanQueueStore(
                     on candidate.ScanBatchId
                     equals candidateBatch.ScanBatchId
                 join document in db.DocumentVersions.AsNoTracking()
-                    on candidate.SavedDocumentVersionId
+                    on candidate.SavedDocumentVersionId!.Value
                     equals document.DocumentVersionId
                 where
                     candidateBatch.TourId == batch.TourId &&
