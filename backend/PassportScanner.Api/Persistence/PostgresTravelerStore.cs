@@ -1642,6 +1642,12 @@ public sealed class PostgresTravelerStore(
                 throw new ArgumentException(
                     "護照有效期限不可空白。");
             }
+
+            if (expiryDate.Value <= birthDate)
+            {
+                throw new ArgumentException(
+                    "護照有效期限必須晚於出生日期。");
+            }
         }
         else if (
             documentType ==
