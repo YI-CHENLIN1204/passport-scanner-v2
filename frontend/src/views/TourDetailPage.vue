@@ -367,12 +367,17 @@ const rows = computed<OperationalRow[]>(() => {
         : { status: 'missing' }
     }
 
+    const stagedNameEn =
+      person.documents.find(item => item.nameEn)
+        ?.nameEn ?? ''
+
     result.push({
       key: `draft:${person.draftPersonId}`,
-      nameZh: person.nameZh || '待確認姓名',
-      nameEn:
-        person.documents.find(item => item.nameEn)
-          ?.nameEn ?? '',
+      nameZh:
+        person.nameZh ||
+        stagedNameEn ||
+        '待確認姓名',
+      nameEn: stagedNameEn,
       birthDate: person.birthDate,
       gender: person.gender,
       documents,
@@ -1333,8 +1338,27 @@ const reviewFormErrors = computed(() => {
     )
   }
 
-  if (!form.nameZh.trim()) {
-    errors.push('中文姓名不可空白。')
+  const requiresChineseName =
+    document?.documentType !== 'PASSPORT' ||
+    form.nationality?.trim().toUpperCase() ===
+      'TWN' ||
+    form.issuingCountry?.trim().toUpperCase() ===
+      'TWN'
+
+  if (
+    requiresChineseName &&
+    !form.nameZh.trim()
+  ) {
+    errors.push('請確認中文姓名。')
+  }
+
+  if (
+    !form.nameZh.trim() &&
+    !form.nameEn.trim()
+  ) {
+    errors.push(
+      '中文姓名與英文姓名至少需要一個。',
+    )
   }
 
   if (!form.birthDate) {
