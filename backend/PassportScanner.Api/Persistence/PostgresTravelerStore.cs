@@ -1166,6 +1166,18 @@ public sealed class PostgresTravelerStore(
 
             if (idMatches.Count > 0)
             {
+                var conflictingIdentity =
+                    idMatches.Any(traveler =>
+                        traveler.BirthDate !=
+                            birthDate ||
+                        traveler.Gender != sex);
+
+                if (conflictingIdentity)
+                {
+                    throw new AmbiguousTravelerMatchException(
+                        "相同身分證字號存在出生日期或性別互相衝突的旅客資料，系統不會自動合併；請先到「旅客資料」人工確認。");
+                }
+
                 return idMatches;
             }
         }
