@@ -1274,6 +1274,7 @@ public sealed class PostgresScanQueueStore(
             item.DocumentNumber,
             item.IssuingCountry,
             item.ExpiryDate,
+            item.SavedDocumentVersionId,
             item.ReviewStatus,
             trainingSelected,
             item.ReviewedAt,
