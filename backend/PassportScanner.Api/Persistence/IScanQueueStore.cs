@@ -19,6 +19,10 @@ public interface IScanQueueStore
         CreateScanItemRequest request,
         DateTimeOffset now);
 
+    ScanBatchResponse CompleteBatch(
+        Guid batchId,
+        DateTimeOffset now);
+
     IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
         Guid tourId);
 
