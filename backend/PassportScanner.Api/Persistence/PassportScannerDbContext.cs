@@ -268,6 +268,14 @@ public sealed class PassportScannerDbContext(
             .HasColumnName("item_count")
             .IsRequired();
 
+        scanBatch.Property(item => item.AttemptCount)
+            .HasColumnName("attempt_count")
+            .IsRequired();
+
+        scanBatch.Property(item => item.FailedCount)
+            .HasColumnName("failed_count")
+            .IsRequired();
+
         scanBatch.Property(item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
