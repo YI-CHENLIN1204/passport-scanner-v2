@@ -12,6 +12,8 @@ public sealed class PassportScannerDbContext(
         Set<DocumentVersionRecord>();
     public DbSet<TourRecord> Tours => Set<TourRecord>();
     public DbSet<TourMemberRecord> TourMembers => Set<TourMemberRecord>();
+    public DbSet<TourMemberDocumentRecord> TourMemberDocuments =>
+        Set<TourMemberDocumentRecord>();
     public DbSet<ScanBatchRecord> ScanBatches => Set<ScanBatchRecord>();
     public DbSet<TourPersonDraftRecord> TourPersonDrafts =>
         Set<TourPersonDraftRecord>();
@@ -240,6 +242,67 @@ public sealed class PassportScannerDbContext(
         member.HasOne<TravelerRecord>()
             .WithMany()
             .HasForeignKey(item => item.TravelerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var memberDocument =
+            modelBuilder.Entity<TourMemberDocumentRecord>();
+
+        memberDocument.ToTable("tour_member_documents");
+        memberDocument.HasKey(
+            item => item.TourMemberDocumentId);
+
+        memberDocument.Property(
+                item => item.TourMemberDocumentId)
+            .HasColumnName("tour_member_document_id");
+
+        memberDocument.Property(
+                item => item.TourMemberId)
+            .HasColumnName("tour_member_id")
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.DocumentVersionId)
+            .HasColumnName("document_version_id")
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.DocumentType)
+            .HasColumnName("document_type")
+            .HasMaxLength(40)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        memberDocument.HasIndex(item => new
+            {
+                item.TourMemberId,
+                item.DocumentType
+            })
+            .IsUnique()
+            .HasDatabaseName(
+                "ux_tour_member_documents_member_type");
+
+        memberDocument.HasIndex(
+                item => item.DocumentVersionId)
+            .HasDatabaseName(
+                "ix_tour_member_documents_document");
+
+        memberDocument.HasOne<TourMemberRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.TourMemberId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        memberDocument.HasOne<DocumentVersionRecord>()
+            .WithMany()
+            .HasForeignKey(item => item.DocumentVersionId)
             .OnDelete(DeleteBehavior.Cascade);
 
         var scanBatch = modelBuilder.Entity<ScanBatchRecord>();
