@@ -1215,6 +1215,35 @@ export async function getTrainingEvaluationSamples(
   >
 }
 
+export async function reserveFixedTestCohort() {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-training/fixed-test/reserve`,
+    { method: 'POST' },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Fixed Test cohort reserve failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<{
+    sampleCount: number
+    newlyReservedCount: number
+    updatedAt: string
+  }>
+}
+
 export async function saveTrainingEvaluationBaseline(
   trainingSampleId: string,
   resultJson: string,
