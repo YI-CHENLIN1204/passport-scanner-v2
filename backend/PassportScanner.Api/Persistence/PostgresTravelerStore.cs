@@ -68,6 +68,21 @@ public sealed class PostgresTravelerStore(
                 "身分證字號格式或檢查碼不正確。");
         }
 
+        if (
+            documentType == "TAIWAN_NATIONAL_ID" &&
+            sex is not ("M" or "F"))
+        {
+            throw new ArgumentException(
+                "台灣身分證旅客性別必須為 M 或 F。");
+        }
+
+        if (nationalIdNumber is not null)
+        {
+            ValidateNationalIdGender(
+                nationalIdNumber,
+                sex);
+        }
+
         using var transaction = db.Database.BeginTransaction();
 
         var existingDocument = FindExistingDocument(
@@ -642,6 +657,10 @@ public sealed class PostgresTravelerStore(
         if (
             effectiveNationalIdNumber is not null)
         {
+            ValidateNationalIdGender(
+                effectiveNationalIdNumber,
+                gender);
+
             var duplicateNationalId =
                 db.Travelers
                     .AsNoTracking()
@@ -1410,6 +1429,27 @@ public sealed class PostgresTravelerStore(
         }
 
         traveler.UpdatedAt = now;
+    }
+
+    private static void ValidateNationalIdGender(
+        string nationalIdNumber,
+        string gender)
+    {
+        if (gender is not ("M" or "F"))
+        {
+            return;
+        }
+
+        var expectedGender =
+            nationalIdNumber[1] == '1'
+                ? "M"
+                : "F";
+
+        if (gender != expectedGender)
+        {
+            throw new ArgumentException(
+                "性別與國民身分證統一編號第 2 碼不一致。");
+        }
     }
 
     private static string NormalizeIdentityName(string value) =>
