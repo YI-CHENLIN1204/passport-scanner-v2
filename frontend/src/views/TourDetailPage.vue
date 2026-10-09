@@ -1603,6 +1603,39 @@ function firstPendingPerson(
   )
 }
 
+function nextPendingPerson(
+  currentDraftPersonId: string,
+) {
+  const otherPerson =
+    queue.value.find(
+      person =>
+        person.draftPersonId !==
+          currentDraftPersonId &&
+        person.documents.some(
+          document =>
+            document.reviewStatus ===
+              'PENDING',
+        ),
+    )
+
+  if (otherPerson) {
+    return otherPerson
+  }
+
+  return (
+    queue.value.find(
+      person =>
+        person.draftPersonId ===
+          currentDraftPersonId &&
+        person.documents.some(
+          document =>
+            document.reviewStatus ===
+              'PENDING',
+        ),
+    ) ?? null
+  )
+}
+
 async function onTrainingSelectionChange(
   event: Event,
 ) {
@@ -1759,8 +1792,9 @@ async function saveReview(moveNext: boolean) {
     await reloadQueue()
 
     if (moveNext) {
-      const next = firstPendingPerson(
-        document.scanItemId,
+      const next = nextPendingPerson(
+        reviewPerson.value?.draftPersonId ??
+          '',
       )
 
       if (!next) {
