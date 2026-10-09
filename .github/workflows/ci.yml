@@ -542,6 +542,35 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID" > /tmp/same-reviewed-tour-after.json
           python3 -c "import json; data=json.load(open('/tmp/same-reviewed-tour-after.json')); assert data['tour']['memberCount'] == 2, data; assert data['tour']['reviewedMemberCount'] == 2, data; assert len(data['members']) == 2, data"
 
+      - name: Verify traveler merge reconciles duplicate current document types
+        run: |
+          REVIEWED_AT_OLD='2026-01-01T00:00:00Z'
+          REVIEWED_AT_NEW='2026-02-01T00:00:00Z'
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"合併舊證\",\"englishName\":\"MERGE OLD\",\"passportNumber\":\"M33333333\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1992-02-02\",\"sex\":\"M\",\"expiryDate\":\"2034-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT_OLD\"}" \
+            > /tmp/current-merge-target.json
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"合併新證\",\"englishName\":\"MERGE NEW\",\"passportNumber\":\"M44444444\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1992-02-02\",\"sex\":\"M\",\"expiryDate\":\"2038-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT_NEW\"}" \
+            > /tmp/current-merge-source.json
+
+          CURRENT_MERGE_TARGET=$(python3 -c "import json; print(json.load(open('/tmp/current-merge-target.json'))['travelerId'])")
+          CURRENT_MERGE_SOURCE=$(python3 -c "import json; print(json.load(open('/tmp/current-merge-source.json'))['travelerId'])")
+          test "$CURRENT_MERGE_TARGET" != "$CURRENT_MERGE_SOURCE"
+
+          curl --fail --silent -X POST "http://localhost:5080/api/travelers/$CURRENT_MERGE_TARGET/merge" \
+            -H 'Content-Type: application/json' \
+            -d "{\"sourceTravelerId\":\"$CURRENT_MERGE_SOURCE\"}" \
+            > /tmp/current-merge-result.json
+
+          python3 -c "import json; data=json.load(open('/tmp/current-merge-result.json')); docs=[d for d in data['documents'] if d['documentType']=='PASSPORT']; assert len(docs)==2, docs; current=[d for d in docs if d['isCurrent']]; assert len(current)==1, docs; assert current[0]['documentNumber']=='M44444444', docs"
+
+          CURRENT_DUPLICATE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM document_versions WHERE traveler_id = '$CURRENT_MERGE_TARGET' AND document_type = 'PASSPORT' AND is_current = TRUE;" | tr -d '\r')
+          test "$CURRENT_DUPLICATE_COUNT" = "1"
+
       - name: Verify traveler merge does not overwrite conflicting tour document
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
