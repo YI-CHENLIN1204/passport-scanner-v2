@@ -187,6 +187,12 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
           python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
 
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail-after-review.json
+          python3 -c "import json; data=json.load(open('/tmp/tour-detail-after-review.json')); assert len(data['members']) == 1, data; docs=data['members'][0]['documents']; assert len(docs) == 1, docs; assert docs[0]['documentType'] == 'TAIWAN_COMPATRIOT_PERMIT', docs"
+
+          LINK_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM tour_member_documents;" | tr -d '\r')
+          test "$LINK_COUNT" = "1"
+
           curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
           python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
 
