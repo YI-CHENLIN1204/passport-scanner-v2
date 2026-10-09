@@ -24,6 +24,7 @@ builder.Services.AddScoped<ITravelerStore, PostgresTravelerStore>();
 builder.Services.AddScoped<ITourStore, PostgresTourStore>();
 builder.Services.AddScoped<IScanQueueStore, PostgresScanQueueStore>();
 builder.Services.AddScoped<IOcrBenchmarkStore, PostgresOcrBenchmarkStore>();
+builder.Services.AddScoped<IOcrBenchmarkRunStore, PostgresOcrBenchmarkRunStore>();
 builder.Services.AddScoped<ITrainingDatasetStore, PostgresTrainingDatasetStore>();
 
 builder.Services.AddCors(options =>
@@ -244,6 +245,20 @@ using (var scope = app.Services.CreateScope())
             result_json text NOT NULL,
             captured_at timestamptz NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS ocr_benchmark_runs (
+            benchmark_run_id uuid PRIMARY KEY,
+            pipeline_version varchar(80) NOT NULL,
+            sample_count integer NOT NULL,
+            failed_count integer NOT NULL,
+            baseline_created_count integer NOT NULL,
+            summary_json text NOT NULL,
+            created_at timestamptz NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS
+            ix_ocr_benchmark_runs_created_at
+            ON ocr_benchmark_runs (created_at DESC);
         """);
 }
 
@@ -575,6 +590,37 @@ app.MapGet(
         Results.Ok(
             store.GetSummary(
                 DateTimeOffset.UtcNow)));
+
+app.MapGet(
+    "/api/ocr-benchmark/runs",
+    (
+        int? limit,
+        IOcrBenchmarkRunStore store) =>
+        Results.Ok(
+            store.List(limit ?? 10)));
+
+app.MapPost(
+    "/api/ocr-benchmark/runs",
+    (
+        SaveOcrBenchmarkRunRequest request,
+        IOcrBenchmarkRunStore store) =>
+    {
+        try
+        {
+            var saved = store.Save(
+                request,
+                DateTimeOffset.UtcNow);
+
+            return Results.Created(
+                $"/api/ocr-benchmark/runs/{saved.BenchmarkRunId}",
+                saved);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
 
 app.MapGet(
     "/api/document-store/status",
