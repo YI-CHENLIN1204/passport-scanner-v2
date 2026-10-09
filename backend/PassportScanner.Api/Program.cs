@@ -940,7 +940,8 @@ app.MapPost(
         PassportReviewRequest request,
         Guid? tourId,
         ITravelerStore store,
-        ITourStore tourStore) =>
+        ITourStore tourStore,
+        PassportScannerDbContext db) =>
     {
         var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = PassportReviewValidator.Validate(request, today);
@@ -987,6 +988,11 @@ app.MapPost(
                 }
             }
 
+            using var transaction =
+                tourId.HasValue
+                    ? db.Database.BeginTransaction()
+                    : null;
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 PassportReviewMapper.ToDocumentInput(request),
@@ -1004,6 +1010,8 @@ app.MapPost(
                 return Results.NotFound(
                     new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
+
+            transaction?.Commit();
 
             return Results.Ok(
                 new PassportReviewSaveResponse(
@@ -1054,7 +1062,8 @@ app.MapPost(
         TaiwanNationalIdReviewRequest request,
         Guid? tourId,
         ITravelerStore store,
-        ITourStore tourStore) =>
+        ITourStore tourStore,
+        PassportScannerDbContext db) =>
     {
         var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanNationalIdReviewValidator.Validate(
@@ -1104,6 +1113,11 @@ app.MapPost(
                 }
             }
 
+            using var transaction =
+                tourId.HasValue
+                    ? db.Database.BeginTransaction()
+                    : null;
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 TaiwanNationalIdReviewMapper.ToDocumentInput(request),
@@ -1121,6 +1135,8 @@ app.MapPost(
                 return Results.NotFound(
                     new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
+
+            transaction?.Commit();
 
             return Results.Ok(
                 new TaiwanNationalIdReviewSaveResponse(
@@ -1186,7 +1202,8 @@ app.MapPost(
         TaiwanCompatriotPermitReviewRequest request,
         Guid? tourId,
         ITravelerStore store,
-        ITourStore tourStore) =>
+        ITourStore tourStore,
+        PassportScannerDbContext db) =>
     {
         var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanCompatriotPermitReviewValidator.Validate(
@@ -1238,6 +1255,11 @@ app.MapPost(
                 }
             }
 
+            using var transaction =
+                tourId.HasValue
+                    ? db.Database.BeginTransaction()
+                    : null;
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 TaiwanCompatriotPermitReviewMapper.ToDocumentInput(request),
@@ -1255,6 +1277,8 @@ app.MapPost(
                 return Results.NotFound(
                     new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
+
+            transaction?.Commit();
 
             return Results.Ok(
                 new TaiwanCompatriotPermitReviewSaveResponse(
