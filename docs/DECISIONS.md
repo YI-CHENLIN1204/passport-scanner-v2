@@ -780,3 +780,16 @@ V2 支援外國護照；正式身份資料與團別畫面不得把「中文姓�
 - 團別統計、待審核人物卡與正式團員畫面在中文姓名空白時使用英文姓名作為 identity/display fallback。
 - 待審核 draft grouping 在中文姓名空白時使用既有 scan item 的英文姓名 + 出生日期 + 性別，不為此額外擴充 draft schema。
 - CSV 與歷史團別仍以該團實際 link 的 DocumentVersion 為準，不因 Traveler 後來改名或換證而改寫過去團別使用的證件版本。
+
+### D-058：性別內部值統一，但審核 UI 跟隨證件標示
+
+Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼續使用 `M`、`F`、`X`，避免人物比對、篩選、CSV 與既有資料出現兩套值。
+
+操作畫面則依正在核對的證件呈現：
+
+- 護照：顯示 `M / F / X`。
+- 台灣身分證：顯示 `男 / 女`，實際儲存仍為 `M / F`。
+- 台胞證：顯示 `男 / 女 / X`，實際儲存仍為 `M / F / X`。
+- Traveler 主檔編輯與跨證件篩選不屬於單一證件畫面，顯示 `男 (M) / 女 (F) / X`，讓使用者同時理解中文語意與 canonical value。
+
+目的：人工審核時讓畫面文字盡量與證件實際印刷內容一致，但不為了 UI 顯示建立第二套資料格式。
