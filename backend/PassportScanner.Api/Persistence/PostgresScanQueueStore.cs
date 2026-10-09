@@ -502,6 +502,9 @@ public sealed class PostgresScanQueueStore(
             return false;
         }
 
+        using var transaction =
+            db.Database.BeginTransaction();
+
         var draftId = item.DraftPersonId;
         var batch = db.ScanBatches.Single(
             value => value.ScanBatchId == item.ScanBatchId);
@@ -568,6 +571,8 @@ public sealed class PostgresScanQueueStore(
                 null,
                 now);
         }
+
+        transaction.Commit();
 
         return true;
     }
