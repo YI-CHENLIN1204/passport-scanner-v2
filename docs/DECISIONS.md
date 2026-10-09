@@ -930,3 +930,12 @@ production 證件照片保存期限仍以團別回國日後 7 天為準，因此
 - 過期團別仍可保留、查詢既有正式旅客與歷史資料；限制的是新的 production 圖片收件。
 - 若確實需要重新收件，操作人員應先確認並修正團別日期，而不是讓新照片以已過期的 `delete_after` 寫入。
 - 此規則與 D-062 相同目的：不可讓 PENDING 人工審核資料在使用者不知情時立即失去原圖。
+
+### D-071：Historical DocumentVersion 對一般旅客編輯保持唯讀
+
+D-047 已將非 current 的歷史證件版本定義為唯讀顯示；backend API 同樣必須遵守，不能只靠前端隱藏輸入框。
+
+- `UpdateTraveler` 只允許修改屬於該 Traveler 且 `IsCurrent = true` 的 DocumentVersion。
+- request 若指定 historical DocumentVersion，直接拒絕，不修改歷史證件內容。
+- historical version 保留當時人工確認的證件快照與版本歷程，不因後續一般主檔修正被靜默覆寫。
+- 若未來確實需要修正歷史資料，應建立明確的歷史修正／稽核流程，不與一般 Traveler edit 混用。
