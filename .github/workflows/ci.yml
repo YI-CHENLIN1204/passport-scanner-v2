@@ -506,6 +506,33 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID" > /tmp/same-identity-tour-after.json
           python3 -c "import json; data=json.load(open('/tmp/same-identity-tour-after.json')); assert data['tour']['reviewedMemberCount'] == 2, data; assert data['tour']['memberCount'] == 2, data; assert len(data['members']) == 2, data; assert {m['nationalIdNumber'] for m in data['members']} == {'A100000001','A100000010'}, data"
 
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$SAME_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_NATIONAL_ID"}' \
+            > /tmp/same-identity-batch.json
+          SAME_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/same-identity-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$SAME_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"same-reviewed.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"同名旅客\",\"nameEn\":\"\",\"birthDate\":\"1990-01-01\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":\"A100000001\",\"documentNumber\":\"A100000001\",\"issuingCountry\":\"TWN\",\"expiryDate\":null,\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/same-reviewed-item.json
+          SAME_REVIEW_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/same-reviewed-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$SAME_REVIEW_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"同名旅客","nameZhOnDocument":"同名旅客","nameEn":"","birthDate":"1990-01-01","gender":"M","nationality":"TWN","nationalIdNumber":"A100000001","documentNumber":"A100000001","issuingCountry":"TWN","expiryDate":null,"useForTraining":false}' \
+            > /tmp/same-reviewed-result.json
+          grep -q '"reviewStatus":"REVIEWED"' /tmp/same-reviewed-result.json
+          grep -Eq '"savedDocumentVersionId":"[0-9a-fA-F-]+"' /tmp/same-reviewed-result.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID/review-queue" > /tmp/same-reviewed-queue.json
+          python3 -c "import json; rows=json.load(open('/tmp/same-reviewed-queue.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$SAME_REVIEW_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'REVIEWED', docs; assert docs[0]['savedDocumentVersionId'], docs"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID" > /tmp/same-reviewed-tour-after.json
+          python3 -c "import json; data=json.load(open('/tmp/same-reviewed-tour-after.json')); assert data['tour']['memberCount'] == 2, data; assert data['tour']['reviewedMemberCount'] == 2, data; assert len(data['members']) == 2, data"
+
       - name: Verify traveler merge does not overwrite conflicting tour document
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
