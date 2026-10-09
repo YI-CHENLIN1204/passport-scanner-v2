@@ -1016,6 +1016,10 @@ async function runBatch() {
 
     await completeScanBatch(
       batch.scanBatchId,
+      {
+        attemptCount: files.value.length,
+        failedCount: failedCount.value,
+      },
     )
 
     progressMessage.value =
@@ -1026,7 +1030,7 @@ async function runBatch() {
     error.value =
       err instanceof Error
         ? err.message
-        : '批次掃描建立失敗。'
+        : '批次掃描執行失敗。'
   } finally {
     running.value = false
   }
