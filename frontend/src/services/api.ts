@@ -829,6 +829,37 @@ export async function createScanBatch(
   return response.json() as Promise<ScanBatchResponse>
 }
 
+export async function listScanBatches(
+  tourId: string,
+  limit = 5,
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+  })
+
+  const response = await fetch(
+    `${apiBaseUrl}/api/tours/${encodeURIComponent(tourId)}/scan-batches?${params.toString()}`,
+  )
+
+  if (!response.ok) {
+    let message =
+      `Scan batch history failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<ScanBatchResponse[]>
+}
+
 export async function completeScanBatch(
   batchId: string,
 ) {
