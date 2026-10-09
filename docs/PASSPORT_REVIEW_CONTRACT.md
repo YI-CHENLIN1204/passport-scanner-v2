@@ -1,8 +1,8 @@
 # Passport Review Draft Contract
 
-此文件定義護照人工覆核完成後，前端準備給未來後端 API 的結構化資料格式。
+此文件定義護照人工覆核使用的結構化資料 contract。
 
-目前狀態：**前端建立 draft 後送到 `POST /api/passport-reviews/validate` 做後端第二層格式驗證；驗證成功後仍不入庫、不匯出 Google Sheets。**
+目前狀態：`POST /api/passport-reviews/validate` 仍保留作「只驗證、不保存」用途；正式內部批次流程則由 `scan_items` 待審核資料經人工確認後寫入 PostgreSQL Traveler / DocumentVersion，團別匯出使用 CSV。
 
 ## Payload
 
@@ -63,9 +63,9 @@
 - MRZ 完整原文。
 - 發照機關、發照地、換證次數等未確認業務價值欄位。
 - traveler_master / document_versions 的資料庫 ID。
-- 團別、訂單、Google Sheets 工作表 ID。
+- ERP／訂單等目前 V2 不處理的外部系統欄位。
 
-這些關聯等資料模型正式確認後再由後端 API contract 擴充，不先把 UI PoC 的暫時欄位綁死成資料庫 schema。
+團別關聯目前由 scan batch / scan item 與 TourMember / TourMemberDocument 分開管理，不把團別資訊硬塞進護照 review payload。
 
 ## 確認與修改規則
 
@@ -85,10 +85,10 @@
 - 接收人工覆核完成後的結構化 draft。
 - 在後端重新執行格式與基本一致性驗證。
 - 不記錄完整 request body 到 log。
-- 不建立 traveler_master。
-- 不建立 document_versions。
-- 不保存證件圖片。
-- 不寫 Google Sheets。
+- 不建立正式 Traveler。
+- 不建立 DocumentVersion。
+- 不變更 production 證件圖片或 Training Dataset。
+- 不執行 CSV 匯出。
 
 成功回應只包含：
 
@@ -179,4 +179,4 @@ V2 內部旅客主檔需要旅客中文姓名，但護照 MRZ 本身不包含中
 `林海注` → LIN / HAI / ZHU  
 MRZ → LIN / HAI / SHENG
 
-前兩音節一致、第三音節明顯衝突，因此候選被拒絕，不會因 OCR confidence 很高就寫入 CRM。
+前兩音節一致、第三音節明顯衝突，因此候選被拒絕，不會因 OCR confidence 很高就寫入正式旅客主檔。
