@@ -23,6 +23,9 @@ public interface ITrainingDatasetStore
     TrainingDatasetSampleImage? GetSampleImage(
         Guid trainingSampleId);
 
+    FixedTestCohortResponse ReserveFixedTestCohort(
+        DateTimeOffset now);
+
     EvaluationBaselineResponse SaveEvaluationBaseline(
         Guid trainingSampleId,
         string resultJson,
