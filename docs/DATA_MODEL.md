@@ -59,23 +59,36 @@
 - 不應因新證件上傳就無條件覆蓋歷史版本。
 - 是否把 OCR 原始輸出長期保存，另行決定。
 
-## 團別 / 訂單旅客關聯
+## 團別與旅客／證件關聯
 
-團別資料與 traveler_master 分開。
+團別資料與 traveler master 分開，而且「旅客擁有某張證件」與「本團實際收到／採用這張證件」必須分開表示。
 
-概念關係：
+目前正式關係：
 
 ```text
-Tour / Product
-   │
-   └── TourTraveler / BookingTraveler
-           │
-           └── traveler_master
-                    │
-                    └── document_versions
+tours
+  │
+  └── tour_members
+          │
+          ├── travelers
+          │      └── document_versions
+          │
+          └── tour_member_documents
+                 └── document_versions
 ```
 
-團別／訂單旅客記錄「這一次出團的人」，traveler_master 記錄「這個人」，document_versions 記錄「這個人曾經使用過哪些版本的證件」。
+語意：
+
+- `travelers`：跨團共用的旅客本人主檔。
+- `document_versions`：該旅客歷史上曾持有／覆核過的證件版本。
+- `tour_members`：這位正式 Traveler 目前掛在這一團。
+- `tour_member_documents`：這一團實際收到並採用的確切 DocumentVersion。
+
+因此，Traveler 即使全域已有護照與台胞證，也不代表新團已經收到這兩張證件。只有建立 `tour_member_documents` 關聯後，才算本團正式已收件。
+
+同一個 tour member、同一種 document type 只保留一個目前採用的版本；重掃或重新審核後可把 link 更新到新的 DocumentVersion，而全域歷史版本仍保留。
+
+待審核階段尚未成為正式 `tour_member_documents`，而是先存在 `tour_person_drafts` + `scan_items`。人工審核完成後才建立／更新正式 Traveler、DocumentVersion、TourMember 與 TourMemberDocument。
 
 ## 訂購人
 
@@ -200,3 +213,37 @@ MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
 - created_at
 
 同一旅客可同時擁有護照、台胞證與台灣身分證；同一證件種類換發時，舊版本保留並將 `is_current` 設為 false。
+
+
+#### tour_members
+
+用途：記錄正式 Traveler 與團別的關聯。
+
+核心欄位：
+
+- tour_member_id
+- tour_id
+- traveler_id
+- created_at
+
+同一團同一 Traveler 不重複建立。
+
+#### tour_member_documents
+
+用途：記錄「這一團實際收到／採用哪一個證件版本」。
+
+核心欄位：
+
+- tour_member_document_id
+- tour_member_id
+- document_version_id
+- document_type
+- created_at
+- updated_at
+
+約束：
+
+- `tour_member_id + document_type` 唯一。
+- link 必須指向該 TourMember 所屬 Traveler 的 DocumentVersion。
+- 從團別移除已審核證件時，只刪本團 link 與對應 scan staging，不刪全域 Traveler / DocumentVersion。
+- 若同團同人同類證件仍有其他 reviewed scan item，link 回退到最近的剩餘版本。
