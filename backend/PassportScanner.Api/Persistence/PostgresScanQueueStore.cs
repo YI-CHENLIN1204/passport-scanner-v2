@@ -427,13 +427,15 @@ public sealed class PostgresScanQueueStore(
             .Single(value =>
                 value.ScanBatchId == item.ScanBatchId);
 
-        if (!tourStore.EnsureMember(
+        if (!tourStore.EnsureMemberDocument(
             batch.TourId,
             saved.TravelerId,
+            saved.DocumentVersionId,
+            item.DocumentType,
             now))
         {
             throw new KeyNotFoundException(
-                "找不到指定團別。");
+                "找不到指定團別、旅客或正式證件版本。");
         }
 
         item.ReviewStatus = Reviewed;
@@ -453,7 +455,7 @@ public sealed class PostgresScanQueueStore(
             request.UseForTraining);
     }
 
-    public bool DeletePendingItem(
+    public bool DeleteItem(
         Guid scanItemId,
         DateTimeOffset now)
     {
@@ -465,19 +467,51 @@ public sealed class PostgresScanQueueStore(
             return false;
         }
 
-        if (item.ReviewStatus != Pending)
-        {
-            throw new InvalidOperationException(
-                "已完成人工審核的證件不能從待審核視窗刪除。");
-        }
-
         var draftId = item.DraftPersonId;
         var batch = db.ScanBatches.Single(
             value => value.ScanBatchId == item.ScanBatchId);
 
+        Guid? reviewedTravelerId = null;
+
+        if (item.ReviewStatus == Reviewed)
+        {
+            if (!item.SavedDocumentVersionId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "這筆已審核資料缺少正式證件版本連結，無法安全移除。");
+            }
+
+            var savedDocument = db.DocumentVersions
+                .AsNoTracking()
+                .SingleOrDefault(value =>
+                    value.DocumentVersionId ==
+                        item.SavedDocumentVersionId.Value);
+
+            if (savedDocument is null)
+            {
+                throw new InvalidOperationException(
+                    "找不到這筆已審核資料對應的正式證件版本。");
+            }
+
+            reviewedTravelerId =
+                savedDocument.TravelerId;
+
+            trainingDatasetStore.SetSelection(
+                item.ScanItemId,
+                false,
+                now);
+        }
+        else if (item.ReviewStatus != Pending)
+        {
+            throw new InvalidOperationException(
+                "目前狀態不允許刪除這筆證件。");
+        }
+
         db.ScanItems.Remove(item);
 
-        if (batch.Status == "OPEN")
+        if (
+            batch.Status == "OPEN" &&
+            item.ReviewStatus == Pending)
         {
             batch.ItemCount = Math.Max(
                 0,
@@ -489,6 +523,52 @@ public sealed class PostgresScanQueueStore(
 
         CleanupEmptyDraft(draftId);
         db.SaveChanges();
+
+        if (reviewedTravelerId.HasValue)
+        {
+            var fallback = (
+                from candidate in db.ScanItems.AsNoTracking()
+                join candidateBatch in db.ScanBatches.AsNoTracking()
+                    on candidate.ScanBatchId
+                    equals candidateBatch.ScanBatchId
+                join document in db.DocumentVersions.AsNoTracking()
+                    on candidate.SavedDocumentVersionId
+                    equals document.DocumentVersionId
+                where
+                    candidateBatch.TourId == batch.TourId &&
+                    candidate.ReviewStatus == Reviewed &&
+                    candidate.DocumentType == item.DocumentType &&
+                    candidate.SavedDocumentVersionId != null &&
+                    document.TravelerId ==
+                        reviewedTravelerId.Value
+                orderby
+                    candidate.ReviewedAt descending,
+                    candidate.UpdatedAt descending,
+                    candidate.CreatedAt descending
+                select new
+                {
+                    document.DocumentVersionId
+                })
+                .FirstOrDefault();
+
+            if (fallback is not null)
+            {
+                tourStore.EnsureMemberDocument(
+                    batch.TourId,
+                    reviewedTravelerId.Value,
+                    fallback.DocumentVersionId,
+                    item.DocumentType,
+                    now);
+            }
+            else
+            {
+                tourStore.RemoveMemberDocument(
+                    batch.TourId,
+                    reviewedTravelerId.Value,
+                    item.DocumentType,
+                    now);
+            }
+        }
 
         return true;
     }
