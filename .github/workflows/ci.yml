@@ -424,6 +424,41 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify traveler merge does not overwrite conflicting tour document
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Merge Conflict","departureDate":"2099-11-20","returnDate":"2099-11-22","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/merge-conflict-tour.json
+          CONFLICT_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-conflict-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/passport-reviews?tourId=$CONFLICT_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"合併甲\",\"englishName\":\"MERGE ALPHA\",\"passportNumber\":\"C11111111\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1991-01-01\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/merge-conflict-target.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/passport-reviews?tourId=$CONFLICT_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"合併乙\",\"englishName\":\"MERGE BETA\",\"passportNumber\":\"C22222222\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1991-01-01\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/merge-conflict-source.json
+
+          CONFLICT_TARGET_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-conflict-target.json'))['travelerId'])")
+          CONFLICT_SOURCE_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-conflict-source.json'))['travelerId'])")
+          test "$CONFLICT_TARGET_ID" != "$CONFLICT_SOURCE_ID"
+
+          CONFLICT_STATUS=$(curl --silent --output /tmp/merge-conflict-response.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/travelers/$CONFLICT_TARGET_ID/merge" \
+            -H 'Content-Type: application/json' \
+            -d "{\"sourceTravelerId\":\"$CONFLICT_SOURCE_ID\"}")
+          test "$CONFLICT_STATUS" = "400"
+
+          curl --fail --silent "http://localhost:5080/api/travelers/$CONFLICT_TARGET_ID" > /tmp/merge-conflict-target-after.json
+          curl --fail --silent "http://localhost:5080/api/travelers/$CONFLICT_SOURCE_ID" > /tmp/merge-conflict-source-after.json
+          curl --fail --silent "http://localhost:5080/api/tours/$CONFLICT_TOUR_ID" > /tmp/merge-conflict-tour-after.json
+
+          python3 -c "import json; data=json.load(open('/tmp/merge-conflict-tour-after.json')); assert len(data['members']) == 2, data; assert {d['documentNumber'] for m in data['members'] for d in m['documents']} == {'C11111111','C22222222'}, data"
+
       - name: Verify foreign passport identity without Chinese name
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
