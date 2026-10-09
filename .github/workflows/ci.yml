@@ -821,28 +821,68 @@ jobs:
 
           grep -q '"scanItemId"' /tmp/large-scan-item.json
 
-      - name: Verify fixed Test baseline cannot be removed by normal actions
+      - name: Verify fixed Test cohort and baseline are immutable
         run: |
-          FIXED_SCAN_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/same-reviewed-item.json'))['scanItemId'])")
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
-          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
             -H 'Content-Type: application/json' \
-            -d '{"selected":true}' \
-            > /tmp/fixed-training-selection.json
+            -d '{"tourName":"CI Fixed Test Cohort","departureDate":"2099-12-01","returnDate":"2099-12-03","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/fixed-cohort-tour.json
+          FIXED_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/fixed-cohort-tour.json'))['tourId'])")
 
-          FIXED_TRAINING_SAMPLE_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id = '$FIXED_SCAN_ITEM_ID';" | tr -d '\r')
-          test -n "$FIXED_TRAINING_SAMPLE_ID"
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$FIXED_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/fixed-cohort-batch.json
+          FIXED_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/fixed-cohort-batch.json'))['scanBatchId'])")
+
+          FOUND_TEST=0
+          for i in $(seq 1 50); do
+            PADDED=$(printf "%03d" "$i")
+            FILE="/tmp/fixed-cohort-item-$PADDED.json"
+
+            curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$FIXED_BATCH_ID/items" \
+              -H 'Content-Type: application/json' \
+              -d "{\"originalFileName\":\"fixed-$PADDED.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"\",\"nameEn\":\"FIXED TEST $PADDED\",\"birthDate\":\"1990-01-01\",\"gender\":\"X\",\"nationality\":\"USA\",\"nationalIdNumber\":null,\"documentNumber\":\"FT$PADDED\",\"issuingCountry\":\"USA\",\"expiryDate\":\"2035-01-01\",\"ocrPayloadJson\":\"{}\"}" \
+              > "$FILE"
+
+            ITEM_ID=$(python3 -c "import json; print(json.load(open('$FILE'))['scanItemId'])")
+
+            curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$ITEM_ID/review" \
+              -H 'Content-Type: application/json' \
+              -d "{\"nameZh\":\"\",\"nameZhOnDocument\":\"\",\"nameEn\":\"FIXED TEST $PADDED\",\"birthDate\":\"1990-01-01\",\"gender\":\"X\",\"nationality\":\"USA\",\"nationalIdNumber\":null,\"documentNumber\":\"FT$PADDED\",\"issuingCountry\":\"USA\",\"expiryDate\":\"2035-01-01\",\"useForTraining\":true}" \
+              > /tmp/fixed-cohort-reviewed.json
+
+            curl --fail --silent "http://localhost:5080/api/ocr-training/evaluation-samples?split=test" > /tmp/fixed-cohort-test-before.json
+            TEST_COUNT=$(python3 -c "import json; print(len(json.load(open('/tmp/fixed-cohort-test-before.json'))))")
+            if [ "$TEST_COUNT" -gt "0" ]; then
+              FOUND_TEST=1
+              break
+            fi
+          done
+
+          test "$FOUND_TEST" = "1"
+
+          curl --fail --silent -X POST "http://localhost:5080/api/ocr-training/fixed-test/reserve" > /tmp/fixed-cohort-reserve.json
+          python3 -c "import json; data=json.load(open('/tmp/fixed-cohort-reserve.json')); assert data['sampleCount'] > 0, data; assert data['newlyReservedCount'] == data['sampleCount'], data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/evaluation-samples?split=fixed-test" > /tmp/fixed-cohort-samples.json
+          FIXED_TRAINING_SAMPLE_ID=$(python3 -c "import json; rows=json.load(open('/tmp/fixed-cohort-samples.json')); assert rows, rows; print(rows[0]['trainingSampleId'])")
+          FIXED_SCAN_ITEM_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT source_scan_item_id FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+
+          python3 -c "import json; rows=json.load(open('/tmp/fixed-cohort-samples.json')); assert all(json.loads(row['evaluationBaselineJson']).get('state') == 'pending' for row in rows), rows"
 
           curl --fail --silent -X PUT "http://localhost:5080/api/ocr-training/samples/$FIXED_TRAINING_SAMPLE_ID/evaluation-baseline" \
             -H 'Content-Type: application/json' \
-            -d '{"resultJson":"{\"ciFixedBaseline\":true}"}' \
+            -d '{"resultJson":"{\"pipelineVersion\":\"ci-fixed\",\"fields\":{}}"}' \
             > /tmp/fixed-baseline.json
 
-          BASELINE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM ocr_evaluation_baselines WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
-          test "$BASELINE_COUNT" = "1"
+          curl --fail --silent "http://localhost:5080/api/ocr-training/evaluation-samples?split=fixed-test" > /tmp/fixed-cohort-after-baseline.json
+          python3 -c "import json; rows=json.load(open('/tmp/fixed-cohort-after-baseline.json')); target=next(row for row in rows if row['trainingSampleId'] == '$FIXED_TRAINING_SAMPLE_ID'); payload=json.loads(target['evaluationBaselineJson']); assert payload['pipelineVersion'] == 'ci-fixed', target"
 
-          curl --fail --silent "http://localhost:5080/api/ocr-training/evaluation-samples?split=test" > /tmp/fixed-test-samples.json
-          python3 -c "import json; rows=json.load(open('/tmp/fixed-test-samples.json')); assert '$FIXED_TRAINING_SAMPLE_ID' in {row['trainingSampleId'] for row in rows}, rows"
+          RESERVE_AGAIN=$(curl --fail --silent -X POST "http://localhost:5080/api/ocr-training/fixed-test/reserve")
+          python3 -c "import json; data=json.loads('''$RESERVE_AGAIN'''); assert data['newlyReservedCount'] == 0, data"
 
           DESELECT_STATUS=$(curl --silent --output /tmp/fixed-baseline-deselect.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
             -H 'Content-Type: application/json' \
