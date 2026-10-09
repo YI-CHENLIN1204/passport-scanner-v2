@@ -239,8 +239,8 @@ using (var scope = app.Services.CreateScope())
         WHERE
             scan.review_status = 'REVIEWED'
             AND scan.saved_document_version_id IS NULL
-            AND EXISTS (
-                SELECT 1
+            AND (
+                SELECT COUNT(DISTINCT document.traveler_id)
                 FROM document_versions AS document
                 WHERE
                     document.document_type = scan.document_type
@@ -250,7 +250,7 @@ using (var scope = app.Services.CreateScope())
                         OR COALESCE(document.issuing_country, '') =
                            COALESCE(scan.issuing_country, '')
                     )
-            );
+            ) = 1;
 
         INSERT INTO tour_member_documents (
             tour_member_document_id,
