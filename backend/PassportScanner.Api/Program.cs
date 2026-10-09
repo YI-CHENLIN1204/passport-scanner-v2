@@ -958,6 +958,37 @@ app.MapPost(
 
         try
         {
+            if (tourId.HasValue)
+            {
+                var targetTour =
+                    tourStore.GetTour(
+                        tourId.Value);
+
+                if (targetTour is null)
+                {
+                    return Results.NotFound(
+                        new
+                        {
+                            message =
+                                "找不到指定團別。"
+                        });
+                }
+
+                if (!targetTour.Tour
+                    .RequiredDocumentTypes
+                    .Contains(
+                        "PASSPORT",
+                        StringComparer.Ordinal))
+                {
+                    return Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "這個團別沒有設定需要此證件類型。"
+                        });
+                }
+            }
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 PassportReviewMapper.ToDocumentInput(request),
@@ -1034,6 +1065,37 @@ app.MapPost(
 
         try
         {
+            if (tourId.HasValue)
+            {
+                var targetTour =
+                    tourStore.GetTour(
+                        tourId.Value);
+
+                if (targetTour is null)
+                {
+                    return Results.NotFound(
+                        new
+                        {
+                            message =
+                                "找不到指定團別。"
+                        });
+                }
+
+                if (!targetTour.Tour
+                    .RequiredDocumentTypes
+                    .Contains(
+                        "TAIWAN_NATIONAL_ID",
+                        StringComparer.Ordinal))
+                {
+                    return Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "這個團別沒有設定需要此證件類型。"
+                        });
+                }
+            }
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 TaiwanNationalIdReviewMapper.ToDocumentInput(request),
@@ -1127,6 +1189,37 @@ app.MapPost(
 
         try
         {
+            if (tourId.HasValue)
+            {
+                var targetTour =
+                    tourStore.GetTour(
+                        tourId.Value);
+
+                if (targetTour is null)
+                {
+                    return Results.NotFound(
+                        new
+                        {
+                            message =
+                                "找不到指定團別。"
+                        });
+                }
+
+                if (!targetTour.Tour
+                    .RequiredDocumentTypes
+                    .Contains(
+                        "TAIWAN_COMPATRIOT_PERMIT",
+                        StringComparer.Ordinal))
+                {
+                    return Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "這個團別沒有設定需要此證件類型。"
+                        });
+                }
+            }
+
             var savedAt = DateTimeOffset.UtcNow;
             var result = store.SaveDocumentReview(
                 TaiwanCompatriotPermitReviewMapper.ToDocumentInput(request),
