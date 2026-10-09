@@ -9,7 +9,7 @@
 候選核心欄位：
 
 - traveler_id
-- name_zh（CRM 中文姓名；台灣護照由 VIZ OCR + 人工覆核取得）
+- name_zh（內部旅客主檔中文姓名；台灣護照由 VIZ OCR + 人工覆核取得）
 - name_en（護照 MRZ 英文姓名）
 - birth_date
 - gender（若保留）
@@ -146,8 +146,8 @@ MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
 
 資料保存原則：
 
-- `traveler_master.name_zh`：CRM 目前採用的中文姓名。
-- `traveler_master.name_en`：CRM 目前採用的英文姓名。
+- `traveler_master.name_zh`：內部旅客主檔目前採用的中文姓名。
+- `traveler_master.name_en`：內部旅客主檔目前採用的英文姓名。
 - `document_versions.name_zh_on_document`：該證件版本實際覆核後的中文姓名。
 - `document_versions.name_en_on_document`：該證件版本實際覆核後的英文姓名。
 
