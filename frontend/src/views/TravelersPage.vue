@@ -507,8 +507,8 @@ onMounted(() => load())
           <span>性別</span>
           <select v-model="genderFilter">
             <option value="">全部</option>
-            <option value="M">M</option>
-            <option value="F">F</option>
+            <option value="M">男 (M)</option>
+            <option value="F">女 (F)</option>
             <option value="X">X</option>
           </select>
         </label>
