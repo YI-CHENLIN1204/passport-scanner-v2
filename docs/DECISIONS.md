@@ -886,3 +886,25 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 團別的 `TourMemberDocument` 可以繼續引用 historical DocumentVersion；全域 current 不等於某一歷史團別當時使用的證件。
 
 資料庫以 partial unique index `ux_document_versions_one_current_per_type` 強制這條 invariant。
+
+### D-067：Traveler PersonalId 欄位降級為 Legacy Compatibility
+
+`travelers.personal_id_type / personal_id_number` 保留是為相容早期資料與搜尋 fallback，不再視為正式證件真相來源。
+
+- 正式證件內容與 current/historical 狀態一律以 `document_versions` 為準。
+- 旅客搜尋仍可保留 PersonalIdNumber fallback，避免非常舊的 legacy Traveler 因缺 DocumentVersion 而突然搜不到。
+- Traveler merge 後，若原 PersonalId 仍對應一張 current DocumentVersion，保持不變。
+- 若原 PersonalId 已變 historical，改指向目前仍為 current 的 DocumentVersion；優先採 `VerifiedAt` 最新，其次 `CreatedAt` 最新。
+- 不因 PersonalId 欄位內容反向覆寫 DocumentVersion。
+
+### D-068：Training Sample 必須保留可追溯 Source Scan Item
+
+`training_samples.source_scan_item_id` 是 Training Dataset 的來源追溯關聯，不只是一般文字欄位。
+
+- 一個 scan item 最多只能對應一個 training sample。
+- `training_samples.source_scan_item_id` 必須 foreign key 到 `scan_items.scan_item_id`。
+- FK 採 `ON DELETE CASCADE`，直接刪除 source scan row 時不可留下 orphan training sample；其 evaluation baseline 依既有 FK 一併清除。
+- production photo retention 只清除 scan item 的圖片 bytes，不刪 scan row，因此不會因 retention 觸發 training sample cascade。
+- Training Dataset 自己保存的 image / OCR input image 仍是獨立訓練副本，不受 production image retention 影響。
+
+目的：訓練資料可以獨立保存影像，但仍要能追溯到哪一筆人工覆核 scan 產生，且資料庫不能留下無來源樣本。
