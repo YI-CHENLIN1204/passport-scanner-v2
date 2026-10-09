@@ -594,6 +594,9 @@ const paddleModelBaseUrl =
   import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
   '/paddle-models'
 
+export const OCR_PIPELINE_VERSION =
+  '2026.10.09.1'
+
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
 
