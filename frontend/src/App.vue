@@ -23,6 +23,7 @@ interface AppRoute {
 
 const currentPath = ref(window.location.pathname)
 const health = ref<'checking' | 'online' | 'offline'>('checking')
+const scanRunning = ref(false)
 
 function parseRoute(path: string): AppRoute {
   const scanMatch = path.match(
@@ -81,6 +82,17 @@ const route = computed(() =>
 )
 
 function navigate(path: string) {
+  if (
+    scanRunning.value &&
+    route.value.view === 'scan' &&
+    path !== currentPath.value
+  ) {
+    window.alert(
+      '批次 OCR 正在進行中，請等待這批處理完成後再離開掃描頁。',
+    )
+    return
+  }
+
   if (window.location.pathname !== path) {
     window.history.pushState({}, '', path)
   }
@@ -90,6 +102,21 @@ function navigate(path: string) {
 }
 
 function handlePopState() {
+  if (
+    scanRunning.value &&
+    route.value.view === 'scan'
+  ) {
+    window.history.pushState(
+      {},
+      '',
+      currentPath.value,
+    )
+    window.alert(
+      '批次 OCR 正在進行中，請等待這批處理完成後再離開掃描頁。',
+    )
+    return
+  }
+
   currentPath.value = window.location.pathname
 }
 
@@ -158,6 +185,7 @@ onBeforeUnmount(() => {
         :key="route.tourId ?? 'scan-home'"
         :tour-id="route.tourId ?? null"
         @navigate="navigate"
+        @running-change="scanRunning = $event"
       />
 
       <TravelersPage
