@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   convertTraditionalNameToSimplified,
 } from '../services/nameScriptConversion'
@@ -37,11 +37,35 @@ const editForm = ref<UpdateTravelerRequest>({
   documents: [],
 })
 
+const historicalDocuments = computed(
+  () =>
+    editingTraveler.value?.documents.filter(
+      document => !document.isCurrent,
+    ) ?? [],
+)
+
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
   if (type === 'TAIWAN_COMPATRIOT_PERMIT') return '台胞證'
   if (type === 'TAIWAN_NATIONAL_ID') return '身分證'
   return type
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
 }
 
 function editingDocumentType(
@@ -610,6 +634,63 @@ onMounted(() => load())
               </div>
             </article>
           </section>
+
+          <section
+            v-if="historicalDocuments.length"
+            class="document-history"
+          >
+            <header>
+              <div>
+                <strong>歷史證件版本</strong>
+                <span>
+                  共 {{ historicalDocuments.length }} 個舊版本
+                </span>
+              </div>
+              <small>
+                舊版本只保留歷史紀錄，不會取代目前有效證件。
+              </small>
+            </header>
+
+            <article
+              v-for="document in historicalDocuments"
+              :key="document.documentVersionId"
+              class="history-card"
+            >
+              <div class="history-card-head">
+                <strong>
+                  {{ documentLabel(document.documentType) }}
+                </strong>
+                <span>歷史版本</span>
+              </div>
+
+              <dl>
+                <div>
+                  <dt>證件號碼</dt>
+                  <dd>{{ document.documentNumber || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>證件姓名</dt>
+                  <dd>
+                    {{
+                      document.nameZhOnDocument ||
+                      document.nameEnOnDocument ||
+                      '—'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>有效期限</dt>
+                  <dd>{{ document.expiryDate || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>最後確認</dt>
+                  <dd>
+                    {{ formatDateTime(document.verifiedAt) }}
+                  </dd>
+                </div>
+              </dl>
+            </article>
+          </section>
         </div>
 
         <p
@@ -1065,6 +1146,95 @@ tr:last-child td {
   font-size: 11px;
 }
 
+.document-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid #e8edf3;
+}
+
+.document-history > header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.document-history > header > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.document-history > header strong {
+  color: #27354b;
+  font-size: 12px;
+}
+
+.document-history > header span,
+.document-history > header small {
+  color: #8390a3;
+  font-size: 9px;
+}
+
+.history-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid #e3e7ed;
+  border-radius: 10px;
+  background: #f8f9fb;
+}
+
+.history-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-card-head strong {
+  color: #344158;
+  font-size: 11px;
+}
+
+.history-card-head span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #eceff4;
+  color: #778397;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.history-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.history-card dl > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.history-card dt {
+  color: #8a95a5;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.history-card dd {
+  overflow: hidden;
+  margin: 0;
+  color: #4a566a;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .edit-modal > footer {
   justify-content: flex-end;
   gap: 8px;
@@ -1091,8 +1261,15 @@ tr:last-child td {
 
 @media (max-width: 720px) {
   .two-column,
-  .three-column {
+  .three-column,
+  .history-card dl {
     grid-template-columns: 1fr;
+  }
+
+  .document-history > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }
 
