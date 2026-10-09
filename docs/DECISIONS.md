@@ -587,3 +587,31 @@ V2 目前使用 Docker named volume 保存 PostgreSQL；named volume 只存在�
 - 出發日期區間。
 
 篩選條件由 API / PostgreSQL 查詢處理；既有簡單呼叫仍保留預設參數，避免影響證件掃描頁等既有流程。
+
+
+### D-046：Production 證件照片保存期限由背景工作實際執行
+
+\`scan_items.delete_after\` 不再只是紀錄欄位。
+
+ASP.NET Core backend 會啟動 production photo retention background worker：
+
+- 啟動後立即檢查一次。
+- 之後約每小時檢查一次。
+- 到達 \`delete_after\` 的 \`scan_items\`，清除 production \`image_bytes\` 與 OCR input image bytes。
+- OCR 結構化欄位、人工審核結果、Traveler / DocumentVersion 與團別資料繼續保存。
+- \`training_samples\` 是人工明確選入後建立的獨立副本，不會因 production 圖片到期而被刪除。
+- production 圖片已刪除後，不允許再新加入 OCR Training Dataset。
+- 尚未人工審核的資料若照片已到期，不允許在沒有原圖的情況下完成審核；仍可刪除該待審核項目。
+- 審核介面顯示 production 照片保存期限，過期後明確顯示照片已依規則刪除。
+
+
+### D-047：旅客資料可查看歷史證件版本
+
+\`document_versions\` 的歷史版本不是只在資料庫保留。
+
+旅客資料頁的編輯視窗：
+
+- current 證件仍可編輯。
+- 非 current 的歷史證件版本以唯讀方式顯示。
+- 至少顯示證件類別、證件號碼、證件姓名、有效期限與最後確認時間。
+- 歷史版本不提供直接改成 current 的 UI，避免操作人員誤改版本狀態。
