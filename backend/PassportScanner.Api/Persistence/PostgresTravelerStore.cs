@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 using PassportScanner.Api.Validation;
+using PassportScanner.Api.Services;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -1538,8 +1539,7 @@ public sealed class PostgresTravelerStore(
 
         if (
             birthDate >
-            DateOnly.FromDateTime(
-                now.UtcDateTime))
+            BusinessDate.Taiwan(now))
         {
             throw new ArgumentException(
                 "出生日期不可晚於目前日期。");
