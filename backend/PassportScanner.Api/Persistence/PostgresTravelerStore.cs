@@ -493,6 +493,14 @@ public sealed class PostgresTravelerStore(
             return null;
         }
 
+        var ownsTransaction =
+            db.Database.CurrentTransaction is null;
+
+        using var transaction =
+            ownsTransaction
+                ? db.Database.BeginTransaction()
+                : null;
+
         var nameZh = NormalizeIdentityName(
             request.NameZh ?? string.Empty);
         var nameEn = Normalize(
@@ -903,6 +911,11 @@ public sealed class PostgresTravelerStore(
             trainingDatasetStore.RefreshSelectedSample(
                 scanItem.ScanItemId,
                 now);
+        }
+
+        if (ownsTransaction)
+        {
+            transaction!.Commit();
         }
 
         return GetTraveler(travelerId);
