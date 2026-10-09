@@ -281,6 +281,31 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/queue-after-reviewed-delete.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-reviewed-delete.json')); assert len(rows) == 1, rows; assert len(rows[0]['documents']) == 1, rows; assert rows[0]['documents'][0]['documentType'] == 'PASSPORT', rows"
 
+      - name: Verify legacy review preflight leaves no partial master data
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Passport Only","departureDate":"2099-12-01","returnDate":"2099-12-03","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/passport-only-tour.json
+          PASSPORT_ONLY_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-only-tour.json'))['tourId'])")
+
+          BEFORE_COUNTS=$(curl --fail --silent http://localhost:5080/api/document-store/status)
+
+          SCOPE_STATUS=$(curl --silent --output /tmp/rejected-tour-type.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/taiwan-compatriot-permit-reviews?tourId=$PASSPORT_ONLY_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"taiwan-compatriot-permit\",\"chineseName\":\"拒絕測試\",\"permitNumber\":\"55667788\",\"birthDate\":\"1990-01-01\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":5,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}")
+          test "$SCOPE_STATUS" = "400"
+
+          MISSING_STATUS=$(curl --silent --output /tmp/rejected-missing-tour.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/taiwan-compatriot-permit-reviews?tourId=00000000-0000-4000-8000-000000000001" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"taiwan-compatriot-permit\",\"chineseName\":\"拒絕測試\",\"permitNumber\":\"55667788\",\"birthDate\":\"1990-01-01\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":5,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}")
+          test "$MISSING_STATUS" = "404"
+
+          AFTER_COUNTS=$(curl --fail --silent http://localhost:5080/api/document-store/status)
+          python3 -c "import json; before=json.loads('''$BEFORE_COUNTS'''); after=json.loads('''$AFTER_COUNTS'''); assert before['travelerCount'] == after['travelerCount'], (before, after); assert before['documentVersionCount'] == after['documentVersionCount'], (before, after)"
+
       - name: Verify manual traveler merge
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
