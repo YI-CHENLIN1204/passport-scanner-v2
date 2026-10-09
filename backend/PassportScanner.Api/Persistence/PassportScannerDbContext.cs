@@ -282,6 +282,76 @@ public sealed class PassportScannerDbContext(
             .IsRequired();
 
         memberDocument.Property(
+                item => item.SnapshotNameZh)
+            .HasColumnName("snapshot_name_zh")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotNameEn)
+            .HasColumnName("snapshot_name_en")
+            .HasMaxLength(160)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotBirthDate)
+            .HasColumnName("snapshot_birth_date")
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotGender)
+            .HasColumnName("snapshot_gender")
+            .HasMaxLength(12)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotNationality)
+            .HasColumnName("snapshot_nationality")
+            .HasMaxLength(12);
+
+        memberDocument.Property(
+                item => item.SnapshotNationalIdNumber)
+            .HasColumnName("snapshot_national_id_number")
+            .HasMaxLength(20);
+
+        memberDocument.Property(
+                item => item.SnapshotNameZhOnDocument)
+            .HasColumnName("snapshot_name_zh_on_document")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotNameEnOnDocument)
+            .HasColumnName("snapshot_name_en_on_document")
+            .HasMaxLength(160)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotDocumentNumber)
+            .HasColumnName("snapshot_document_number")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        memberDocument.Property(
+                item => item.SnapshotIssuingCountry)
+            .HasColumnName("snapshot_issuing_country")
+            .HasMaxLength(12);
+
+        memberDocument.Property(
+                item => item.SnapshotDocumentNationality)
+            .HasColumnName("snapshot_document_nationality")
+            .HasMaxLength(12);
+
+        memberDocument.Property(
+                item => item.SnapshotExpiryDate)
+            .HasColumnName("snapshot_expiry_date");
+
+        memberDocument.Property(
+                item => item.SnapshotVerifiedAt)
+            .HasColumnName("snapshot_verified_at")
+            .IsRequired();
+
+        memberDocument.Property(
                 item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
