@@ -1328,7 +1328,7 @@ export async function downloadTrainingDataset() {
 }
 
 
-export async function deletePendingScanItem(
+export async function deleteScanItem(
   scanItemId: string,
 ) {
   const response = await fetch(
