@@ -536,6 +536,14 @@ public sealed class PassportScannerDbContext(
             .HasForeignKey(item => item.DraftPersonId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        scanItem.HasOne<DocumentVersionRecord>()
+            .WithMany()
+            .HasForeignKey(item =>
+                item.SavedDocumentVersionId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .HasConstraintName(
+                "fk_scan_items_saved_document_version");
+
         var trainingSample =
             modelBuilder.Entity<TrainingSampleRecord>();
 
