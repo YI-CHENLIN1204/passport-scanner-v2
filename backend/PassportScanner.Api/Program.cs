@@ -252,6 +252,40 @@ using (var scope = app.Services.CreateScope())
                     )
             ) = 1;
 
+        UPDATE scan_items AS scan
+        SET saved_document_version_id = NULL
+        WHERE
+            scan.saved_document_version_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM document_versions AS document
+                WHERE
+                    document.document_version_id =
+                        scan.saved_document_version_id
+            );
+
+        DO $migration$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname =
+                    'fk_scan_items_saved_document_version'
+            ) THEN
+                ALTER TABLE scan_items
+                    ADD CONSTRAINT
+                        fk_scan_items_saved_document_version
+                    FOREIGN KEY (
+                        saved_document_version_id
+                    )
+                    REFERENCES document_versions(
+                        document_version_id
+                    )
+                    ON DELETE SET NULL;
+            END IF;
+        END
+        $migration$;
+
         INSERT INTO tour_member_documents (
             tour_member_document_id,
             tour_member_id,
