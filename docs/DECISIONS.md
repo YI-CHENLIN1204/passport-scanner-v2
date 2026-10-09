@@ -1014,3 +1014,15 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 為相容舊版呼叫，若 SaveEvaluationBaseline 發現尚未有 cohort，backend 會先自動 reserve 當下完整 Test cohort；若該 sample 不在固定 cohort，拒絕追加。
 
 目的：固定 Benchmark cohort 是在『開始第一次測試』時決定，而不是由 OCR 成功與否決定，避免失敗樣本被系統性排除。
+
+### D-078：固定 Benchmark cohort 與動態 Test split 分開看待
+
+`test` split 是 Training Dataset 的防資料洩漏分組；`fixed-test` 則是版本回歸比較的固定 cohort，兩者用途不同。
+
+- `test` 仍會包含 deterministic hash 分到 Test 的一般 Traveler group，以及 D-076 強制留在 Test 的 fixed-baseline Traveler group。
+- `fixed-test` 只依 `ocr_evaluation_baselines` membership 讀取，不因之後新增的 Test 樣本而擴張。
+- fixed-test 查詢不重新套 `IsUsableTrainingSample` 動態篩選；一旦樣本已被固定，就算未來訓練資料品質條件改變，也應保留在 benchmark 中並顯式失敗，而不是靜默消失。
+- OCR 品質頁在 fixed cohort 已存在時，按鈕張數與實際重測樣本都使用 `fixed-test`；只有尚未建立 cohort 前，按鈕暫以當下 `test` 數量顯示預計建立的固定集合大小。
+- 新增同一 fixed-Test Traveler 的 Training Sample 可能讓 Dataset 的 Test count 增加，但不會改變固定 benchmark baseline sample count。
+
+目的：Dataset split 解決 Train/Test leakage；Fixed Benchmark 解決版本比較公平性。兩者不能再用同一個『Test 數量』混為一談。
