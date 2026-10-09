@@ -101,6 +101,9 @@ jobs:
           grep -Fxq 'training_samples' /tmp/tables.txt
           grep -Fxq 'travelers' /tmp/tables.txt
 
+          SAVED_DOC_FK=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_scan_items_saved_document_version';" | tr -d '\r')
+          test "$SAVED_DOC_FK" = "1"
+
       - name: Verify tour create and filters
         run: |
           curl --fail --silent -X POST http://localhost:5080/api/tours \
