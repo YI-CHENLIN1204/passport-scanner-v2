@@ -829,6 +829,35 @@ export async function createScanBatch(
   return response.json() as Promise<ScanBatchResponse>
 }
 
+export async function completeScanBatch(
+  batchId: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/scan-batches/${encodeURIComponent(batchId)}/complete`,
+    {
+      method: 'POST',
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Complete scan batch failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<ScanBatchResponse>
+}
+
 export async function addScanItem(
   batchId: string,
   request: CreateScanItemRequest,
