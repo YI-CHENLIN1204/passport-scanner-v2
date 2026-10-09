@@ -41,6 +41,8 @@ public sealed class PostgresScanQueueStore(
             DocumentType = documentType,
             Status = "OPEN",
             ItemCount = 0,
+            AttemptCount = 0,
+            FailedCount = 0,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -218,6 +220,7 @@ public sealed class PostgresScanQueueStore(
 
     public ScanBatchResponse CompleteBatch(
         Guid batchId,
+        CompleteScanBatchRequest request,
         DateTimeOffset now)
     {
         var batch = db.ScanBatches.SingleOrDefault(
@@ -236,6 +239,25 @@ public sealed class PostgresScanQueueStore(
                 "掃描批次狀態不允許完成。");
         }
 
+        if (
+            request.AttemptCount < 0 ||
+            request.FailedCount < 0 ||
+            request.FailedCount > request.AttemptCount)
+        {
+            throw new ArgumentException(
+                "批次處理張數不可為負數，且失敗張數不可大於總張數。");
+        }
+
+        if (
+            request.AttemptCount !=
+                batch.ItemCount + request.FailedCount)
+        {
+            throw new ArgumentException(
+                "批次總張數必須等於成功加入待審核張數加上失敗張數。");
+        }
+
+        batch.AttemptCount = request.AttemptCount;
+        batch.FailedCount = request.FailedCount;
         batch.Status = "COMPLETED";
         batch.UpdatedAt = now;
         db.SaveChanges();
@@ -454,9 +476,14 @@ public sealed class PostgresScanQueueStore(
             value => value.ScanBatchId == item.ScanBatchId);
 
         db.ScanItems.Remove(item);
-        batch.ItemCount = Math.Max(
-            0,
-            batch.ItemCount - 1);
+
+        if (batch.Status == "OPEN")
+        {
+            batch.ItemCount = Math.Max(
+                0,
+                batch.ItemCount - 1);
+        }
+
         batch.UpdatedAt = now;
         db.SaveChanges();
 
@@ -773,6 +800,8 @@ public sealed class PostgresScanQueueStore(
             batch.DocumentType,
             batch.Status,
             batch.ItemCount,
+            batch.AttemptCount,
+            batch.FailedCount,
             batch.CreatedAt,
             batch.UpdatedAt);
 
