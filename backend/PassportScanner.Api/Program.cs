@@ -973,7 +973,7 @@ app.MapPost(
                     savedAt))
             {
                 return Results.NotFound(
-                    new { message = "找不到指定團別。" });
+                    new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
 
             return Results.Ok(
@@ -1049,7 +1049,7 @@ app.MapPost(
                     savedAt))
             {
                 return Results.NotFound(
-                    new { message = "找不到指定團別。" });
+                    new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
 
             return Results.Ok(
@@ -1142,7 +1142,7 @@ app.MapPost(
                     savedAt))
             {
                 return Results.NotFound(
-                    new { message = "找不到指定團別。" });
+                    new { message = "找不到指定團別，或此團未要求這個證件類型。" });
             }
 
             return Results.Ok(
