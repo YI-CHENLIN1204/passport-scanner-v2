@@ -804,14 +804,33 @@ async function rerunTestSet() {
               current.orientationAttempts,
           })
 
-          await saveTrainingEvaluationBaseline(
-            sample.trainingSampleId,
-            baselineJson,
-          )
+          const savedBaseline =
+            await saveTrainingEvaluationBaseline(
+              sample.trainingSampleId,
+              baselineJson,
+            )
 
-          baselineFields = current.fields
+          const savedSample = {
+            ...sample,
+            evaluationBaselineJson:
+              savedBaseline.resultJson,
+          }
+
+          baselineFields =
+            evaluationBaselineFieldsForSample(
+              savedSample,
+            )
           baselinePipelineVersion =
-            OCR_PIPELINE_VERSION
+            evaluationBaselineVersionForSample(
+              savedSample,
+            )
+
+          if (!baselineFields) {
+            throw new Error(
+              '固定 baseline 格式無法解析，未使用目前 OCR 結果覆蓋既有基準。',
+            )
+          }
+
           baselineCreated += 1
         }
 
