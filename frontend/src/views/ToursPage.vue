@@ -19,6 +19,10 @@ const tours = ref<TourSummaryResponse[]>([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+const statusFilter = ref('')
+const documentTypeFilter = ref('')
+const departureFrom = ref('')
+const departureTo = ref('')
 const createOpen = ref(false)
 const creating = ref(false)
 const createError = ref('')
@@ -36,8 +40,17 @@ const documentOptions = [
   { value: 'TAIWAN_NATIONAL_ID', label: '台灣身分證' },
 ]
 
+const hasFilters = computed(
+  () =>
+    Boolean(search.value.trim()) ||
+    Boolean(statusFilter.value) ||
+    Boolean(documentTypeFilter.value) ||
+    Boolean(departureFrom.value) ||
+    Boolean(departureTo.value),
+)
+
 const resultText = computed(() =>
-  search.value.trim()
+  hasFilters.value
     ? `找到 ${tours.value.length} 個團別`
     : `共 ${tours.value.length} 個團別`,
 )
@@ -102,7 +115,18 @@ async function loadTours() {
   error.value = ''
 
   try {
-    tours.value = await listTours(search.value)
+    tours.value = await listTours(
+      search.value,
+      {
+        status: statusFilter.value,
+        documentType:
+          documentTypeFilter.value,
+        departureFrom:
+          departureFrom.value,
+        departureTo:
+          departureTo.value,
+      },
+    )
   } catch (err) {
     error.value =
       err instanceof Error
@@ -111,6 +135,15 @@ async function loadTours() {
   } finally {
     loading.value = false
   }
+}
+
+function clearFilters() {
+  search.value = ''
+  statusFilter.value = ''
+  documentTypeFilter.value = ''
+  departureFrom.value = ''
+  departureTo.value = ''
+  void loadTours()
 }
 
 function openCreate() {
@@ -211,31 +244,97 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <div class="toolbar">
-      <div class="search-box">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="6.5" />
-          <path d="m16 16 4 4" />
-        </svg>
-        <input
-          v-model="search"
-          type="search"
-          placeholder="搜尋團別名稱"
-          @keyup.enter="loadTours"
-        />
+    <section class="filter-card">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <input
+            v-model="search"
+            type="search"
+            placeholder="搜尋團別名稱"
+            @keyup.enter="loadTours"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="secondary-action"
+          :disabled="loading"
+          @click="loadTours"
+        >
+          搜尋
+        </button>
+
+        <span class="result-count">{{ resultText }}</span>
       </div>
 
-      <button
-        type="button"
-        class="secondary-action"
-        :disabled="loading"
-        @click="loadTours"
-      >
-        搜尋
-      </button>
+      <div class="tour-filters">
+        <label>
+          <span>收件狀態</span>
+          <select v-model="statusFilter">
+            <option value="">全部狀態</option>
+            <option value="empty">尚未收件</option>
+            <option value="progress">收件中</option>
+            <option value="pending">待審核</option>
+            <option value="complete">收件完成</option>
+          </select>
+        </label>
 
-      <span class="result-count">{{ resultText }}</span>
-    </div>
+        <label>
+          <span>需要證件</span>
+          <select v-model="documentTypeFilter">
+            <option value="">全部證件</option>
+            <option
+              v-for="option in documentOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>出發日從</span>
+          <input
+            v-model="departureFrom"
+            type="date"
+          />
+        </label>
+
+        <label>
+          <span>出發日至</span>
+          <input
+            v-model="departureTo"
+            type="date"
+            :min="departureFrom || undefined"
+          />
+        </label>
+
+        <div class="tour-filter-actions">
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="loading"
+            @click="loadTours"
+          >
+            套用條件
+          </button>
+          <button
+            v-if="hasFilters"
+            type="button"
+            class="clear-filter-action"
+            :disabled="loading"
+            @click="clearFilters"
+          >
+            清除
+          </button>
+        </div>
+      </div>
+    </section>
 
     <p v-if="error" class="error-message">{{ error }}</p>
 
@@ -248,7 +347,7 @@ onBeforeUnmount(() => {
       <strong>目前沒有符合條件的團別</strong>
       <span>建立第一個團別後，就可以開始批次收取證件。</span>
       <button
-        v-if="!search.trim()"
+        v-if="!hasFilters"
         type="button"
         class="empty-create"
         @click="openCreate"
@@ -538,14 +637,19 @@ onBeforeUnmount(() => {
   background: #fafbfc;
 }
 
-.toolbar {
-  display: flex;
-  gap: 9px;
-  align-items: center;
+.filter-card {
+  display: grid;
+  gap: 10px;
   padding: 11px;
   border: 1px solid #e0e5ed;
   border-radius: 14px;
   background: #fff;
+}
+
+.toolbar {
+  display: flex;
+  gap: 9px;
+  align-items: center;
 }
 
 .search-box {
@@ -589,6 +693,56 @@ onBeforeUnmount(() => {
   color: #7c8799;
   font-size: 12px;
   text-align: right;
+}
+
+.tour-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1fr)
+    minmax(140px, 1fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    auto;
+  gap: 9px;
+  align-items: end;
+  padding-top: 10px;
+  border-top: 1px solid #edf0f4;
+}
+
+.tour-filters label {
+  display: grid;
+  gap: 5px;
+  color: #6d798d;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.tour-filters select,
+.tour-filters input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d8e0ea;
+  border-radius: 9px;
+  background: #f9fafc;
+  color: #2f3c52;
+  font: inherit;
+}
+
+.tour-filter-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.clear-filter-action {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: #6e7a8d;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .tour-grid {
@@ -1010,6 +1164,16 @@ button:disabled {
   opacity: .55;
 }
 
+@media (max-width: 980px) {
+  .tour-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tour-filter-actions {
+    align-self: end;
+  }
+}
+
 @media (max-width: 720px) {
   .page-header,
   .toolbar {
@@ -1017,14 +1181,22 @@ button:disabled {
     flex-direction: column;
   }
 
-  .toolbar {
-    padding: 10px;
-  }
-
   .result-count {
     min-width: 0;
     text-align: left;
     order: -1;
+  }
+
+  .tour-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .tour-filter-actions {
+    align-self: stretch;
+  }
+
+  .tour-filter-actions > button {
+    flex: 1;
   }
 
   .date-grid {
