@@ -373,6 +373,23 @@ public sealed class PostgresScanQueueStore(
         }
 
         var oldDraftId = item.DraftPersonId;
+        Guid? previousReviewedTravelerId = null;
+
+        if (
+            item.ReviewStatus == Reviewed &&
+            item.SavedDocumentVersionId.HasValue)
+        {
+            previousReviewedTravelerId =
+                db.DocumentVersions
+                    .AsNoTracking()
+                    .Where(document =>
+                        document.DocumentVersionId ==
+                            item.SavedDocumentVersionId.Value)
+                    .Select(document =>
+                        (Guid?)document.TravelerId)
+                    .SingleOrDefault();
+        }
+
         var identity = NormalizeIdentity(
             request.NameZh,
             request.BirthDate,
@@ -444,6 +461,19 @@ public sealed class PostgresScanQueueStore(
         item.ReviewedAt = now;
         item.UpdatedAt = now;
         db.SaveChanges();
+
+        if (
+            previousReviewedTravelerId.HasValue &&
+            previousReviewedTravelerId.Value !=
+                saved.TravelerId)
+        {
+            ReconcileTourDocumentLink(
+                batch.TourId,
+                previousReviewedTravelerId.Value,
+                item.DocumentType,
+                item.ScanItemId,
+                now);
+        }
 
         trainingDatasetStore.SetSelection(
             item.ScanItemId,
@@ -526,51 +556,80 @@ public sealed class PostgresScanQueueStore(
 
         if (reviewedTravelerId.HasValue)
         {
-            var fallback = (
-                from candidate in db.ScanItems.AsNoTracking()
-                join candidateBatch in db.ScanBatches.AsNoTracking()
-                    on candidate.ScanBatchId
-                    equals candidateBatch.ScanBatchId
-                join document in db.DocumentVersions.AsNoTracking()
-                    on candidate.SavedDocumentVersionId!.Value
-                    equals document.DocumentVersionId
-                where
-                    candidateBatch.TourId == batch.TourId &&
-                    candidate.ReviewStatus == Reviewed &&
-                    candidate.DocumentType == item.DocumentType &&
-                    candidate.SavedDocumentVersionId != null &&
-                    document.TravelerId ==
-                        reviewedTravelerId.Value
-                orderby
-                    candidate.ReviewedAt descending,
-                    candidate.UpdatedAt descending,
-                    candidate.CreatedAt descending
-                select new
-                {
-                    document.DocumentVersionId
-                })
-                .FirstOrDefault();
-
-            if (fallback is not null)
-            {
-                tourStore.EnsureMemberDocument(
-                    batch.TourId,
-                    reviewedTravelerId.Value,
-                    fallback.DocumentVersionId,
-                    item.DocumentType,
-                    now);
-            }
-            else
-            {
-                tourStore.RemoveMemberDocument(
-                    batch.TourId,
-                    reviewedTravelerId.Value,
-                    item.DocumentType,
-                    now);
-            }
+            ReconcileTourDocumentLink(
+                batch.TourId,
+                reviewedTravelerId.Value,
+                item.DocumentType,
+                null,
+                now);
         }
 
         return true;
+    }
+
+    private void ReconcileTourDocumentLink(
+        Guid tourId,
+        Guid travelerId,
+        string documentType,
+        Guid? excludingScanItemId,
+        DateTimeOffset now)
+    {
+        var candidates = (
+            from candidate in db.ScanItems.AsNoTracking()
+            join candidateBatch in db.ScanBatches.AsNoTracking()
+                on candidate.ScanBatchId
+                equals candidateBatch.ScanBatchId
+            where
+                candidateBatch.TourId == tourId &&
+                candidate.ReviewStatus == Reviewed &&
+                candidate.DocumentType == documentType &&
+                candidate.SavedDocumentVersionId.HasValue &&
+                (
+                    !excludingScanItemId.HasValue ||
+                    candidate.ScanItemId !=
+                        excludingScanItemId.Value
+                )
+            orderby
+                candidate.ReviewedAt descending,
+                candidate.UpdatedAt descending,
+                candidate.CreatedAt descending
+            select candidate.SavedDocumentVersionId!.Value
+        ).ToList();
+
+        var candidateIds = candidates
+            .Distinct()
+            .ToList();
+
+        var travelerDocumentIds = db.DocumentVersions
+            .AsNoTracking()
+            .Where(document =>
+                candidateIds.Contains(
+                    document.DocumentVersionId) &&
+                document.TravelerId == travelerId)
+            .Select(document =>
+                document.DocumentVersionId)
+            .ToHashSet();
+
+        var fallbackDocumentId = candidates
+            .FirstOrDefault(id =>
+                travelerDocumentIds.Contains(id));
+
+        if (fallbackDocumentId != Guid.Empty)
+        {
+            tourStore.EnsureMemberDocument(
+                tourId,
+                travelerId,
+                fallbackDocumentId,
+                documentType,
+                now);
+            return;
+        }
+
+        tourStore.RemoveMemberDocument(
+            tourId,
+            travelerId,
+            documentType,
+            now);
     }
 
     public int PurgeExpiredImages(
