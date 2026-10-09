@@ -74,6 +74,10 @@ public interface ITravelerStore
 
     IReadOnlyList<TravelerSummary> SearchTravelers(
         string? query,
+        string? documentType,
+        string? gender,
+        string? nationality,
+        int offset,
         int limit);
 
     TravelerDetail? GetTraveler(Guid travelerId);
