@@ -38,7 +38,7 @@ public interface IScanQueueStore
         ReviewScanItemRequest request,
         DateTimeOffset now);
 
-    bool DeletePendingItem(
+    bool DeleteItem(
         Guid scanItemId,
         DateTimeOffset now);
 
