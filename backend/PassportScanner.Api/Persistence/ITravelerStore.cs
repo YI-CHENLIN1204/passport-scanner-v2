@@ -87,6 +87,11 @@ public interface ITravelerStore
         UpdateTravelerRequest request,
         DateTimeOffset now);
 
+    TravelerDetail? MergeTravelers(
+        Guid targetTravelerId,
+        Guid sourceTravelerId,
+        DateTimeOffset now);
+
     int TravelerCount { get; }
     int DocumentVersionCount { get; }
 }
