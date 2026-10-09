@@ -364,12 +364,6 @@ public sealed class PostgresTourStore(
             }
         }
 
-        tour.TourName = name;
-        tour.DepartureDate = request.DepartureDate;
-        tour.ReturnDate = request.ReturnDate;
-        tour.RequiredDocumentTypes = requiredDocumentTypes;
-        tour.UpdatedAt = now;
-
         var deleteAfter =
             BusinessDate
                 .ProductionPhotoDeleteAfter(
@@ -381,8 +375,26 @@ public sealed class PostgresTourStore(
             .ToList();
 
         var scanItems = db.ScanItems
-            .Where(item => tourDraftIds.Contains(item.DraftPersonId))
+            .Where(item =>
+                tourDraftIds.Contains(
+                    item.DraftPersonId))
             .ToList();
+
+        if (
+            deleteAfter <= now &&
+            scanItems.Any(item =>
+                item.ReviewStatus == "PENDING" &&
+                item.ImageBytes.Length > 0))
+        {
+            throw new ArgumentException(
+                "新的回國日會讓尚未審核的證件照片立即超過保存期限；請先完成或刪除待審核資料，再修改回國日。");
+        }
+
+        tour.TourName = name;
+        tour.DepartureDate = request.DepartureDate;
+        tour.ReturnDate = request.ReturnDate;
+        tour.RequiredDocumentTypes = requiredDocumentTypes;
+        tour.UpdatedAt = now;
 
         foreach (var item in scanItems)
         {
