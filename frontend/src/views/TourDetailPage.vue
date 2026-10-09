@@ -252,6 +252,20 @@ function documentLabel(type: string) {
   return type
 }
 
+function retentionDate(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10)
+  }
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
 function identityKey(
   nameZh: string,
   birthDate: string | null,
@@ -2435,9 +2449,16 @@ onBeforeUnmount(() => {
         <div class="review-layout">
           <div class="review-image-column">
             <div class="image-toolbar">
-              <span>
-                原始覆核圖
-              </span>
+              <div class="image-toolbar-meta">
+                <span>原始覆核圖</span>
+                <small>
+                  {{
+                    currentDocument.imageAvailable
+                      ? `照片保存至 ${retentionDate(currentDocument.deleteAfter)}`
+                      : '照片已依保存期限刪除'
+                  }}
+                </small>
+              </div>
 
               <div
                 v-if="currentDocument.imageAvailable"
@@ -3700,6 +3721,21 @@ tbody tr:last-child td {
 .image-toolbar > div {
   display: flex;
   gap: 4px;
+}
+
+.image-toolbar .image-toolbar-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.image-toolbar-meta > span {
+  color: #c3cbd8;
+  font-weight: 700;
+}
+
+.image-toolbar-meta > small {
+  color: #7f8ba0;
+  font-size: 9px;
 }
 
 .image-toolbar button {
