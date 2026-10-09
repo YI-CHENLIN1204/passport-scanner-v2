@@ -21,6 +21,9 @@ public sealed class PassportScannerDbContext(
     public DbSet<OcrEvaluationBaselineRecord>
         OcrEvaluationBaselines =>
             Set<OcrEvaluationBaselineRecord>();
+    public DbSet<OcrBenchmarkRunRecord>
+        OcrBenchmarkRuns =>
+            Set<OcrBenchmarkRunRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -562,5 +565,53 @@ public sealed class PassportScannerDbContext(
             .HasForeignKey<OcrEvaluationBaselineRecord>(
                 item => item.TrainingSampleId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        var benchmarkRun =
+            modelBuilder.Entity<OcrBenchmarkRunRecord>();
+
+        benchmarkRun.ToTable("ocr_benchmark_runs");
+        benchmarkRun.HasKey(item =>
+            item.BenchmarkRunId);
+
+        benchmarkRun.Property(item =>
+                item.BenchmarkRunId)
+            .HasColumnName("benchmark_run_id");
+
+        benchmarkRun.Property(item =>
+                item.PipelineVersion)
+            .HasColumnName("pipeline_version")
+            .HasMaxLength(80)
+            .IsRequired();
+
+        benchmarkRun.Property(item =>
+                item.SampleCount)
+            .HasColumnName("sample_count")
+            .IsRequired();
+
+        benchmarkRun.Property(item =>
+                item.FailedCount)
+            .HasColumnName("failed_count")
+            .IsRequired();
+
+        benchmarkRun.Property(item =>
+                item.BaselineCreatedCount)
+            .HasColumnName("baseline_created_count")
+            .IsRequired();
+
+        benchmarkRun.Property(item =>
+                item.SummaryJson)
+            .HasColumnName("summary_json")
+            .HasColumnType("text")
+            .IsRequired();
+
+        benchmarkRun.Property(item =>
+                item.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        benchmarkRun.HasIndex(item =>
+                item.CreatedAt)
+            .HasDatabaseName(
+                "ix_ocr_benchmark_runs_created_at");
     }
 }
