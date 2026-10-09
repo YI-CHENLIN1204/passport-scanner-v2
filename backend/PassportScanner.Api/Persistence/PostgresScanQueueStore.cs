@@ -452,7 +452,7 @@ public sealed class PostgresScanQueueStore(
             now))
         {
             throw new KeyNotFoundException(
-                "找不到指定團別、旅客或正式證件版本。");
+                "找不到指定團別、旅客或正式證件版本，或此團未要求這個證件類型。");
         }
 
         item.ReviewStatus = Reviewed;
