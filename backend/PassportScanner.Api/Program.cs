@@ -276,8 +276,30 @@ app.MapGet("/api/health", () =>
 
 app.MapGet(
     "/api/tours",
-    (string? query, ITourStore store) =>
-        Results.Ok(store.ListTours(query)));
+    (
+        string? query,
+        string? status,
+        string? documentType,
+        DateOnly? departureFrom,
+        DateOnly? departureTo,
+        ITourStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.ListTours(
+                    query,
+                    status,
+                    documentType,
+                    departureFrom,
+                    departureTo));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
 
 app.MapGet(
     "/api/tours/{tourId:guid}",
