@@ -91,7 +91,7 @@ onMounted(refresh)
   <section class="traveler-workspace">
     <div class="workspace-heading">
       <div>
-        <p class="eyebrow">CRM · Traveler archive</p>
+        <p class="eyebrow">TRAVELER · Archive</p>
         <h2>旅客資料</h2>
         <p>
           查看目前已完成人工覆核的旅客與證件版本。護照、台胞證與台灣身分證都會歸到同一位旅客主檔。
