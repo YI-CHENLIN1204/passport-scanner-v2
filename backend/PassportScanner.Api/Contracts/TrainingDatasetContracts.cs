@@ -47,6 +47,11 @@ public sealed record EvaluationBaselineResponse(
     string ResultJson,
     DateTimeOffset CapturedAt);
 
+public sealed record FixedTestCohortResponse(
+    int SampleCount,
+    int NewlyReservedCount,
+    DateTimeOffset UpdatedAt);
+
 public sealed record TrainingDatasetSampleImage(
     byte[] Bytes,
     string ContentType,
