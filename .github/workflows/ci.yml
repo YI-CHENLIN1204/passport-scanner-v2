@@ -261,6 +261,25 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-retention.json
           python3 -c "import json; rows=json.load(open('/tmp/review-queue-retention.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PERMIT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['imageAvailable'] is False, docs[0]"
 
+      - name: Verify reviewed document can be removed from only this tour
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+          DOCUMENT_VERSION_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT saved_document_version_id FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID';" | tr -d '\r')
+          TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT traveler_id FROM document_versions WHERE document_version_id = '$DOCUMENT_VERSION_ID';" | tr -d '\r')
+
+          STATUS=$(curl --silent --output /tmp/delete-reviewed.txt --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID")
+          test "$STATUS" = "204"
+
+          COUNTS=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT (SELECT COUNT(*) FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM training_samples WHERE source_scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM tour_member_documents), (SELECT COUNT(*) FROM document_versions WHERE document_version_id = '$DOCUMENT_VERSION_ID'), (SELECT COUNT(*) FROM travelers WHERE traveler_id = '$TRAVELER_ID');" | tr -d '\r')
+          test "$COUNTS" = "0|0|0|1|1"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-after-reviewed-delete.json
+          python3 -c "import json; data=json.load(open('/tmp/tour-after-reviewed-delete.json')); assert data['members'] == [], data; assert data['tour']['pendingReviewCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/queue-after-reviewed-delete.json
+          python3 -c "import json; rows=json.load(open('/tmp/queue-after-reviewed-delete.json')); assert len(rows) == 1, rows; assert len(rows[0]['documents']) == 1, rows; assert rows[0]['documents'][0]['documentType'] == 'PASSPORT', rows"
+
       - name: Verify large scan payload passes through frontend proxy
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
