@@ -164,6 +164,16 @@ public sealed class PassportScannerDbContext(
             })
             .HasDatabaseName("ix_document_versions_traveler_current");
 
+        document.HasIndex(item => new
+            {
+                item.TravelerId,
+                item.DocumentType
+            })
+            .IsUnique()
+            .HasFilter("is_current = TRUE")
+            .HasDatabaseName(
+                "ux_document_versions_one_current_per_type");
+
         document.HasOne<TravelerRecord>()
             .WithMany()
             .HasForeignKey(item => item.TravelerId)
