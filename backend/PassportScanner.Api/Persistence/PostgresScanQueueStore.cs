@@ -154,6 +154,7 @@ public sealed class PostgresScanQueueStore(
         var draft = ResolveDraftPerson(
             batch.TourId,
             identity.NameZh,
+            Normalize(request.NameEn),
             identity.BirthDate,
             identity.Gender,
             now);
@@ -426,6 +427,7 @@ public sealed class PostgresScanQueueStore(
             item,
             oldDraftId,
             identity.NameZh,
+            item.NameEn,
             identity.BirthDate,
             identity.Gender,
             now);
@@ -718,21 +720,29 @@ public sealed class PostgresScanQueueStore(
     private TourPersonDraftRecord ResolveDraftPerson(
         Guid tourId,
         string nameZh,
+        string nameEn,
         DateOnly? birthDate,
         string gender,
         DateTimeOffset now)
     {
-        if (HasCompleteIdentity(nameZh, birthDate, gender))
+        if (HasCompleteIdentity(
+            nameZh,
+            nameEn,
+            birthDate,
+            gender))
         {
             var matches = FindDraftMatches(
                 tourId,
                 nameZh,
+                nameEn,
                 birthDate!.Value,
                 gender);
 
             if (matches.Count > 0)
             {
-                return ConsolidateDrafts(matches, now);
+                return ConsolidateDrafts(
+                    matches,
+                    now);
             }
         }
 
@@ -756,14 +766,21 @@ public sealed class PostgresScanQueueStore(
         ScanItemRecord item,
         Guid oldDraftId,
         string nameZh,
+        string nameEn,
         DateOnly? birthDate,
         string gender,
         DateTimeOffset now)
     {
         var oldDraft = db.TourPersonDrafts.Single(
-            draft => draft.DraftPersonId == oldDraftId);
+            draft =>
+                draft.DraftPersonId ==
+                    oldDraftId);
 
-        if (!HasCompleteIdentity(nameZh, birthDate, gender))
+        if (!HasCompleteIdentity(
+            nameZh,
+            nameEn,
+            birthDate,
+            gender))
         {
             UpdateDraftIdentity(
                 oldDraft,
@@ -777,29 +794,38 @@ public sealed class PostgresScanQueueStore(
         var matches = FindDraftMatches(
             oldDraft.TourId,
             nameZh,
+            nameEn,
             birthDate!.Value,
             gender)
             .Where(draft =>
-                draft.DraftPersonId != oldDraftId)
+                draft.DraftPersonId !=
+                    oldDraftId)
             .ToList();
 
         if (matches.Count > 0)
         {
-            var target = ConsolidateDrafts(matches, now);
-            item.DraftPersonId = target.DraftPersonId;
+            var target =
+                ConsolidateDrafts(
+                    matches,
+                    now);
+            item.DraftPersonId =
+                target.DraftPersonId;
             return;
         }
 
         var siblingCount = db.ScanItems.Count(
             candidate =>
-                candidate.DraftPersonId == oldDraftId &&
-                candidate.ScanItemId != item.ScanItemId);
+                candidate.DraftPersonId ==
+                    oldDraftId &&
+                candidate.ScanItemId !=
+                    item.ScanItemId);
 
         if (
             siblingCount == 0 ||
             DraftIdentityMatches(
                 oldDraft,
                 nameZh,
+                nameEn,
                 birthDate.Value,
                 gender))
         {
@@ -812,35 +838,87 @@ public sealed class PostgresScanQueueStore(
             return;
         }
 
-        var newDraft = new TourPersonDraftRecord
-        {
-            DraftPersonId = Guid.NewGuid(),
-            TourId = oldDraft.TourId,
-            NameZh = nameZh,
-            BirthDate = birthDate,
-            Gender = gender,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
+        var newDraft =
+            new TourPersonDraftRecord
+            {
+                DraftPersonId =
+                    Guid.NewGuid(),
+                TourId =
+                    oldDraft.TourId,
+                NameZh =
+                    nameZh,
+                BirthDate =
+                    birthDate,
+                Gender =
+                    gender,
+                CreatedAt =
+                    now,
+                UpdatedAt =
+                    now
+            };
 
         db.TourPersonDrafts.Add(newDraft);
-        item.DraftPersonId = newDraft.DraftPersonId;
+        item.DraftPersonId =
+            newDraft.DraftPersonId;
     }
 
-    private List<TourPersonDraftRecord> FindDraftMatches(
-        Guid tourId,
-        string nameZh,
-        DateOnly birthDate,
-        string gender) =>
-        db.TourPersonDrafts
+    private List<TourPersonDraftRecord>
+        FindDraftMatches(
+            Guid tourId,
+            string nameZh,
+            string nameEn,
+            DateOnly birthDate,
+            string gender)
+    {
+        var candidates = db.TourPersonDrafts
             .Where(item =>
                 item.TourId == tourId &&
-                item.NameZh == nameZh &&
                 item.BirthDate == birthDate &&
                 item.Gender == gender)
-            .OrderBy(item => item.CreatedAt)
-            .ThenBy(item => item.DraftPersonId)
+            .OrderBy(item =>
+                item.CreatedAt)
+            .ThenBy(item =>
+                item.DraftPersonId)
             .ToList();
+
+        if (!string.IsNullOrWhiteSpace(nameZh))
+        {
+            return candidates
+                .Where(item =>
+                    item.NameZh == nameZh)
+                .ToList();
+        }
+
+        if (string.IsNullOrWhiteSpace(nameEn))
+        {
+            return [];
+        }
+
+        var candidateIds = candidates
+            .Where(item =>
+                string.IsNullOrWhiteSpace(
+                    item.NameZh))
+            .Select(item =>
+                item.DraftPersonId)
+            .ToList();
+
+        var matchingIds = db.ScanItems
+            .AsNoTracking()
+            .Where(item =>
+                candidateIds.Contains(
+                    item.DraftPersonId) &&
+                item.NameEn == nameEn)
+            .Select(item =>
+                item.DraftPersonId)
+            .Distinct()
+            .ToHashSet();
+
+        return candidates
+            .Where(item =>
+                matchingIds.Contains(
+                    item.DraftPersonId))
+            .ToList();
+    }
 
     private TourPersonDraftRecord ConsolidateDrafts(
         IReadOnlyList<TourPersonDraftRecord> drafts,
@@ -904,22 +982,55 @@ public sealed class PostgresScanQueueStore(
         draft.UpdatedAt = now;
     }
 
-    private static bool DraftIdentityMatches(
+    private bool DraftIdentityMatches(
         TourPersonDraftRecord draft,
         string nameZh,
+        string nameEn,
         DateOnly birthDate,
-        string gender) =>
-        draft.NameZh == nameZh &&
-        draft.BirthDate == birthDate &&
-        draft.Gender == gender;
+        string gender)
+    {
+        if (
+            draft.BirthDate != birthDate ||
+            draft.Gender != gender)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nameZh))
+        {
+            return draft.NameZh == nameZh;
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                draft.NameZh) ||
+            string.IsNullOrWhiteSpace(
+                nameEn))
+        {
+            return false;
+        }
+
+        return db.ScanItems.Any(
+            item =>
+                item.DraftPersonId ==
+                    draft.DraftPersonId &&
+                item.NameEn == nameEn);
+    }
 
     private static bool HasCompleteIdentity(
         string nameZh,
+        string nameEn,
         DateOnly? birthDate,
         string gender) =>
-        !string.IsNullOrWhiteSpace(nameZh) &&
+        (
+            !string.IsNullOrWhiteSpace(
+                nameZh) ||
+            !string.IsNullOrWhiteSpace(
+                nameEn)
+        ) &&
         birthDate.HasValue &&
-        !string.IsNullOrWhiteSpace(gender);
+        !string.IsNullOrWhiteSpace(
+            gender);
 
     private static (
         string NameZh,
