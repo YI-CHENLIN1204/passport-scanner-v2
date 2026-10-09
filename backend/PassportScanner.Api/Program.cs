@@ -88,20 +88,39 @@ using (var scope = app.Services.CreateScope())
             )
             WHERE is_current = TRUE;
 
-        WITH ranked_primary_documents AS (
+        WITH travelers_needing_personal_id_repair AS (
+            SELECT traveler.traveler_id
+            FROM travelers AS traveler
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM document_versions AS current_document
+                WHERE
+                    current_document.traveler_id =
+                        traveler.traveler_id
+                    AND current_document.is_current = TRUE
+                    AND current_document.document_type =
+                        traveler.personal_id_type
+                    AND current_document.document_number =
+                        traveler.personal_id_number
+            )
+        ),
+        ranked_primary_documents AS (
             SELECT
-                traveler_id,
-                document_type,
-                document_number,
+                document.traveler_id,
+                document.document_type,
+                document.document_number,
                 ROW_NUMBER() OVER (
-                    PARTITION BY traveler_id
+                    PARTITION BY document.traveler_id
                     ORDER BY
-                        verified_at DESC,
-                        created_at DESC,
-                        document_version_id DESC
+                        document.verified_at DESC,
+                        document.created_at DESC,
+                        document.document_version_id DESC
                 ) AS primary_rank
-            FROM document_versions
-            WHERE is_current = TRUE
+            FROM document_versions AS document
+            INNER JOIN travelers_needing_personal_id_repair AS repair
+                ON repair.traveler_id =
+                    document.traveler_id
+            WHERE document.is_current = TRUE
         )
         UPDATE travelers AS traveler
         SET
@@ -113,13 +132,7 @@ using (var scope = app.Services.CreateScope())
         WHERE
             traveler.traveler_id =
                 ranked.traveler_id
-            AND ranked.primary_rank = 1
-            AND (
-                traveler.personal_id_type IS DISTINCT FROM
-                    ranked.document_type
-                OR traveler.personal_id_number IS DISTINCT FROM
-                    ranked.document_number
-            );
+            AND ranked.primary_rank = 1;
 
         CREATE TABLE IF NOT EXISTS tours (
             tour_id uuid PRIMARY KEY,
