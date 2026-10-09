@@ -649,7 +649,7 @@ app.MapDelete(
     {
         try
         {
-            return store.DeletePendingItem(
+            return store.DeleteItem(
                 scanItemId,
                 DateTimeOffset.UtcNow)
                 ? Results.NoContent()
