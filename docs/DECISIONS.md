@@ -563,6 +563,9 @@ V2 目前使用 Docker named volume 保存 PostgreSQL；named volume 只存在�
 - `scripts/restore-db.ps1`：在另一台電腦重建並還原資料庫。
 - 備份預設放在 `backups/`，並由 `.gitignore` 排除。
 - `*.dump` 不得提交 GitHub，因為內容可能包含旅客主檔、證件圖片、ground truth 與私人 OCR Dataset。
+- 備份完成時同時產生 SHA256 sidecar；restore 若找到 sidecar，必須先驗證 hash。
+- restore 在停止 frontend/backend、DROP 正式資料庫之前，先把 dump 複製進 PostgreSQL container 並執行 `pg_restore --list` 確認 archive 可讀。
+- hash 不符或 archive 不可讀時必須在破壞性操作前中止；既有正式資料庫不可因壞備份而先被刪除。
 
 換電腦、重設 Docker Desktop 或進行可能刪除 volume 的操作前，應先建立資料庫備份。
 
