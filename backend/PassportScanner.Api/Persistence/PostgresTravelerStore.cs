@@ -708,6 +708,18 @@ public sealed class PostgresTravelerStore(
                 item.IsCurrent)
             .ToList();
 
+        foreach (var currentDocument in currentDocuments)
+        {
+            ValidateDocumentFields(
+                currentDocument.DocumentType,
+                currentDocument.DocumentNumber,
+                currentDocument.NameEnOnDocument,
+                currentDocument.Nationality,
+                currentDocument.IssuingCountry,
+                currentDocument.ExpiryDate,
+                birthDate);
+        }
+
         var currentNationalIdDocuments =
             currentDocuments
                 .Where(item =>
