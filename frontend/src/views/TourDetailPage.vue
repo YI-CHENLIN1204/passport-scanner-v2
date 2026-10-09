@@ -1880,10 +1880,23 @@ async function saveReview(moveNext: boolean) {
 
     await reloadQueue()
 
+    const updatedParent =
+      queue.value.find(person =>
+        person.documents.some(
+          item =>
+            item.scanItemId ===
+            document.scanItemId,
+        ),
+      )
+
     if (moveNext) {
-      const next = nextPendingPerson(
+      const currentDraftPersonId =
+        updatedParent?.draftPersonId ??
         reviewPerson.value?.draftPersonId ??
-          '',
+        ''
+
+      const next = nextPendingPerson(
+        currentDraftPersonId,
       )
 
       if (!next) {
@@ -1894,15 +1907,6 @@ async function saveReview(moveNext: boolean) {
       openReview(next)
       return
     }
-
-    const updatedParent =
-      queue.value.find(person =>
-        person.documents.some(
-          item =>
-            item.scanItemId ===
-            document.scanItemId,
-        ),
-      )
 
     if (!updatedParent) {
       reviewPerson.value = null
