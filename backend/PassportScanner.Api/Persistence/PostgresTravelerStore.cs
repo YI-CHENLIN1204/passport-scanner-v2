@@ -820,7 +820,7 @@ public sealed class PostgresTravelerStore(
             return [];
         }
 
-        return db.Travelers
+        var identityMatches = db.Travelers
             .Where(traveler =>
                 traveler.NameZh == nameZh &&
                 traveler.BirthDate == birthDate &&
@@ -828,6 +828,24 @@ public sealed class PostgresTravelerStore(
             .OrderBy(traveler => traveler.CreatedAt)
             .ThenBy(traveler => traveler.TravelerId)
             .ToList();
+
+        if (!string.IsNullOrWhiteSpace(nationalIdNumber))
+        {
+            identityMatches = identityMatches
+                .Where(traveler =>
+                    string.IsNullOrWhiteSpace(
+                        traveler.NationalIdNumber) ||
+                    traveler.NationalIdNumber ==
+                        nationalIdNumber)
+                .ToList();
+        }
+
+        if (identityMatches.Count > 1)
+        {
+            throw new AmbiguousTravelerMatchException();
+        }
+
+        return identityMatches;
     }
 
     private TravelerRecord ConsolidateTravelerMatches(
