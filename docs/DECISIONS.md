@@ -699,3 +699,28 @@ ASP.NET Core backend 會啟動 production photo retention background worker：
 - 已審核資料再次修改，若人物身份被改成另一個 Traveler，也必須重新計算舊 Traveler 在本團的 document link，避免殘留重複團員。
 
 Traveler 自動合併時，\`tour_member_documents\` 必須跟著 \`tour_members\` 搬移並依 document type 去重，不能因人物合併遺失團別收件關係。
+
+
+### D-052：已存在的 Traveler 支援人工明確合併
+
+自動人物比對仍以身分證字號優先，其次才使用姓名／生日／性別；但若 OCR 或人工資料造成同一真人已經被建立成兩個正式 Traveler，系統必須提供人工合併，而不是要求使用者直接改資料庫。
+
+人工合併採「來源 → 保留主檔」：
+
+- 操作人員明確指定哪一筆 Traveler 保留。
+- 另一筆 Traveler 合併後刪除。
+- 保留 Traveler 的中文姓名與既有主檔為準；來源資料只補保留主檔目前為空白的英文姓名、國籍、身分證字號。
+- 來源的全部 DocumentVersion 移到保留 Traveler。
+- 來源的 TourMember / TourMemberDocument 一起移動；若兩人已同時存在同一團，合併成一個 TourMember，證件 link 依 document type 去重。
+- 同類型有多個 current DocumentVersion 時，沿用既有 current reconciliation 規則，只保留最近確認版本為 current；歷史版本不刪除。
+- reviewed scan item、draft identity 與已選 Training Sample 的 ground truth 要同步到保留 Traveler；Training split 本身依 DocumentVersion 的 TravelerId 動態分組，因此 DocumentVersion 搬移後，同一真人會自動回到同一 split group。
+
+為降低誤合併風險：
+
+- 保留與來源不能是同一 Traveler。
+- 出生日期不同時禁止合併。
+- 性別不同時禁止合併。
+- 兩邊都有身分證字號且內容不同時禁止合併；必須先人工確認／修正。
+- UI 必須同時顯示兩邊身份與證件摘要。
+- 使用者必須勾選「我已確認是同一位旅客」，並再次確認，才真正執行。
+- 合併目前不提供 UI undo；需要復原時使用資料庫備份處理。
