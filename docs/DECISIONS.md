@@ -674,3 +674,28 @@ ASP.NET Core backend 會啟動 production photo retention background worker：
 - 使用者若移除失敗項目，也不會讓既有成功項目重新變成待處理狀態。
 
 這個規則避免因少數失敗圖片造成整批重跑與重複 staging。
+
+
+### D-051：團別實際收件與全域 DocumentVersion 分離
+
+正式 Traveler / DocumentVersion 是跨團共用的旅客主檔；團別不能再因為 Traveler 已經有某張 current 證件，就自動視為「本團已收到」。
+
+因此新增 \`tour_member_documents\`：
+
+- \`tour_members\`：表示這位 Traveler 已有正式資料掛入這一團。
+- \`tour_member_documents\`：表示這一團實際採用／收到哪一個 DocumentVersion。
+- 同一個 tour member、同一個 document type 只保留一個目前採用的版本。
+- 人工審核完成時，除了建立／更新 Traveler 與 DocumentVersion，也必須建立或更新本團的 document link。
+- 團別詳情、已收證件數、缺件判斷與 CSV 只以本團 document link 為正式收件依據，不自動拿 Traveler 其他 current 證件補齊。
+- 舊 reviewed scan item 在啟動 migration 時會依 \`saved_document_version_id\` backfill 到新關聯表。
+
+已審核 scan item 可以從團別移除：
+
+- 刪除的是本團 scan item、production 收件關聯與對應 training sample。
+- 不刪除全域 Traveler。
+- 不刪除全域 DocumentVersion。
+- 若同團同人同證件類型仍有其他 reviewed scan item，會自動回退到最近一筆剩餘版本。
+- 若沒有任何正式證件 link，該 Traveler 的 tour member 會從此團移除。
+- 已審核資料再次修改，若人物身份被改成另一個 Traveler，也必須重新計算舊 Traveler 在本團的 document link，避免殘留重複團員。
+
+Traveler 自動合併時，\`tour_member_documents\` 必須跟著 \`tour_members\` 搬移並依 document type 去重，不能因人物合併遺失團別收件關係。
