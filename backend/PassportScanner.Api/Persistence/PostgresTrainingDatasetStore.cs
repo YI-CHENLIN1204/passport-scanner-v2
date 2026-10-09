@@ -318,6 +318,79 @@ public sealed class PostgresTrainingDatasetStore(
                 contentType));
     }
 
+    public FixedTestCohortResponse ReserveFixedTestCohort(
+        DateTimeOffset now)
+    {
+        var existingCount =
+            db.OcrEvaluationBaselines.Count();
+
+        if (existingCount > 0)
+        {
+            return new FixedTestCohortResponse(
+                existingCount,
+                0,
+                now);
+        }
+
+        var usableSamples = db.TrainingSamples
+            .AsNoTracking()
+            .OrderBy(item => item.DocumentType)
+            .ThenBy(item => item.SelectedAt)
+            .ToList()
+            .Where(IsUsableTrainingSample)
+            .ToList();
+
+        var splitBySample =
+            BuildSplitAssignments(usableSamples);
+
+        var testSamples = usableSamples
+            .Where(sample =>
+                splitBySample[
+                    sample.TrainingSampleId] ==
+                "test")
+            .ToList();
+
+        if (testSamples.Count == 0)
+        {
+            return new FixedTestCohortResponse(
+                0,
+                0,
+                now);
+        }
+
+        using var transaction =
+            db.Database.BeginTransaction();
+
+        var pendingJson =
+            JsonSerializer.Serialize(
+                new
+                {
+                    state = "pending",
+                    cohortVersion = 1,
+                    reservedAt = now
+                });
+
+        foreach (var sample in testSamples)
+        {
+            db.OcrEvaluationBaselines.Add(
+                new OcrEvaluationBaselineRecord
+                {
+                    TrainingSampleId =
+                        sample.TrainingSampleId,
+                    ResultJson = pendingJson,
+                    CapturedAt = now
+                });
+        }
+
+        db.SaveChanges();
+        transaction.Commit();
+
+        return new FixedTestCohortResponse(
+            testSamples.Count,
+            testSamples.Count,
+            now);
+    }
+
     public EvaluationBaselineResponse SaveEvaluationBaseline(
         Guid trainingSampleId,
         string resultJson,
@@ -347,6 +420,13 @@ public sealed class PostgresTrainingDatasetStore(
                 nameof(resultJson));
         }
 
+        if (IsPendingEvaluationBaseline(resultJson))
+        {
+            throw new ArgumentException(
+                "pending baseline 是系統內部 cohort 保留狀態，不能直接寫入。",
+                nameof(resultJson));
+        }
+
         var existing =
             db.OcrEvaluationBaselines
                 .SingleOrDefault(item =>
@@ -355,16 +435,26 @@ public sealed class PostgresTrainingDatasetStore(
 
         if (existing is null)
         {
-            existing =
-                new OcrEvaluationBaselineRecord
-                {
-                    TrainingSampleId =
-                        trainingSampleId,
-                    ResultJson = resultJson,
-                    CapturedAt = now
-                };
+            ReserveFixedTestCohort(now);
 
-            db.OcrEvaluationBaselines.Add(existing);
+            existing =
+                db.OcrEvaluationBaselines
+                    .SingleOrDefault(item =>
+                        item.TrainingSampleId ==
+                            trainingSampleId);
+
+            if (existing is null)
+            {
+                throw new InvalidOperationException(
+                    "這張樣本不屬於已固定的 Test cohort，不能在固定基準建立後追加新樣本。");
+            }
+        }
+
+        if (IsPendingEvaluationBaseline(
+            existing.ResultJson))
+        {
+            existing.ResultJson = resultJson;
+            existing.CapturedAt = now;
             db.SaveChanges();
         }
 
@@ -738,6 +828,33 @@ public sealed class PostgresTrainingDatasetStore(
         }
 
         return "test";
+    }
+
+    private static bool IsPendingEvaluationBaseline(
+        string resultJson)
+    {
+        try
+        {
+            using var document =
+                JsonDocument.Parse(resultJson);
+
+            return
+                document.RootElement.ValueKind ==
+                    JsonValueKind.Object &&
+                document.RootElement.TryGetProperty(
+                    "state",
+                    out var state) &&
+                state.ValueKind ==
+                    JsonValueKind.String &&
+                string.Equals(
+                    state.GetString(),
+                    "pending",
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool IsUsableTrainingSample(
