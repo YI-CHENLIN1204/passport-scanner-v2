@@ -50,6 +50,7 @@ public sealed record ScanItemResponse(
     string DocumentType,
     string OriginalFileName,
     string ImageContentType,
+    bool ImageAvailable,
     string NameZh,
     string NameZhOnDocument,
     string NameEn,
