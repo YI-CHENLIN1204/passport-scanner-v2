@@ -20,6 +20,14 @@
 - V2 正式匯出格式為 CSV；欄位選擇與排序由使用者在匯出視窗設定。
 - 未經文件確認，不要自行擴充 V3 / V4 功能。
 
+## 目前開發優先順序
+
+- OCR recognition / parser 目前以固定 Test baseline `2026.10.09.1` 暫時凍結。
+- 除非使用者明確重新開啟 OCR 改善，不要自行調整 OCR model、recognition threshold、parser threshold、orientation strategy 或固定 Test split。
+- 不要把固定 Test 圖片加入 Train；Train / Validation / Test 仍以 Traveler group 切分，避免同人資料洩漏。
+- 現階段優先完成 V2 系統本體：團別收件、批次掃描生命週期、人工審核、Traveler / DocumentVersion、人物合併、資料一致性、production photo retention、Training Dataset 管理、CSV 匯出與備份／還原。
+- OCR 歷史 PoC 文件可保留作技術歷史，不可因舊文件的 TODO 將已凍結 OCR 工作重新當成目前優先事項。
+
 ## 隱私與敏感資料
 
 - 證件影像、身分證字號、護照號碼都視為敏感資料。
