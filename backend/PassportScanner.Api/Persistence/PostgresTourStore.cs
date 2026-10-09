@@ -414,6 +414,13 @@ public sealed class PostgresTourStore(
         var normalizedDocumentType =
             documentType.Trim().ToUpperInvariant();
 
+        if (!tour.RequiredDocumentTypes.Contains(
+            normalizedDocumentType,
+            StringComparer.Ordinal))
+        {
+            return false;
+        }
+
         var document = db.DocumentVersions
             .SingleOrDefault(item =>
                 item.DocumentVersionId ==
