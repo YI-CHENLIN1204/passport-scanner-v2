@@ -1318,6 +1318,43 @@ const currentDocument = computed(() =>
   ] ?? null,
 )
 
+const reviewGenderOptions = computed(() => {
+  const type =
+    currentDocument.value?.documentType
+
+  if (type === 'PASSPORT') {
+    return [
+      { value: 'M', label: 'M' },
+      { value: 'F', label: 'F' },
+      { value: 'X', label: 'X' },
+    ]
+  }
+
+  if (type === 'TAIWAN_NATIONAL_ID') {
+    return [
+      { value: 'M', label: '男' },
+      { value: 'F', label: '女' },
+    ]
+  }
+
+  if (
+    type ===
+    'TAIWAN_COMPATRIOT_PERMIT'
+  ) {
+    return [
+      { value: 'M', label: '男' },
+      { value: 'F', label: '女' },
+      { value: 'X', label: 'X' },
+    ]
+  }
+
+  return [
+    { value: 'M', label: '男 (M)' },
+    { value: 'F', label: '女 (F)' },
+    { value: 'X', label: 'X' },
+  ]
+})
+
 const permitNameConversion = computed(() =>
   convertSimplifiedNameToTraditional(
     currentDocument.value?.nameZhOnDocument ?? '',
@@ -2101,8 +2138,8 @@ onBeforeUnmount(() => {
             <span>性別</span>
             <select v-model="genderFilter">
               <option value="all">全部</option>
-              <option value="M">M</option>
-              <option value="F">F</option>
+              <option value="M">男 (M)</option>
+              <option value="F">女 (F)</option>
               <option value="X">X</option>
             </select>
           </label>
@@ -2845,14 +2882,12 @@ onBeforeUnmount(() => {
                   <option value="">
                     待確認
                   </option>
-                  <option value="M">
-                    M
-                  </option>
-                  <option value="F">
-                    F
-                  </option>
-                  <option value="X">
-                    X
+                  <option
+                    v-for="option in reviewGenderOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
                   </option>
                 </select>
               </label>
