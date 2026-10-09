@@ -14,6 +14,12 @@ import {
 
 const travelers = ref<TravelerSummaryResponse[]>([])
 const search = ref('')
+const documentTypeFilter = ref('')
+const genderFilter = ref('')
+const nationalityFilter = ref('')
+const page = ref(0)
+const pageSize = 50
+const hasNextPage = ref(false)
 const loading = ref(true)
 const error = ref('')
 const editOpen = ref(false)
@@ -170,12 +176,36 @@ async function saveEdit() {
   }
 }
 
-async function load() {
+async function load(
+  resetPage = false,
+) {
+  if (resetPage) {
+    page.value = 0
+  }
+
   loading.value = true
   error.value = ''
 
   try {
-    travelers.value = await searchTravelers(search.value, 100)
+    const rows = await searchTravelers(
+      search.value,
+      pageSize + 1,
+      {
+        documentType:
+          documentTypeFilter.value,
+        gender:
+          genderFilter.value,
+        nationality:
+          nationalityFilter.value,
+        offset:
+          page.value * pageSize,
+      },
+    )
+
+    hasNextPage.value =
+      rows.length > pageSize
+    travelers.value =
+      rows.slice(0, pageSize)
   } catch (err) {
     error.value =
       err instanceof Error
@@ -186,7 +216,33 @@ async function load() {
   }
 }
 
-onMounted(load)
+function clearFilters() {
+  search.value = ''
+  documentTypeFilter.value = ''
+  genderFilter.value = ''
+  nationalityFilter.value = ''
+  void load(true)
+}
+
+function previousPage() {
+  if (page.value <= 0 || loading.value) {
+    return
+  }
+
+  page.value -= 1
+  void load()
+}
+
+function nextPage() {
+  if (!hasNextPage.value || loading.value) {
+    return
+  }
+
+  page.value += 1
+  void load()
+}
+
+onMounted(() => load())
 </script>
 
 <template>
@@ -199,24 +255,83 @@ onMounted(load)
       </div>
     </header>
 
-    <div class="toolbar">
-      <div class="search-box">
-        <span>⌕</span>
-        <input
-          v-model="search"
-          type="search"
-          placeholder="搜尋姓名或證件資料"
-          @keyup.enter="load"
-        />
+    <section class="filter-card">
+      <div class="filter-main-row">
+        <div class="search-box">
+          <span>⌕</span>
+          <input
+            v-model="search"
+            type="search"
+            placeholder="搜尋姓名、身分證字號或證件號碼"
+            @keyup.enter="load(true)"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="search-button"
+          :disabled="loading"
+          @click="load(true)"
+        >
+          搜尋
+        </button>
       </div>
-      <button
-        type="button"
-        :disabled="loading"
-        @click="load"
-      >
-        搜尋
-      </button>
-    </div>
+
+      <div class="filter-row">
+        <label>
+          <span>證件類別</span>
+          <select v-model="documentTypeFilter">
+            <option value="">全部證件</option>
+            <option value="PASSPORT">護照</option>
+            <option value="TAIWAN_COMPATRIOT_PERMIT">
+              台胞證
+            </option>
+            <option value="TAIWAN_NATIONAL_ID">
+              身分證
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>性別</span>
+          <select v-model="genderFilter">
+            <option value="">全部</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+            <option value="X">X</option>
+          </select>
+        </label>
+
+        <label>
+          <span>國籍</span>
+          <input
+            v-model="nationalityFilter"
+            type="text"
+            placeholder="例如 TWN"
+            @keyup.enter="load(true)"
+          />
+        </label>
+
+        <div class="filter-actions">
+          <button
+            type="button"
+            class="apply-filter-button"
+            :disabled="loading"
+            @click="load(true)"
+          >
+            套用條件
+          </button>
+          <button
+            type="button"
+            class="clear-filter-button"
+            :disabled="loading"
+            @click="clearFilters"
+          >
+            清除
+          </button>
+        </div>
+      </div>
+    </section>
 
     <p v-if="error" class="error-message">{{ error }}</p>
 
@@ -286,6 +401,36 @@ onMounted(load)
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div
+      v-if="
+        !loading &&
+        (travelers.length || page > 0)
+      "
+      class="pagination-bar"
+    >
+      <span>
+        第 {{ page + 1 }} 頁 ·
+        本頁 {{ travelers.length }} 筆
+      </span>
+
+      <div>
+        <button
+          type="button"
+          :disabled="page === 0 || loading"
+          @click="previousPage"
+        >
+          上一頁
+        </button>
+        <button
+          type="button"
+          :disabled="!hasNextPage || loading"
+          @click="nextPage"
+        >
+          下一頁
+        </button>
+      </div>
     </div>
 
     <div
@@ -526,7 +671,16 @@ onMounted(load)
   letter-spacing: .12em;
 }
 
-.toolbar {
+.filter-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dce3ed;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.filter-main-row {
   display: flex;
   gap: 10px;
 }
@@ -550,14 +704,73 @@ onMounted(load)
   background: transparent;
 }
 
-.toolbar > button {
-  min-height: 44px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 10px;
+.search-button,
+.apply-filter-button,
+.clear-filter-button,
+.pagination-bar button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.search-button,
+.apply-filter-button {
+  border: 1px solid #172033;
   background: #172033;
   color: #fff;
+}
+
+.clear-filter-button,
+.pagination-bar button {
+  border: 1px solid #d5dce7;
+  background: #fff;
+  color: #334158;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(110px, .7fr)
+    minmax(140px, .8fr)
+    auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-row label {
+  display: grid;
+  gap: 5px;
+  color: #647187;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.filter-row select,
+.filter-row input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d5dce7;
+  border-radius: 9px;
+  background: #fff;
+  color: #344158;
+  font: inherit;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.search-button:disabled,
+.apply-filter-button:disabled,
+.clear-filter-button:disabled,
+.pagination-bar button:disabled {
+  cursor: default;
+  opacity: .5;
 }
 
 .table-card {
@@ -634,9 +847,32 @@ tr:last-child td {
   color: #bd3328;
 }
 
-@media (max-width: 720px) {
-  .toolbar {
+@media (max-width: 860px) {
+  .filter-main-row {
+    align-items: stretch;
     flex-direction: column;
+  }
+
+  .filter-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-actions {
+    align-self: end;
+  }
+}
+
+@media (max-width: 720px) {
+  .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    align-self: stretch;
+  }
+
+  .filter-actions > button {
+    flex: 1;
   }
 
   .table-card {
@@ -646,6 +882,20 @@ tr:last-child td {
   table {
     min-width: 720px;
   }
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #6f7b8e;
+  font-size: 12px;
+}
+
+.pagination-bar > div {
+  display: flex;
+  gap: 8px;
 }
 
 .action-cell {
