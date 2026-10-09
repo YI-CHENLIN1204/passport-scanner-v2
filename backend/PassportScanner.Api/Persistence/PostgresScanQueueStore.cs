@@ -271,7 +271,8 @@ public sealed class PostgresScanQueueStore(
             .SingleOrDefault(
                 value => value.ScanItemId == scanItemId);
 
-        return item is null
+        return item is null ||
+            item.ImageBytes.Length == 0
             ? null
             : new ScanItemImage(
                 item.ImageBytes,
@@ -406,6 +407,21 @@ public sealed class PostgresScanQueueStore(
         db.SaveChanges();
 
         return true;
+    }
+
+    public int PurgeExpiredImages(
+        DateTimeOffset now)
+    {
+        return db.Database.ExecuteSqlInterpolated(
+            $@"UPDATE scan_items
+               SET image_bytes = decode('', 'hex'),
+                   ocr_input_image_bytes = NULL,
+                   updated_at = {now}
+               WHERE delete_after <= {now}
+                 AND (
+                     octet_length(image_bytes) > 0
+                     OR ocr_input_image_bytes IS NOT NULL
+                 )");
     }
 
     private static ReviewedDocumentInput BuildReviewedDocumentInput(
@@ -713,6 +729,7 @@ public sealed class PostgresScanQueueStore(
             item.DocumentType,
             item.OriginalFileName,
             item.ImageContentType,
+            item.ImageBytes.Length > 0,
             item.NameZh,
             item.NameZhOnDocument,
             item.NameEn,
