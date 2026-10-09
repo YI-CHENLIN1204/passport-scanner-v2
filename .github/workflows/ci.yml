@@ -393,6 +393,28 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify foreign passport identity without Chinese name
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"\",\"englishName\":\"JOHN SMITH\",\"passportNumber\":\"P1234567\",\"nationality\":\"USA\",\"issuingState\":\"USA\",\"birthDate\":\"1985-04-12\",\"sex\":\"M\",\"expiryDate\":\"2034-04-11\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":false,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":null,\"chineseNameScore\":null,\"chineseNameRomanizationStatus\":\"unknown\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/foreign-passport-1.json
+
+          FOREIGN_TRAVELER_1=$(python3 -c "import json; print(json.load(open('/tmp/foreign-passport-1.json'))['travelerId'])")
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"\",\"englishName\":\"JOHN SMITH\",\"passportNumber\":\"P7654321\",\"nationality\":\"USA\",\"issuingState\":\"USA\",\"birthDate\":\"1985-04-12\",\"sex\":\"M\",\"expiryDate\":\"2039-04-11\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":false,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":null,\"chineseNameScore\":null,\"chineseNameRomanizationStatus\":\"unknown\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/foreign-passport-2.json
+
+          FOREIGN_TRAVELER_2=$(python3 -c "import json; print(json.load(open('/tmp/foreign-passport-2.json'))['travelerId'])")
+          test "$FOREIGN_TRAVELER_1" = "$FOREIGN_TRAVELER_2"
+
+          curl --fail --silent "http://localhost:5080/api/travelers/$FOREIGN_TRAVELER_1" > /tmp/foreign-traveler.json
+          python3 -c "import json; data=json.load(open('/tmp/foreign-traveler.json')); assert data['traveler']['nameZh'] == '', data; assert data['traveler']['nameEn'] == 'JOHN SMITH', data; assert len(data['documents']) == 2, data"
+
       - name: Verify large scan payload passes through frontend proxy
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
