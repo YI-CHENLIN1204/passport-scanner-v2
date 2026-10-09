@@ -329,8 +329,7 @@ function formalDocument(
 ) {
   return member.documents.find(
     document =>
-      document.documentType === type &&
-      document.isCurrent,
+      document.documentType === type,
   )
 }
 
@@ -984,8 +983,7 @@ function exportDocument(
 ) {
   return member.documents.find(
     document =>
-      document.documentType === type &&
-      document.isCurrent,
+      document.documentType === type,
   )
 }
 
@@ -1047,8 +1045,7 @@ function membersForExport(kind: ExportKind) {
   return detail.value.members.filter(member =>
     member.documents.some(
       document =>
-        document.documentType === kind &&
-        document.isCurrent,
+        document.documentType === kind,
     ),
   )
 }
