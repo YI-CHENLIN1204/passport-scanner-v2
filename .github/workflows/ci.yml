@@ -458,6 +458,36 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify traveler edits preserve current document identity rules
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/taiwan-national-id-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"tw-id\",\"chineseName\":\"編輯身分\",\"nationalId\":\"A100000029\",\"birthDate\":\"1994-04-04\",\"sex\":\"M\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":4,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/edit-id-traveler.json
+
+          EDIT_ID_TRAVELER=$(python3 -c "import json; print(json.load(open('/tmp/edit-id-traveler.json'))['travelerId'])")
+
+          EMPTY_NAME_STATUS=$(curl --silent --output /tmp/edit-id-empty-name.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$EDIT_ID_TRAVELER" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"","nameEn":"EDIT ID","birthDate":"1994-04-04","gender":"M","nationality":"TWN","nationalIdNumber":"A100000029","documents":[]}')
+          test "$EMPTY_NAME_STATUS" = "400"
+          grep -q '中文姓名不可空白' /tmp/edit-id-empty-name.json
+
+          X_GENDER_STATUS=$(curl --silent --output /tmp/edit-id-x-gender.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$EDIT_ID_TRAVELER" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"編輯身分","nameEn":"EDIT ID","birthDate":"1994-04-04","gender":"X","nationality":"TWN","nationalIdNumber":"A100000029","documents":[]}')
+          test "$X_GENDER_STATUS" = "400"
+          grep -q '性別必須為 M 或 F' /tmp/edit-id-x-gender.json
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$EDIT_ID_TRAVELER" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"編輯身分","nameEn":"EDIT ID","birthDate":"1994-04-04","gender":"M","nationality":"TWN","nationalIdNumber":null,"documents":[]}' \
+            > /tmp/edit-id-preserved.json
+
+          python3 -c "import json; data=json.load(open('/tmp/edit-id-preserved.json')); assert data['traveler']['nationalIdNumber'] == 'A100000029', data; current=[d for d in data['documents'] if d['documentType']=='TAIWAN_NATIONAL_ID' and d['isCurrent']]; assert len(current)==1, data; assert current[0]['documentNumber']=='A100000029', data"
+
       - name: Verify distinct same-name scan drafts stay separate
         run: |
           IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
