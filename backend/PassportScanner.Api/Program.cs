@@ -92,6 +92,30 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS ux_tour_members_tour_traveler
             ON tour_members (tour_id, traveler_id);
 
+        CREATE TABLE IF NOT EXISTS tour_member_documents (
+            tour_member_document_id uuid PRIMARY KEY,
+            tour_member_id uuid NOT NULL
+                REFERENCES tour_members(tour_member_id)
+                ON DELETE CASCADE,
+            document_version_id uuid NOT NULL
+                REFERENCES document_versions(document_version_id)
+                ON DELETE CASCADE,
+            document_type varchar(40) NOT NULL,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            ux_tour_member_documents_member_type
+            ON tour_member_documents (
+                tour_member_id,
+                document_type
+            );
+
+        CREATE INDEX IF NOT EXISTS
+            ix_tour_member_documents_document
+            ON tour_member_documents (document_version_id);
+
         CREATE TABLE IF NOT EXISTS scan_batches (
             scan_batch_id uuid PRIMARY KEY,
             tour_id uuid NOT NULL
@@ -227,6 +251,75 @@ using (var scope = app.Services.CreateScope())
                            COALESCE(scan.issuing_country, '')
                     )
             );
+
+        INSERT INTO tour_member_documents (
+            tour_member_document_id,
+            tour_member_id,
+            document_version_id,
+            document_type,
+            created_at,
+            updated_at
+        )
+        SELECT
+            CAST(
+                md5(
+                    latest.tour_member_id::text ||
+                    latest.document_type
+                )
+                AS uuid
+            ),
+            latest.tour_member_id,
+            latest.document_version_id,
+            latest.document_type,
+            latest.linked_at,
+            latest.linked_at
+        FROM (
+            SELECT DISTINCT ON (
+                member.tour_member_id,
+                document.document_type
+            )
+                member.tour_member_id,
+                document.document_version_id,
+                document.document_type,
+                COALESCE(
+                    scan.reviewed_at,
+                    scan.updated_at,
+                    scan.created_at
+                ) AS linked_at
+            FROM scan_items AS scan
+            INNER JOIN scan_batches AS batch
+                ON batch.scan_batch_id =
+                    scan.scan_batch_id
+            INNER JOIN document_versions AS document
+                ON document.document_version_id =
+                    scan.saved_document_version_id
+            INNER JOIN tour_members AS member
+                ON member.tour_id = batch.tour_id
+                AND member.traveler_id =
+                    document.traveler_id
+            WHERE
+                scan.review_status = 'REVIEWED'
+                AND scan.saved_document_version_id
+                    IS NOT NULL
+            ORDER BY
+                member.tour_member_id,
+                document.document_type,
+                scan.reviewed_at DESC NULLS LAST,
+                scan.updated_at DESC,
+                scan.created_at DESC
+        ) AS latest
+        ON CONFLICT (
+            tour_member_id,
+            document_type
+        )
+        DO UPDATE SET
+            document_version_id =
+                EXCLUDED.document_version_id,
+            updated_at =
+                GREATEST(
+                    tour_member_documents.updated_at,
+                    EXCLUDED.updated_at
+                );
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
