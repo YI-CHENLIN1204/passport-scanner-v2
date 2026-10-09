@@ -954,23 +954,34 @@ async function buildScanItem(file: File) {
   throw new Error('尚未選擇證件類型。')
 }
 
-async function runBatch() {
+async function runBatch(
+  targetItems: BatchFileState[] = files.value,
+) {
   if (
     running.value ||
     !selectedTourId.value ||
     !documentType.value ||
-    !files.value.length
+    !targetItems.length
   ) {
     return
   }
 
+  const batchItems = [...targetItems]
+  const retrying =
+    batchItems.length !== files.value.length
+  const alreadyCompletedCount =
+    files.value.length - batchItems.length
+
   running.value = true
   error.value = ''
-  completedCount.value = 0
+  completedCount.value =
+    alreadyCompletedCount
 
-  files.value.forEach(item => {
+  batchItems.forEach(item => {
     item.status = 'queued'
-    item.message = '等待辨識'
+    item.message = retrying
+      ? '等待重新辨識'
+      : '等待辨識'
     item.elapsedMs = null
   })
 
@@ -982,19 +993,21 @@ async function runBatch() {
 
     for (
       let index = 0;
-      index < files.value.length;
+      index < batchItems.length;
       index += 1
     ) {
-      const item = files.value[index]
+      const item = batchItems[index]
       item.status = 'processing'
       item.message =
-        `正在處理 ${index + 1} / ${files.value.length}`
+        `正在處理 ${index + 1} / ${batchItems.length}`
 
       const itemStartedAt = performance.now()
 
       try {
         progressMessage.value =
-          `正在辨識 ${index + 1} / ${files.value.length}…`
+          retrying
+            ? `正在重跑失敗項目 ${index + 1} / ${batchItems.length}…`
+            : `正在辨識 ${index + 1} / ${batchItems.length}…`
 
         const request = await buildScanItem(item.file)
         await addScanItem(batch.scanBatchId, request)
@@ -1010,22 +1023,37 @@ async function runBatch() {
       } finally {
         item.elapsedMs =
           performance.now() - itemStartedAt
-        completedCount.value = index + 1
+        completedCount.value =
+          alreadyCompletedCount + index + 1
       }
     }
+
+    const retryFailedCount =
+      batchItems.filter(
+        item => item.status === 'error',
+      ).length
+    const retrySuccessCount =
+      batchItems.length - retryFailedCount
 
     await completeScanBatch(
       batch.scanBatchId,
       {
-        attemptCount: files.value.length,
-        failedCount: failedCount.value,
+        attemptCount: batchItems.length,
+        failedCount: retryFailedCount,
       },
     )
 
-    progressMessage.value =
-      failedCount.value > 0
-        ? `批次完成：成功 ${successCount.value} 張，失敗 ${failedCount.value} 張。`
-        : `批次完成：${successCount.value} 張已全部加入待審核。`
+    if (retrying) {
+      progressMessage.value =
+        retryFailedCount > 0
+          ? `重跑完成：成功 ${retrySuccessCount} 張，仍失敗 ${retryFailedCount} 張。`
+          : `重跑完成：${retrySuccessCount} 張失敗項目已全部加入待審核。`
+    } else {
+      progressMessage.value =
+        retryFailedCount > 0
+          ? `批次完成：成功 ${retrySuccessCount} 張，失敗 ${retryFailedCount} 張。`
+          : `批次完成：${retrySuccessCount} 張已全部加入待審核。`
+    }
   } catch (err) {
     error.value =
       err instanceof Error
@@ -1034,6 +1062,15 @@ async function runBatch() {
   } finally {
     running.value = false
   }
+}
+
+function retryFailedItems() {
+  const failedItems =
+    files.value.filter(
+      item => item.status === 'error',
+    )
+
+  void runBatch(failedItems)
 }
 
 watch(
@@ -1428,17 +1465,28 @@ onBeforeUnmount(() => {
             </span>
           </div>
 
-          <button
-            type="button"
-            @click="
-              emit(
-                'navigate',
-                `/tours/${selectedTourId}`,
-              )
-            "
-          >
-            回團別審核
-          </button>
+          <div class="batch-complete-actions">
+            <button
+              v-if="failedCount"
+              type="button"
+              class="retry-button"
+              @click="retryFailedItems"
+            >
+              只重跑失敗 {{ failedCount }} 張
+            </button>
+
+            <button
+              type="button"
+              @click="
+                emit(
+                  'navigate',
+                  `/tours/${selectedTourId}`,
+                )
+              "
+            >
+              回團別審核
+            </button>
+          </div>
         </div>
 
         <footer class="upload-footer">
@@ -1456,7 +1504,7 @@ onBeforeUnmount(() => {
               !files.length ||
               batchFinished
             "
-            @click="runBatch"
+            @click="runBatch()"
           >
             {{
               running
@@ -1925,6 +1973,12 @@ progress {
   font-size: 10px;
 }
 
+.batch-complete-actions {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center;
+}
+
 .batch-complete button {
   min-height: 35px;
   padding: 0 11px;
@@ -1935,6 +1989,12 @@ progress {
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.batch-complete.partial .retry-button {
+  border-color: #e1c992;
+  background: #fffaf0;
+  color: #865b14;
 }
 
 .upload-footer {
@@ -1978,6 +2038,16 @@ button:disabled {
   .batch-complete {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .batch-complete-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batch-complete-actions button {
+    width: 100%;
   }
 
   .setup-grid {
