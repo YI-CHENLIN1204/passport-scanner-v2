@@ -26,6 +26,10 @@ public sealed class PostgresScanQueueStore(
             item => item.TourId == tourId)
             ?? throw new KeyNotFoundException("找不到指定團別。");
 
+        EnsureProductionPhotoRetentionActive(
+            tour,
+            now);
+
         var documentType = Normalize(request.DocumentType);
 
         if (!tour.RequiredDocumentTypes.Contains(
@@ -72,6 +76,10 @@ public sealed class PostgresScanQueueStore(
 
         var tour = db.Tours.Single(
             item => item.TourId == batch.TourId);
+
+        EnsureProductionPhotoRetentionActive(
+            tour,
+            now);
 
         if (string.IsNullOrWhiteSpace(request.ImageContentType) ||
             !request.ImageContentType.StartsWith(
@@ -1238,6 +1246,21 @@ public sealed class PostgresScanQueueStore(
 
         throw new ArgumentException(
             "日期格式必須為 YYYY-MM-DD。");
+    }
+
+    private static void EnsureProductionPhotoRetentionActive(
+        TourRecord tour,
+        DateTimeOffset now)
+    {
+        var deleteAfter =
+            BusinessDate.ProductionPhotoDeleteAfter(
+                tour.ReturnDate);
+
+        if (deleteAfter <= now)
+        {
+            throw new InvalidOperationException(
+                "這個團別的回國日已超過證件照片保存期限，不能再建立新的掃描收件；請先確認並修正團別日期。");
+        }
     }
 
     private static ScanBatchResponse ToBatchResponse(
