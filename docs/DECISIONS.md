@@ -861,3 +861,16 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 若正式 link 同時指向多位 Traveler，視為資料不一致，不再用弱身份條件強行去重。
 
 目的：人工審核完成後，正式外鍵關係的可信度高於任何姓名／生日推測，尤其避免同名旅客被重複顯示或錯誤去重。
+
+### D-065：Legacy scan backfill 不得猜 Traveler，SavedDocumentVersion 為正式 FK
+
+舊版 reviewed scan item 可能沒有 `saved_document_version_id`，啟動 migration 只能在關聯唯一時補資料。
+
+- 以 document type + document number，比護照時再加 issuing country 找 DocumentVersion。
+- 只有符合條件的 DocumentVersion 全部唯一屬於同一位 Traveler 時，才允許 backfill `saved_document_version_id`。
+- 若同一證件 identity 歷史上跨多位 Traveler 出現，保持 NULL，不使用 `ORDER BY ... LIMIT 1` 猜一位。
+- `scan_items.saved_document_version_id` 正式設為指向 `document_versions.document_version_id` 的 foreign key。
+- FK 採 `ON DELETE SET NULL`：若 DocumentVersion 未來真的被刪除，保留 scan history，只解除正式證件關聯。
+- 對既有資料庫加 constraint 前，若發現指向不存在 DocumentVersion 的 orphan UUID，先清成 NULL。
+
+目的：migration 只修復能確定的舊資料，不在背景啟動流程替操作人員做身份猜測。
