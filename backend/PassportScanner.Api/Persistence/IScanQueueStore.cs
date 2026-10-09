@@ -32,4 +32,7 @@ public interface IScanQueueStore
     bool DeletePendingItem(
         Guid scanItemId,
         DateTimeOffset now);
+
+    int PurgeExpiredImages(
+        DateTimeOffset now);
 }
