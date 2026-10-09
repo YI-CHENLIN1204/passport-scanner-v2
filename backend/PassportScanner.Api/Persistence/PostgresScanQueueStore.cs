@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
 using PassportScanner.Api.Services;
+using PassportScanner.Api.Validation;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -151,13 +152,23 @@ public sealed class PostgresScanQueueStore(
             request.NameZh,
             request.BirthDate,
             request.Gender);
+        var nameEn = Normalize(request.NameEn);
+        var nationalIdNumber =
+            NormalizeNullable(
+                request.NationalIdNumber ??
+                (batch.DocumentType ==
+                    "TAIWAN_NATIONAL_ID"
+                    ? request.DocumentNumber
+                    : null));
 
         var draft = ResolveDraftPerson(
             batch.TourId,
             identity.NameZh,
-            Normalize(request.NameEn),
+            nameEn,
             identity.BirthDate,
             identity.Gender,
+            ValidGroupingNationalId(
+                nationalIdNumber),
             now);
 
         var item = new ScanItemRecord
@@ -180,17 +191,12 @@ public sealed class PostgresScanQueueStore(
                 string.IsNullOrWhiteSpace(request.NameZhOnDocument)
                     ? request.NameZh
                     : request.NameZhOnDocument),
-            NameEn = Normalize(request.NameEn),
+            NameEn = nameEn,
             BirthDate = identity.BirthDate,
             Gender = identity.Gender,
             Nationality = NormalizeNullable(request.Nationality),
             NationalIdNumber =
-                NormalizeNullable(
-                    request.NationalIdNumber ??
-                    (batch.DocumentType ==
-                        "TAIWAN_NATIONAL_ID"
-                        ? request.DocumentNumber
-                        : null)),
+                nationalIdNumber,
             DocumentNumber = Normalize(request.DocumentNumber),
             IssuingCountry =
                 NormalizeNullable(request.IssuingCountry),
@@ -437,6 +443,8 @@ public sealed class PostgresScanQueueStore(
             item.NameEn,
             identity.BirthDate,
             identity.Gender,
+            ValidGroupingNationalId(
+                item.NationalIdNumber),
             now);
 
         db.SaveChanges();
@@ -730,26 +738,41 @@ public sealed class PostgresScanQueueStore(
         string nameEn,
         DateOnly? birthDate,
         string gender,
+        string? nationalIdNumber,
         DateTimeOffset now)
     {
+        if (nationalIdNumber is not null)
+        {
+            var strongMatches =
+                FindDraftMatchesByNationalId(
+                    tourId,
+                    nationalIdNumber);
+
+            if (strongMatches.Count > 0)
+            {
+                return ConsolidateDrafts(
+                    strongMatches,
+                    now);
+            }
+        }
+
         if (HasCompleteIdentity(
             nameZh,
             nameEn,
             birthDate,
             gender))
         {
-            var matches = FindDraftMatches(
+            var weakMatches = FindDraftMatches(
                 tourId,
                 nameZh,
                 nameEn,
                 birthDate!.Value,
-                gender);
+                gender,
+                nationalIdNumber);
 
-            if (matches.Count > 0)
+            if (weakMatches.Count == 1)
             {
-                return ConsolidateDrafts(
-                    matches,
-                    now);
+                return weakMatches[0];
             }
         }
 
@@ -776,6 +799,7 @@ public sealed class PostgresScanQueueStore(
         string nameEn,
         DateOnly? birthDate,
         string gender,
+        string? nationalIdNumber,
         DateTimeOffset now)
     {
         var oldDraft = db.TourPersonDrafts.Single(
@@ -798,25 +822,44 @@ public sealed class PostgresScanQueueStore(
             return;
         }
 
-        var matches = FindDraftMatches(
+        if (nationalIdNumber is not null)
+        {
+            var strongMatches =
+                FindDraftMatchesByNationalId(
+                    oldDraft.TourId,
+                    nationalIdNumber)
+                .Where(draft =>
+                    draft.DraftPersonId !=
+                        oldDraftId)
+                .ToList();
+
+            if (strongMatches.Count > 0)
+            {
+                var target = ConsolidateDrafts(
+                    strongMatches,
+                    now);
+                item.DraftPersonId =
+                    target.DraftPersonId;
+                return;
+            }
+        }
+
+        var weakMatches = FindDraftMatches(
             oldDraft.TourId,
             nameZh,
             nameEn,
             birthDate!.Value,
-            gender)
+            gender,
+            nationalIdNumber)
             .Where(draft =>
                 draft.DraftPersonId !=
                     oldDraftId)
             .ToList();
 
-        if (matches.Count > 0)
+        if (weakMatches.Count == 1)
         {
-            var target =
-                ConsolidateDrafts(
-                    matches,
-                    now);
             item.DraftPersonId =
-                target.DraftPersonId;
+                weakMatches[0].DraftPersonId;
             return;
         }
 
@@ -831,10 +874,12 @@ public sealed class PostgresScanQueueStore(
             siblingCount == 0 ||
             DraftIdentityMatches(
                 oldDraft,
+                item.ScanItemId,
                 nameZh,
                 nameEn,
                 birthDate.Value,
-                gender))
+                gender,
+                nationalIdNumber))
         {
             UpdateDraftIdentity(
                 oldDraft,
@@ -870,12 +915,48 @@ public sealed class PostgresScanQueueStore(
     }
 
     private List<TourPersonDraftRecord>
+        FindDraftMatchesByNationalId(
+            Guid tourId,
+            string nationalIdNumber)
+    {
+        var draftIds = (
+            from scan in db.ScanItems.AsNoTracking()
+            join batch in db.ScanBatches.AsNoTracking()
+                on scan.ScanBatchId
+                equals batch.ScanBatchId
+            where
+                batch.TourId == tourId &&
+                scan.NationalIdNumber ==
+                    nationalIdNumber
+            select scan.DraftPersonId
+        )
+        .Distinct()
+        .ToList();
+
+        if (draftIds.Count == 0)
+        {
+            return [];
+        }
+
+        return db.TourPersonDrafts
+            .Where(draft =>
+                draftIds.Contains(
+                    draft.DraftPersonId))
+            .OrderBy(draft =>
+                draft.CreatedAt)
+            .ThenBy(draft =>
+                draft.DraftPersonId)
+            .ToList();
+    }
+
+    private List<TourPersonDraftRecord>
         FindDraftMatches(
             Guid tourId,
             string nameZh,
             string nameEn,
             DateOnly birthDate,
-            string gender)
+            string gender,
+            string? nationalIdNumber)
     {
         var candidates = db.TourPersonDrafts
             .Where(item =>
@@ -890,39 +971,81 @@ public sealed class PostgresScanQueueStore(
 
         if (!string.IsNullOrWhiteSpace(nameZh))
         {
-            return candidates
+            candidates = candidates
                 .Where(item =>
                     item.NameZh == nameZh)
                 .ToList();
         }
+        else if (!string.IsNullOrWhiteSpace(nameEn))
+        {
+            var candidateIds = candidates
+                .Where(item =>
+                    string.IsNullOrWhiteSpace(
+                        item.NameZh))
+                .Select(item =>
+                    item.DraftPersonId)
+                .ToList();
 
-        if (string.IsNullOrWhiteSpace(nameEn))
+            var matchingIds = db.ScanItems
+                .AsNoTracking()
+                .Where(item =>
+                    candidateIds.Contains(
+                        item.DraftPersonId) &&
+                    item.NameEn == nameEn)
+                .Select(item =>
+                    item.DraftPersonId)
+                .Distinct()
+                .ToHashSet();
+
+            candidates = candidates
+                .Where(item =>
+                    matchingIds.Contains(
+                        item.DraftPersonId))
+                .ToList();
+        }
+        else
         {
             return [];
         }
 
-        var candidateIds = candidates
-            .Where(item =>
-                string.IsNullOrWhiteSpace(
-                    item.NameZh))
+        if (
+            nationalIdNumber is null ||
+            candidates.Count == 0)
+        {
+            return candidates;
+        }
+
+        var candidateDraftIds = candidates
             .Select(item =>
                 item.DraftPersonId)
             .ToList();
 
-        var matchingIds = db.ScanItems
-            .AsNoTracking()
-            .Where(item =>
-                candidateIds.Contains(
-                    item.DraftPersonId) &&
-                item.NameEn == nameEn)
-            .Select(item =>
-                item.DraftPersonId)
-            .Distinct()
-            .ToHashSet();
+        var conflictingDraftIds =
+            db.ScanItems
+                .AsNoTracking()
+                .Where(item =>
+                    candidateDraftIds.Contains(
+                        item.DraftPersonId) &&
+                    item.NationalIdNumber != null &&
+                    item.NationalIdNumber !=
+                        nationalIdNumber)
+                .Select(item => new
+                {
+                    item.DraftPersonId,
+                    item.NationalIdNumber
+                })
+                .ToList()
+                .Where(item =>
+                    ValidGroupingNationalId(
+                        item.NationalIdNumber) is
+                        not null)
+                .Select(item =>
+                    item.DraftPersonId)
+                .ToHashSet();
 
         return candidates
             .Where(item =>
-                matchingIds.Contains(
+                !conflictingDraftIds.Contains(
                     item.DraftPersonId))
             .ToList();
     }
@@ -991,16 +1114,43 @@ public sealed class PostgresScanQueueStore(
 
     private bool DraftIdentityMatches(
         TourPersonDraftRecord draft,
+        Guid currentScanItemId,
         string nameZh,
         string nameEn,
         DateOnly birthDate,
-        string gender)
+        string gender,
+        string? nationalIdNumber)
     {
         if (
             draft.BirthDate != birthDate ||
             draft.Gender != gender)
         {
             return false;
+        }
+
+        if (nationalIdNumber is not null)
+        {
+            var conflictingNationalId =
+                db.ScanItems
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.DraftPersonId ==
+                            draft.DraftPersonId &&
+                        item.ScanItemId !=
+                            currentScanItemId &&
+                        item.NationalIdNumber != null)
+                    .Select(item =>
+                        item.NationalIdNumber)
+                    .ToList()
+                    .Any(value =>
+                        ValidGroupingNationalId(value) is
+                            string valid &&
+                        valid != nationalIdNumber);
+
+            if (conflictingNationalId)
+            {
+                return false;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(nameZh))
@@ -1021,7 +1171,23 @@ public sealed class PostgresScanQueueStore(
             item =>
                 item.DraftPersonId ==
                     draft.DraftPersonId &&
+                item.ScanItemId !=
+                    currentScanItemId &&
                 item.NameEn == nameEn);
+    }
+
+    private static string? ValidGroupingNationalId(
+        string? value)
+    {
+        var normalized =
+            NormalizeNullable(value);
+
+        return
+            normalized is not null &&
+            TaiwanNationalIdReviewValidator
+                .IsValidNationalId(normalized)
+                ? normalized
+                : null;
     }
 
     private static bool HasCompleteIdentity(
