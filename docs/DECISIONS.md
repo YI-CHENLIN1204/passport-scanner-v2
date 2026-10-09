@@ -849,3 +849,15 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 人工審核修正出合法身分證字號後，如果發現目前 draft 的其他 scan item 有不同合法身分證字號，這張證件必須拆出，不可因姓名／生日相同繼續黏在一起。
 
 目的：待審核人物卡的自動分組只負責降低操作量，不能先於人工審核把兩位真人不可逆地揉成同一人。
+
+### D-064：已審核 scan item 以 SavedDocumentVersion 關聯正式 Traveler
+
+一旦 scan item 完成人工審核並產生 `saved_document_version_id`，團別統計與前端人物列不應再依姓名猜它屬於哪位 Traveler。
+
+- `ScanItemResponse` 對內提供 `savedDocumentVersionId`。
+- 後端團別 summary 先由 `saved_document_version_id -> document_versions.traveler_id` 精確映射 draft 到正式 Traveler。
+- 前端團別人物列先以 `savedDocumentVersionId` 對照本團正式 member documents。
+- 只有沒有可用正式關聯時，才依序退回 NationalIdNumber 唯一命中，再退回姓名／英文姓名 + 出生日期 + 性別唯一命中。
+- 若正式 link 同時指向多位 Traveler，視為資料不一致，不再用弱身份條件強行去重。
+
+目的：人工審核完成後，正式外鍵關係的可信度高於任何姓名／生日推測，尤其避免同名旅客被重複顯示或錯誤去重。
