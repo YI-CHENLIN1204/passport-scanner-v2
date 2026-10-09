@@ -46,6 +46,9 @@ public sealed record UpdateTravelerRequest(
     string? NationalIdNumber,
     IReadOnlyList<UpdateTravelerDocumentRequest>? Documents);
 
+public sealed record MergeTravelerRequest(
+    Guid SourceTravelerId);
+
 public sealed record DocumentStoreStatusResponse(
     string Persistence,
     int TravelerCount,
