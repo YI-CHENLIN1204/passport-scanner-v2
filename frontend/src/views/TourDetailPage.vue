@@ -15,11 +15,13 @@ import {
   getReviewQueue,
   getScanItemImageUrl,
   getTourDetail,
+  listScanBatches,
   reviewScanItem,
   setTrainingSampleSelection,
   updateTour,
   type ReviewQueuePersonResponse,
   type ReviewScanItemRequest,
+  type ScanBatchResponse,
   type ScanItemResponse,
   type TourDetailResponse,
   type TourMemberResponse,
@@ -81,6 +83,7 @@ interface OperationalRow {
 
 const detail = ref<TourDetailResponse | null>(null)
 const queue = ref<ReviewQueuePersonResponse[]>([])
+const recentBatches = ref<ScanBatchResponse[]>([])
 const loading = ref(true)
 const error = ref('')
 const exporting = ref(false)
@@ -250,6 +253,34 @@ function documentLabel(type: string) {
   }
   if (type === 'TAIWAN_NATIONAL_ID') return '身分證'
   return type
+}
+
+function batchStatusLabel(status: string) {
+  if (status === 'COMPLETED') {
+    return '已完成'
+  }
+
+  if (status === 'OPEN') {
+    return '尚未結束'
+  }
+
+  return status
+}
+
+function batchUpdatedTime(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
 }
 
 function retentionDate(value: string) {
@@ -625,21 +656,27 @@ async function load() {
   error.value = ''
 
   try {
-    const [tour, reviewQueue] =
-      await Promise.all([
-        getTourDetail(props.tourId),
-        getReviewQueue(props.tourId),
-      ])
+    const [
+      tour,
+      reviewQueue,
+      batches,
+    ] = await Promise.all([
+      getTourDetail(props.tourId),
+      getReviewQueue(props.tourId),
+      listScanBatches(props.tourId, 5),
+    ])
 
     if (!tour) {
       error.value = '找不到指定團別。'
       detail.value = null
       queue.value = []
+      recentBatches.value = []
       return
     }
 
     detail.value = tour
     queue.value = reviewQueue
+    recentBatches.value = batches
   } catch (err) {
     error.value =
       err instanceof Error
@@ -651,13 +688,18 @@ async function load() {
 }
 
 async function reloadQueue() {
-  queue.value = await getReviewQueue(
-    props.tourId,
-  )
+  const [
+    reviewQueue,
+    tour,
+    batches,
+  ] = await Promise.all([
+    getReviewQueue(props.tourId),
+    getTourDetail(props.tourId),
+    listScanBatches(props.tourId, 5),
+  ])
 
-  const tour = await getTourDetail(
-    props.tourId,
-  )
+  queue.value = reviewQueue
+  recentBatches.value = batches
 
   if (tour) detail.value = tour
 }
@@ -1810,6 +1852,59 @@ onBeforeUnmount(() => {
           </strong>
         </div>
       </div>
+
+      <section
+        v-if="recentBatches.length"
+        class="recent-batches"
+      >
+        <header>
+          <div>
+            <strong>最近掃描批次</strong>
+            <span>
+              顯示最近 {{ recentBatches.length }} 批
+            </span>
+          </div>
+          <small>
+            「尚未結束」可能仍在處理，或是上次掃描中途離開。
+          </small>
+        </header>
+
+        <div class="batch-list">
+          <article
+            v-for="batch in recentBatches"
+            :key="batch.scanBatchId"
+            class="batch-item"
+            :class="{
+              open: batch.status === 'OPEN',
+            }"
+          >
+            <div>
+              <strong>
+                {{ documentLabel(batch.documentType) }}
+              </strong>
+              <span>
+                {{ batch.itemCount }} 張
+              </span>
+            </div>
+
+            <span
+              class="batch-status"
+              :class="{
+                complete:
+                  batch.status === 'COMPLETED',
+                open:
+                  batch.status === 'OPEN',
+              }"
+            >
+              {{ batchStatusLabel(batch.status) }}
+            </span>
+
+            <time :datetime="batch.updatedAt">
+              {{ batchUpdatedTime(batch.updatedAt) }}
+            </time>
+          </article>
+        </div>
+      </section>
 
       <p
         v-if="error"
@@ -3285,6 +3380,102 @@ onBeforeUnmount(() => {
   color: #956619;
 }
 
+.recent-batches {
+  display: grid;
+  gap: 10px;
+  padding: 13px 15px;
+  border: 1px solid #dde4ed;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.recent-batches > header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.recent-batches > header > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.recent-batches > header strong {
+  color: #28364b;
+  font-size: 11px;
+}
+
+.recent-batches > header span,
+.recent-batches > header small {
+  color: #8490a2;
+  font-size: 9px;
+}
+
+.batch-list {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(180px, 1fr));
+  gap: 7px;
+}
+
+.batch-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 9px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #e5eaf0;
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.batch-item.open {
+  border-color: #eadcbf;
+  background: #fffaf2;
+}
+
+.batch-item > div {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.batch-item > div strong {
+  color: #344258;
+  font-size: 10px;
+}
+
+.batch-item > div span,
+.batch-item time {
+  color: #818c9d;
+  font-size: 9px;
+}
+
+.batch-item time {
+  grid-column: 1 / -1;
+}
+
+.batch-status {
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.batch-status.complete {
+  background: #eaf7ef;
+  color: #26734a;
+}
+
+.batch-status.open {
+  background: #fff0d7;
+  color: #916313;
+}
+
 .member-card {
   overflow: hidden;
   border: 1px solid #dde3ec;
@@ -4097,6 +4288,16 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
+  .recent-batches > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .batch-list {
+    grid-template-columns: 1fr;
+  }
+
   .table-wrap table {
     min-width: 680px;
   }
