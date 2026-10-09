@@ -1,249 +1,389 @@
 # Data Model
 
-本文件描述目前已確認的概念模型；實際 SQL schema 尚未完全凍結。
+本文件描述 Passport Scanner V2 **目前實際使用中的資料模型與資料一致性規則**。
 
-## traveler_master
+正式 persistence 為 ASP.NET Core + Entity Framework Core + PostgreSQL 16。若本文件與較早 PoC 文件衝突，以 `docs/DECISIONS.md` 中較新的已確認決策與目前 schema 為準。
 
-用途：保存「旅客本人」的穩定主檔，避免每次出團都建立重複的人。
+V2 不把電話、訂單、預計人數、出生地、發證地、發證次數等未確認或不屬於 Scanner 的資料硬塞進旅客／證件主檔。
 
-候選核心欄位：
-
-- traveler_id
-- name_zh（內部旅客主檔中文姓名；台灣護照由 VIZ OCR + 人工覆核取得）
-- name_en（護照 MRZ 英文姓名）
-- birth_date
-- gender（若保留）
-- nationality
-- personal_id_type
-- personal_id_number
-- phone / contact 資料（若由其他流程取得）
-- created_at
-- updated_at
-
-### personal_id_type / personal_id_number
-
-用來表示旅客主要個人識別證件，不把系統寫死成只有台灣身分證。
-
-例如：
-
-- TW_ID
-- PASSPORT
-- 其他未來必要類型
-
-外國旅客若沒有台灣身分證相關欄位，應允許 NULL，不可硬填台灣格式。
-
-## document_versions
-
-用途：同一旅客可能換發新護照／新台胞證，因此不能只覆蓋舊資料。
-
-候選核心欄位：
-
-- document_version_id
-- traveler_id
-- document_type
-- name_zh_on_document
-- name_en_on_document
-- document_number
-- issuing_country
-- nationality
-- issue_date
-- expiry_date
-- birth_place（若最終確認保留）
-- version_status / is_current
-- verified_at
-- created_at
-
-原則：
-
-- 新證件可以建立新版本。
-- 不應因新證件上傳就無條件覆蓋歷史版本。
-- 是否把 OCR 原始輸出長期保存，另行決定。
-
-## 團別與旅客／證件關聯
-
-團別資料與 traveler master 分開，而且「旅客擁有某張證件」與「本團實際收到／採用這張證件」必須分開表示。
-
-目前正式關係：
+## 關係總覽
 
 ```text
 tours
+  ├── scan_batches
+  │     └── scan_items
+  │            ├── tour_person_drafts
+  │            ├── document_versions (saved_document_version_id, reviewed 後)
+  │            └── training_samples
+  │                    └── ocr_evaluation_baselines
   │
   └── tour_members
-          │
-          ├── travelers
-          │      └── document_versions
-          │
-          └── tour_member_documents
-                 └── document_versions
+         ├── travelers
+         │      └── document_versions
+         └── tour_member_documents
+                └── document_versions
+
+ocr_benchmark_runs
 ```
 
-語意：
+核心概念分成三層：
 
-- `travelers`：跨團共用的旅客本人主檔。
-- `document_versions`：該旅客歷史上曾持有／覆核過的證件版本。
-- `tour_members`：這位正式 Traveler 目前掛在這一團。
-- `tour_member_documents`：這一團實際收到並採用的確切 DocumentVersion。
+1. **scan staging**：OCR 後、人工審核前的暫存資料。
+2. **formal traveler/document data**：人工審核後可信的 Traveler / DocumentVersion。
+3. **tour receipt links**：某一團實際收到並採用哪張正式證件。
 
-因此，Traveler 即使全域已有護照與台胞證，也不代表新團已經收到這兩張證件。只有建立 `tour_member_documents` 關聯後，才算本團正式已收件。
+不能因 Traveler 全域已有某張證件，就自動視為新團已經收到該證件。
 
-同一個 tour member、同一種 document type 只保留一個目前採用的版本；重掃或重新審核後可把 link 更新到新的 DocumentVersion，而全域歷史版本仍保留。
+## travelers
 
-待審核階段尚未成為正式 `tour_member_documents`，而是先存在 `tour_person_drafts` + `scan_items`。人工審核完成後才建立／更新正式 Traveler、DocumentVersion、TourMember 與 TourMemberDocument。
+用途：跨團共用的「旅客本人」主檔。
 
-## 訂購人
+目前主要欄位：
 
-既有業務構想：
+- `traveler_id`
+- `name_zh`
+- `name_en`
+- `birth_date`
+- `gender`
+- `nationality`
+- `national_id_number`
+- `personal_id_type`
+- `personal_id_number`
+- `created_at`
+- `updated_at`
 
-- 同名 + 手機末四碼可作為人工分組／尋找訂購人的輔助條件。
-- 「是否為訂購人」可作為訂單關係欄位，而不是證件 OCR 欄位。
+### 姓名與外國旅客
 
-這部分屬訂單／金流管理，不應混入 OCR 模型本身。
+資料庫中的 `name_zh` 為 required string，但外國旅客沒有中文姓名時使用空字串；只要 `name_en` 存在即可。
 
+台灣身分證、台胞證，以及 nationality / issuing country 為 TWN 的護照仍要求中文姓名。
 
-## V2 正式旅客／證件持久化
+### national_id_number
 
-資料層仍以 `ITravelerStore` 作為邊界，但正式實作已切換為 `PostgresTravelerStore` + Entity Framework Core + PostgreSQL。Docker Compose 使用 named volume 保存資料，因此 frontend／backend container 重建或重啟不會清空旅客資料。
+`national_id_number` 專門表示台灣國民身分證統一編號：
 
-### 旅客辨識／版本判斷
+- nullable。
+- 有值時必須通過台灣身分證檢查碼。
+- 性別必須為 M / F，且與第 2 碼一致。
+- 若 Traveler 有 current `TAIWAN_NATIONAL_ID`，主檔字號必須與該證件號碼一致。
 
-護照人工覆核完成後：
+### personal_id_type / personal_id_number
 
-1. 先以「護照號碼 + 簽發國」找 document version。
-   - 找到：更新該版本的覆核／有效資訊，不建立重複版本。
-   - 若該版本原本已不是 current，重新掃描不會把舊護照偷偷切回 current。
-2. 若沒有同一本護照，再找 traveler。
-   - 有中文姓名時（例如台灣護照）：優先以「中文姓名 + 出生日期 + 國籍」exact match。
-   - 沒有中文姓名的外國護照：退回「英文姓名 + 出生日期 + 國籍」exact match。
-   - 找到唯一一位：視為同一旅客的新護照，建立新的 document_version；舊護照版本改為非 current。
-   - 找不到：建立 traveler_master + 第一個 document_version。
-   - 找到多位：回傳 conflict，不自動合併，未來由人工選擇旅客。
+這兩欄是早期資料模型留下的 compatibility 欄位，不再是正式證件真相來源。
 
-此比對故意採保守 exact match，不做模糊姓名自動合併。
+正式證件內容、current / historical 狀態一律以 `document_versions` 為準。
 
-### 第一版概念約束
+保留這兩欄的原因：
 
-未來 SQL schema 應至少能表達：
+- 相容非常早期資料。
+- 旅客搜尋仍可作 legacy fallback。
+- Traveler merge 後會重新對齊仍為 current 的證件，避免指向 historical 版本。
 
-- `document_type + issuing_country + document_number` 不應重複建立相同證件版本。
-- 同一旅客同一證件類型只能有一個 current version。
-- document_versions 必須保留歷史版本。
-- traveler_master 與 document_versions 的建立／切換 current 應在同一 transaction 中完成。
-- 重複旅客合併不可只靠模糊姓名自動執行。
+不可用 PersonalId 欄位反向覆寫 DocumentVersion。
 
-這些業務規則已由 `PostgresTravelerStore` 實作；前端 review contract 不因資料庫切換而改變。
+## document_versions
 
+用途：保存同一 Traveler 的護照、台胞證、台灣身分證版本歷程。
 
-## 中文姓名與護照 VIZ
+目前欄位：
 
-MRZ 不包含中文姓名，因此 `name_zh` 不能由 MRZ parser 產生。
+- `document_version_id`
+- `traveler_id`
+- `document_type`
+- `name_zh_on_document`
+- `name_en_on_document`
+- `document_number`
+- `issuing_country`
+- `nationality`
+- `expiry_date`
+- `is_current`
+- `verified_at`
+- `created_at`
 
-台灣護照採兩路資料來源：
+目前沒有保存：
 
-- MRZ：英文姓名、護照號碼、國籍、出生日期、性別、有效期限、簽發國。
-- VIZ（Visual Inspection Zone）：中文姓名。
+- issue date。
+- birth place。
+- 發證地／發證機關。
+- 補換發次數。
+- 曾持證加註。
 
-`PP-OCRv5_mobile_rec` 本身支援繁體中文，因此不另外建立第二套 OCR engine。先從整頁 OCR 結果尋找符合中文姓名結構的候選；若找不到，才裁切台灣護照 VIZ 區域重試。
+這些欄位若未來要新增，必須先確認實際業務或分析價值。
 
-資料保存原則：
+### 版本規則
 
-- `traveler_master.name_zh`：內部旅客主檔目前採用的中文姓名。
-- `traveler_master.name_en`：內部旅客主檔目前採用的英文姓名。
-- `document_versions.name_zh_on_document`：該證件版本實際覆核後的中文姓名。
-- `document_versions.name_en_on_document`：該證件版本實際覆核後的英文姓名。
+- 同一本證件再次覆核：更新既有 DocumentVersion，不建立重複版本。
+- 新證件：建立新 DocumentVersion。
+- 舊證件重新掃描：不會偷偷把 historical version 切回 current。
+- 同一 Traveler + document type 最多只能有一筆 `is_current = true`。
+- PostgreSQL 使用 partial unique index `ux_document_versions_one_current_per_type` 強制 current invariant。
+- historical DocumentVersion 在一般 Traveler edit 中唯讀。
+- 團別可以繼續引用 historical DocumentVersion，因為「全域目前證件」不等於「某個歷史團當時使用的證件」。
 
-換發護照時即使英文羅馬拼音改變，也能保留舊版本當時的姓名。
+### 同一本證件 identity
 
+正式 persistence 查找既有 DocumentVersion 時：
 
-## 多證件共用後端
+- Passport：`document_type + document_number + issuing_country`。
+- 台胞證／台灣身分證：`document_type + document_number`。
 
-後端已將原本護照專用的 `SavePassportReview` 改為共用 `ITravelerStore.SaveDocumentReview`。
+應用層會拒絕把相同證件 identity 靜默掛到另一位 Traveler。
 
-目前正式接入：
+## Traveler identity matching
 
-- `PASSPORT`
-- `TAIWAN_COMPATRIOT_PERMIT`
-- `TAIWAN_NATIONAL_ID`
+人物自動比對採保守策略，不以模糊姓名推測。
 
-三種證件共用 traveler matching / document versioning：
+### 1. 強識別：台灣身分證字號
 
-1. 先以同類證件的 document number 尋找既有版本。
-2. 同一本證件再次覆核時更新既有版本，不重複新增。
-3. 找不到同一本證件時，以姓名 + 出生日期做保守 exact-match 找 traveler。
-4. 找到唯一旅客：建立該證件類型的新 document version。
-5. 找不到：建立新 traveler + 第一個 document version。
-6. 多位候選：回傳 conflict，不自動合併。
+若有合法 `national_id_number`：
 
-護照仍額外使用 issuing country 參與同一本護照判斷；台胞證使用其 8 位證件號碼判斷同一證件。
+- 優先搜尋相同字號 Traveler。
+- 相同合法字號可用來整理歷史重複 Traveler。
+- 不同合法字號不得因姓名／生日相同而自動合併。
 
-旅客主檔 nationality 已允許 NULL，避免從台胞證本身推導並沒有必要保存的國籍值。
+### 2. 弱識別：姓名 + 出生日期 + 性別
 
+沒有足夠強識別時：
 
-### PostgreSQL 實體表
+- 有中文姓名：`name_zh + birth_date + gender`。
+- 沒有中文姓名的外國旅客：`name_en + birth_date + gender`，且只比對同樣沒有中文姓名的 Traveler。
+- 只在唯一命中時自動使用。
+- 命中多位時回傳 ambiguous conflict，不猜其中一位。
 
-#### travelers
+Nationality 不再被當成能消除同名歧義的強識別。
 
-核心欄位：
+### 3. 人工 merge
 
-- traveler_id
-- name_zh
-- name_en
-- birth_date
-- gender
-- nationality
-- personal_id_type
-- personal_id_number
-- created_at
-- updated_at
+若同一真人已因歷史 OCR／人工資料形成兩個 Traveler：
 
-#### document_versions
+- 由操作人員明確指定來源與保留 Traveler。
+- 出生日期、性別、兩邊皆有但不同的身分證字號等衝突會阻止 merge。
+- DocumentVersion、TourMember、TourMemberDocument、reviewed scan/draft 關聯一起整理。
+- 同一團同證件類型若兩邊掛的是不同證件，不替操作人員猜哪一本；先要求處理團別證件衝突。
+- merge 全程使用 transaction。
 
-核心欄位：
+## tours
 
-- document_version_id
-- traveler_id
-- document_type
-- name_zh_on_document
-- name_en_on_document
-- document_number
-- issuing_country
-- nationality
-- expiry_date
-- is_current
-- verified_at
-- created_at
+用途：Scanner 內部的一個團別／出團工作區。
 
-同一旅客可同時擁有護照、台胞證與台灣身分證；同一證件種類換發時，舊版本保留並將 `is_current` 設為 false。
+目前欄位：
 
+- `tour_id`
+- `tour_name`
+- `departure_date`
+- `return_date`
+- `required_document_types` (PostgreSQL `text[]`)
+- `created_at`
+- `updated_at`
 
-#### tour_members
+Scanner 不保存預計人數。
 
-用途：記錄正式 Traveler 與團別的關聯。
+此團需要哪些證件直接由 `required_document_types` 決定，不硬編碼「國旅／出境／大陸團」業務類型。
 
-核心欄位：
+## tour_members
 
-- tour_member_id
-- tour_id
-- traveler_id
-- created_at
+用途：正式 Traveler 與團別的關聯。
 
-同一團同一 Traveler 不重複建立。
+欄位：
 
-#### tour_member_documents
+- `tour_member_id`
+- `tour_id`
+- `traveler_id`
+- `created_at`
 
-用途：記錄「這一團實際收到／採用哪一個證件版本」。
+資料庫 unique constraint：
 
-核心欄位：
+```text
+tour_id + traveler_id
+```
 
-- tour_member_document_id
-- tour_member_id
-- document_version_id
-- document_type
-- created_at
-- updated_at
+同一 Traveler 在同一團只能有一筆 TourMember。
 
-約束：
+## tour_member_documents
 
-- `tour_member_id + document_type` 唯一。
+用途：表示「這一團實際收到／採用哪個 DocumentVersion」。
+
+欄位：
+
+- `tour_member_document_id`
+- `tour_member_id`
+- `document_version_id`
+- `document_type`
+- `created_at`
+- `updated_at`
+
+資料庫 unique constraint：
+
+```text
+tour_member_id + document_type
+```
+
+規則：
+
 - link 必須指向該 TourMember 所屬 Traveler 的 DocumentVersion。
-- 從團別移除已審核證件時，只刪本團 link 與對應 scan staging，不刪全域 Traveler / DocumentVersion。
-- 若同團同人同類證件仍有其他 reviewed scan item，link 回退到最近的剩餘版本。
+- 重掃／重新審核可把本團 link 更新到新的 DocumentVersion。
+- 從團別移除已審核證件，不刪全域 Traveler / DocumentVersion。
+- 若同團同人同類型仍有其他 reviewed scan item，link 回退到最近的剩餘版本。
+- 沒有任何正式證件 link 後，空的 TourMember 會移除。
+
+## scan_batches
+
+用途：記錄一次「同一團 + 同一證件類型」的批次掃描執行。
+
+主要欄位：
+
+- `scan_batch_id`
+- `tour_id`
+- `document_type`
+- `status`
+- `item_count`
+- `attempt_count`
+- `failed_count`
+- `created_at`
+- `updated_at`
+
+狀態：
+
+- `OPEN`：尚未正式完成，可能仍在處理或曾中途離開。
+- `COMPLETED`：前端已回報本批 attempt / failed 統計。
+
+`COMPLETED` 後不可再新增 scan item。
+
+## tour_person_drafts
+
+用途：人工審核前的人物暫存群組。
+
+主要欄位：
+
+- `draft_person_id`
+- `tour_id`
+- `name_zh`
+- `birth_date`
+- `gender`
+- `created_at`
+- `updated_at`
+
+Draft grouping 同樣採保守策略：
+
+- 合法 NationalIdNumber 相同是強識別。
+- 姓名／英文姓名 + 出生日期 + 性別只在唯一命中一個 draft 時自動掛上。
+- 弱條件命中多筆時保持獨立，不 consolidation。
+- 已審核 scan item 有 `saved_document_version_id` 後，優先以正式 DocumentVersion → Traveler 關聯判斷，不再依姓名猜。
+
+## scan_items
+
+用途：每張上傳證件在人工覆核前後的 staging / review record。
+
+主要欄位：
+
+- `scan_item_id`
+- `scan_batch_id`
+- `draft_person_id`
+- `document_type`
+- `original_file_name`
+- `image_content_type`
+- `image_bytes`
+- `ocr_input_image_content_type`
+- `ocr_input_image_bytes`
+- `name_zh`
+- `name_zh_on_document`
+- `name_en`
+- `birth_date`
+- `gender`
+- `nationality`
+- `national_id_number`
+- `document_number`
+- `issuing_country`
+- `expiry_date`
+- `ocr_payload_json`
+- `review_status`
+- `saved_document_version_id`
+- `reviewed_at`
+- `delete_after`
+- `created_at`
+- `updated_at`
+
+`saved_document_version_id`：
+
+- 人工審核成功後指向正式 DocumentVersion。
+- PostgreSQL FK → `document_versions.document_version_id`。
+- `ON DELETE SET NULL`，保留 scan history。
+
+### Production photo retention
+
+- production `image_bytes` / OCR input image bytes 只保留到團別回國日後 7 個完整日曆日。
+- 到期由 background worker 清除圖片 bytes，不刪 scan row。
+- 已過 retention cutoff 的團不得再建立新的 production scan intake。
+- PENDING 原圖已刪除後不能完成審核。
+- 結構化欄位、正式 Traveler / DocumentVersion 與團別資料繼續保留。
+
+## training_samples
+
+用途：操作人員明確選入、可供未來 OCR 改善的私人 Dataset 副本。
+
+主要欄位：
+
+- `training_sample_id`
+- `source_scan_item_id`
+- `document_type`
+- `image_content_type`
+- `image_bytes`
+- `ocr_input_image_content_type`
+- `ocr_input_image_bytes`
+- `ocr_payload_json`
+- `ground_truth_json`
+- `selected_at`
+- `updated_at`
+
+規則：
+
+- 每個 source scan item 最多一筆 training sample。
+- `source_scan_item_id` FK → `scan_items.scan_item_id`，`ON DELETE CASCADE`。
+- production retention 不刪 scan row，所以不會因 production 圖片到期而刪 training sample。
+- Training Dataset 擁有自己的 image / OCR input 副本。
+- 只有人工明確選入且完成審核的資料可進 Dataset。
+- Train / Validation / Test 必須以 Traveler group 分離，避免同一真人跨 split。
+- 固定 Test 不用於反覆調參；OCR 重新開啟條件見 D-072。
+
+## ocr_evaluation_baselines
+
+用途：固定某個 Training Sample 的 OCR evaluation baseline。
+
+- 主鍵也是 `training_sample_id`。
+- FK → `training_samples`，`ON DELETE CASCADE`。
+- 保存 `result_json` 與 `captured_at`。
+
+## ocr_benchmark_runs
+
+用途：保存 benchmark run 摘要與 pipeline version，追蹤每次固定 Test 重跑結果。
+
+主要欄位：
+
+- `benchmark_run_id`
+- `pipeline_version`
+- `sample_count`
+- `failed_count`
+- `baseline_created_count`
+- `summary_json`
+- `created_at`
+
+## 人工編輯規則
+
+「旅客資料」允許修正 current Traveler / DocumentVersion，但不能繞過正式 identity validation：
+
+- historical DocumentVersion 唯讀。
+- current 台灣身分證存在時，主檔 NationalIdNumber 必須與證件號碼一致。
+- 有台灣身分證字號時，性別只能 M / F 且必須符合字號第 2 碼。
+- current 台灣身分證、台胞證或 TWN 護照存在時，中文姓名不可清空。
+- Traveler birth date 修改後，所有 current documents 都重新驗證，例如 passport / permit expiry 必須晚於出生日期。
+- Traveler、current document、reviewed scan/draft、Training ground truth 同步更新採同一 transaction。
+
+## 訂購人／訂單資料
+
+訂購人、手機、訂單、金流、最低出團人數等不屬於目前 Scanner V2 schema。
+
+未來 ERP / 訂單系統若需要：
+
+- 「是否為訂購人」應是訂單關係，不是 OCR 欄位。
+- 手機等 contact data 不應為了人物 OCR matching 而加入證件模型。
+- Scanner 可透過正式 integration layer 與 ERP 關聯，不在目前 schema 預埋未確認欄位。
