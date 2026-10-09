@@ -841,6 +841,9 @@ jobs:
           BASELINE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM ocr_evaluation_baselines WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
           test "$BASELINE_COUNT" = "1"
 
+          curl --fail --silent "http://localhost:5080/api/ocr-training/evaluation-samples?split=test" > /tmp/fixed-test-samples.json
+          python3 -c "import json; rows=json.load(open('/tmp/fixed-test-samples.json')); assert '$FIXED_TRAINING_SAMPLE_ID' in {row['trainingSampleId'] for row in rows}, rows"
+
           DESELECT_STATUS=$(curl --silent --output /tmp/fixed-baseline-deselect.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
             -H 'Content-Type: application/json' \
             -d '{"selected":false}')
