@@ -1183,7 +1183,11 @@ export interface TrainingEvaluationSampleResponse {
 }
 
 export async function getTrainingEvaluationSamples(
-  split: 'train' | 'validation' | 'test' = 'test',
+  split:
+    | 'train'
+    | 'validation'
+    | 'test'
+    | 'fixed-test' = 'test',
 ) {
   const params = new URLSearchParams({ split })
   const response = await fetch(
