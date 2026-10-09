@@ -61,7 +61,7 @@ public sealed record TravelerDetail(
 public sealed class AmbiguousTravelerMatchException : Exception
 {
     public AmbiguousTravelerMatchException()
-        : base("找到多位可能相同的旅客，系統不會自動合併。")
+        : base("找到多位可能相同的旅客，系統不會自動合併；請先到「旅客資料」確認並人工合併。")
     {
     }
 }
