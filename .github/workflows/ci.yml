@@ -443,6 +443,42 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify distinct same-name scan drafts stay separate
+        run: |
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Draft Identity","departureDate":"2099-11-12","returnDate":"2099-11-14","requiredDocumentTypes":["TAIWAN_NATIONAL_ID"]}' \
+            > /tmp/draft-identity-tour.json
+          DRAFT_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/draft-identity-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$DRAFT_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_NATIONAL_ID"}' \
+            > /tmp/draft-identity-batch.json
+          DRAFT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/draft-identity-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$DRAFT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"same-a.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"同名待審\",\"nameEn\":\"\",\"birthDate\":\"1990-01-01\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":\"A100000001\",\"documentNumber\":\"A100000001\",\"issuingCountry\":\"TWN\",\"expiryDate\":null,\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/draft-identity-a.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$DRAFT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"same-b.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"同名待審\",\"nameEn\":\"\",\"birthDate\":\"1990-01-01\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":\"A100000010\",\"documentNumber\":\"A100000010\",\"issuingCountry\":\"TWN\",\"expiryDate\":null,\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/draft-identity-b.json
+
+          DRAFT_ID_A=$(python3 -c "import json; print(json.load(open('/tmp/draft-identity-a.json'))['draftPersonId'])")
+          DRAFT_ID_B=$(python3 -c "import json; print(json.load(open('/tmp/draft-identity-b.json'))['draftPersonId'])")
+          test "$DRAFT_ID_A" != "$DRAFT_ID_B"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$DRAFT_TOUR_ID/review-queue" > /tmp/draft-identity-queue.json
+          python3 -c "import json; rows=json.load(open('/tmp/draft-identity-queue.json')); assert len(rows) == 2, rows; assert len({row['draftPersonId'] for row in rows}) == 2, rows; assert {d['nationalIdNumber'] for row in rows for d in row['documents']} == {'A100000001','A100000010'}, rows"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$DRAFT_TOUR_ID" > /tmp/draft-identity-tour-after.json
+          python3 -c "import json; data=json.load(open('/tmp/draft-identity-tour-after.json')); assert data['tour']['memberCount'] == 2, data; assert data['tour']['pendingReviewCount'] == 2, data; assert data['tour']['receivedDocumentCount'] == 2, data"
+
       - name: Verify distinct same-name travelers stay separate
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
