@@ -178,9 +178,37 @@ using (var scope = app.Services.CreateScope())
                 REFERENCES document_versions(document_version_id)
                 ON DELETE CASCADE,
             document_type varchar(40) NOT NULL,
+            snapshot_name_zh varchar(80) NOT NULL,
+            snapshot_name_en varchar(160) NOT NULL,
+            snapshot_birth_date date NOT NULL,
+            snapshot_gender varchar(12) NOT NULL,
+            snapshot_nationality varchar(12) NULL,
+            snapshot_national_id_number varchar(20) NULL,
+            snapshot_name_zh_on_document varchar(80) NOT NULL,
+            snapshot_name_en_on_document varchar(160) NOT NULL,
+            snapshot_document_number varchar(80) NOT NULL,
+            snapshot_issuing_country varchar(12) NULL,
+            snapshot_document_nationality varchar(12) NULL,
+            snapshot_expiry_date date NULL,
+            snapshot_verified_at timestamptz NOT NULL,
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
+
+        ALTER TABLE tour_member_documents
+            ADD COLUMN IF NOT EXISTS snapshot_name_zh varchar(80) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_name_en varchar(160) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_birth_date date NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_gender varchar(12) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_nationality varchar(12) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_national_id_number varchar(20) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_name_zh_on_document varchar(80) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_name_en_on_document varchar(160) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_document_number varchar(80) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_issuing_country varchar(12) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_document_nationality varchar(12) NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_expiry_date date NULL,
+            ADD COLUMN IF NOT EXISTS snapshot_verified_at timestamptz NULL;
 
         CREATE UNIQUE INDEX IF NOT EXISTS
             ux_tour_member_documents_member_type
@@ -368,6 +396,19 @@ using (var scope = app.Services.CreateScope())
             tour_member_id,
             document_version_id,
             document_type,
+            snapshot_name_zh,
+            snapshot_name_en,
+            snapshot_birth_date,
+            snapshot_gender,
+            snapshot_nationality,
+            snapshot_national_id_number,
+            snapshot_name_zh_on_document,
+            snapshot_name_en_on_document,
+            snapshot_document_number,
+            snapshot_issuing_country,
+            snapshot_document_nationality,
+            snapshot_expiry_date,
+            snapshot_verified_at,
             created_at,
             updated_at
         )
@@ -382,6 +423,19 @@ using (var scope = app.Services.CreateScope())
             latest.tour_member_id,
             latest.document_version_id,
             latest.document_type,
+            latest.snapshot_name_zh,
+            latest.snapshot_name_en,
+            latest.snapshot_birth_date,
+            latest.snapshot_gender,
+            latest.snapshot_nationality,
+            latest.snapshot_national_id_number,
+            latest.snapshot_name_zh_on_document,
+            latest.snapshot_name_en_on_document,
+            latest.snapshot_document_number,
+            latest.snapshot_issuing_country,
+            latest.snapshot_document_nationality,
+            latest.snapshot_expiry_date,
+            latest.snapshot_verified_at,
             latest.linked_at,
             latest.linked_at
         FROM (
@@ -392,6 +446,46 @@ using (var scope = app.Services.CreateScope())
                 member.tour_member_id,
                 document.document_version_id,
                 document.document_type,
+                COALESCE(
+                    NULLIF(scan.name_zh, ''),
+                    traveler.name_zh,
+                    ''
+                ) AS snapshot_name_zh,
+                COALESCE(
+                    NULLIF(scan.name_en, ''),
+                    traveler.name_en,
+                    ''
+                ) AS snapshot_name_en,
+                COALESCE(
+                    scan.birth_date,
+                    traveler.birth_date
+                ) AS snapshot_birth_date,
+                COALESCE(
+                    NULLIF(scan.gender, ''),
+                    traveler.gender
+                ) AS snapshot_gender,
+                COALESCE(
+                    scan.nationality,
+                    traveler.nationality
+                ) AS snapshot_nationality,
+                COALESCE(
+                    scan.national_id_number,
+                    traveler.national_id_number
+                ) AS snapshot_national_id_number,
+                document.name_zh_on_document
+                    AS snapshot_name_zh_on_document,
+                document.name_en_on_document
+                    AS snapshot_name_en_on_document,
+                document.document_number
+                    AS snapshot_document_number,
+                document.issuing_country
+                    AS snapshot_issuing_country,
+                document.nationality
+                    AS snapshot_document_nationality,
+                document.expiry_date
+                    AS snapshot_expiry_date,
+                document.verified_at
+                    AS snapshot_verified_at,
                 COALESCE(
                     scan.reviewed_at,
                     scan.updated_at,
@@ -404,6 +498,9 @@ using (var scope = app.Services.CreateScope())
             INNER JOIN document_versions AS document
                 ON document.document_version_id =
                     scan.saved_document_version_id
+            INNER JOIN travelers AS traveler
+                ON traveler.traveler_id =
+                    document.traveler_id
             INNER JOIN tour_members AS member
                 ON member.tour_id = batch.tour_id
                 AND member.traveler_id =
@@ -424,6 +521,132 @@ using (var scope = app.Services.CreateScope())
             document_type
         )
         DO NOTHING;
+
+        WITH snapshot_source AS (
+            SELECT
+                link.tour_member_document_id,
+                COALESCE(
+                    NULLIF(scan.name_zh, ''),
+                    traveler.name_zh,
+                    ''
+                ) AS snapshot_name_zh,
+                COALESCE(
+                    NULLIF(scan.name_en, ''),
+                    traveler.name_en,
+                    ''
+                ) AS snapshot_name_en,
+                COALESCE(
+                    scan.birth_date,
+                    traveler.birth_date
+                ) AS snapshot_birth_date,
+                COALESCE(
+                    NULLIF(scan.gender, ''),
+                    traveler.gender
+                ) AS snapshot_gender,
+                COALESCE(
+                    scan.nationality,
+                    traveler.nationality
+                ) AS snapshot_nationality,
+                COALESCE(
+                    scan.national_id_number,
+                    traveler.national_id_number
+                ) AS snapshot_national_id_number,
+                document.name_zh_on_document
+                    AS snapshot_name_zh_on_document,
+                document.name_en_on_document
+                    AS snapshot_name_en_on_document,
+                document.document_number
+                    AS snapshot_document_number,
+                document.issuing_country
+                    AS snapshot_issuing_country,
+                document.nationality
+                    AS snapshot_document_nationality,
+                document.expiry_date
+                    AS snapshot_expiry_date,
+                document.verified_at
+                    AS snapshot_verified_at
+            FROM tour_member_documents AS link
+            INNER JOIN tour_members AS member
+                ON member.tour_member_id =
+                    link.tour_member_id
+            INNER JOIN travelers AS traveler
+                ON traveler.traveler_id =
+                    member.traveler_id
+            INNER JOIN document_versions AS document
+                ON document.document_version_id =
+                    link.document_version_id
+            LEFT JOIN LATERAL (
+                SELECT candidate.*
+                FROM scan_items AS candidate
+                INNER JOIN scan_batches AS batch
+                    ON batch.scan_batch_id =
+                        candidate.scan_batch_id
+                WHERE
+                    candidate.saved_document_version_id =
+                        link.document_version_id
+                    AND candidate.review_status =
+                        'REVIEWED'
+                    AND batch.tour_id =
+                        member.tour_id
+                ORDER BY
+                    candidate.reviewed_at DESC NULLS LAST,
+                    candidate.updated_at DESC,
+                    candidate.created_at DESC
+                LIMIT 1
+            ) AS scan ON TRUE
+        )
+        UPDATE tour_member_documents AS link
+        SET
+            snapshot_name_zh =
+                source.snapshot_name_zh,
+            snapshot_name_en =
+                source.snapshot_name_en,
+            snapshot_birth_date =
+                source.snapshot_birth_date,
+            snapshot_gender =
+                source.snapshot_gender,
+            snapshot_nationality =
+                source.snapshot_nationality,
+            snapshot_national_id_number =
+                source.snapshot_national_id_number,
+            snapshot_name_zh_on_document =
+                source.snapshot_name_zh_on_document,
+            snapshot_name_en_on_document =
+                source.snapshot_name_en_on_document,
+            snapshot_document_number =
+                source.snapshot_document_number,
+            snapshot_issuing_country =
+                source.snapshot_issuing_country,
+            snapshot_document_nationality =
+                source.snapshot_document_nationality,
+            snapshot_expiry_date =
+                source.snapshot_expiry_date,
+            snapshot_verified_at =
+                source.snapshot_verified_at
+        FROM snapshot_source AS source
+        WHERE
+            link.tour_member_document_id =
+                source.tour_member_document_id
+            AND (
+                link.snapshot_name_zh IS NULL
+                OR link.snapshot_name_en IS NULL
+                OR link.snapshot_birth_date IS NULL
+                OR link.snapshot_gender IS NULL
+                OR link.snapshot_name_zh_on_document IS NULL
+                OR link.snapshot_name_en_on_document IS NULL
+                OR link.snapshot_document_number IS NULL
+                OR link.snapshot_verified_at IS NULL
+            );
+
+        ALTER TABLE tour_member_documents
+            ALTER COLUMN snapshot_name_zh SET NOT NULL,
+            ALTER COLUMN snapshot_name_en SET NOT NULL,
+            ALTER COLUMN snapshot_birth_date SET NOT NULL,
+            ALTER COLUMN snapshot_gender SET NOT NULL,
+            ALTER COLUMN snapshot_name_zh_on_document SET NOT NULL,
+            ALTER COLUMN snapshot_name_en_on_document SET NOT NULL,
+            ALTER COLUMN snapshot_document_number SET NOT NULL,
+            ALTER COLUMN snapshot_verified_at SET NOT NULL;
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
