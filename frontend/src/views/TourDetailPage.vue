@@ -246,6 +246,15 @@ const exportFieldDefinitions: ExportFieldDefinition[] = [
   },
 ]
 
+function displayGender(
+  value: string | null | undefined,
+) {
+  if (value === 'M') return '男'
+  if (value === 'F') return '女'
+  if (value === 'X') return 'X'
+  return value ?? ''
+}
+
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
   if (type === 'TAIWAN_COMPATRIOT_PERMIT') {
@@ -2218,7 +2227,7 @@ onBeforeUnmount(() => {
                         '生日待確認'
                       }}
                       <template v-if="row.gender">
-                        · {{ row.gender }}
+                        · {{ displayGender(row.gender) }}
                       </template>
                     </small>
                   </div>
