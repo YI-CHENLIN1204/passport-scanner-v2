@@ -312,14 +312,7 @@ using (var scope = app.Services.CreateScope())
             tour_member_id,
             document_type
         )
-        DO UPDATE SET
-            document_version_id =
-                EXCLUDED.document_version_id,
-            updated_at =
-                GREATEST(
-                    tour_member_documents.updated_at,
-                    EXCLUDED.updated_at
-                );
+        DO NOTHING;
 
         CREATE INDEX IF NOT EXISTS ix_scan_items_draft_review_status
             ON scan_items (draft_person_id, review_status);
