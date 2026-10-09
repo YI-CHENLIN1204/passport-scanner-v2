@@ -370,12 +370,26 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-after-rejected-date-edit.json
           python3 -c "import json; data=json.load(open('/tmp/tour-after-rejected-date-edit.json')); assert data['tour']['departureDate'] == '2099-10-10', data; assert data['tour']['returnDate'] == '2099-10-12', data"
 
-      - name: Verify expired pending photo cannot be reviewed
+      - name: Verify expired pending photo cutoff is enforced before purge
         run: |
           PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
 
           docker compose exec -T database psql -U passport_scanner -d passport_scanner -v ON_ERROR_STOP=1 -c "UPDATE scan_items SET delete_after = NOW() - INTERVAL '1 hour' WHERE scan_item_id = '$PASSPORT_ITEM_ID';"
+
+          IMAGE_BYTES_BEFORE_PURGE=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT octet_length(image_bytes) FROM scan_items WHERE scan_item_id = '$PASSPORT_ITEM_ID';" | tr -d '\r')
+          test "$IMAGE_BYTES_BEFORE_PURGE" -gt "0"
+
+          IMAGE_STATUS=$(curl --silent --output /tmp/expired-pending-image.bin --write-out "%{http_code}" "http://localhost:5080/api/scan-items/$PASSPORT_ITEM_ID/image")
+          test "$IMAGE_STATUS" = "404"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/expired-pending-queue-before-purge.json
+          python3 -c "import json; rows=json.load(open('/tmp/expired-pending-queue-before-purge.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs; assert docs[0]['imageAvailable'] is False, docs"
+
+          STATUS=$(curl --silent --output /tmp/expired-pending-review.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$PASSPORT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameZhOnDocument":"王小明","nameEn":"WANG HSIAO MING","birthDate":"1990-01-15","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"T12345678","issuingCountry":"TWN","expiryDate":"2030-12-31","useForTraining":false}')
+          test "$STATUS" = "400"
 
           docker compose restart backend
           for i in {1..30}; do
@@ -393,13 +407,10 @@ jobs:
             sleep 2
           done
 
-          STATUS=$(curl --silent --output /tmp/expired-pending-review.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$PASSPORT_ITEM_ID/review" \
-            -H 'Content-Type: application/json' \
-            -d '{"nameZh":"王小明","nameZhOnDocument":"王小明","nameEn":"WANG HSIAO MING","birthDate":"1990-01-15","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"T12345678","issuingCountry":"TWN","expiryDate":"2030-12-31","useForTraining":false}')
-          test "$STATUS" = "400"
+          test "$IMAGE_BYTES" = "0"
 
-          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/expired-pending-queue.json
-          python3 -c "import json; rows=json.load(open('/tmp/expired-pending-queue.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs; assert docs[0]['imageAvailable'] is False, docs"
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/expired-pending-queue-after-purge.json
+          python3 -c "import json; rows=json.load(open('/tmp/expired-pending-queue-after-purge.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['imageAvailable'] is False, docs"
 
       - name: Verify legacy review preflight leaves no partial master data
         run: |
