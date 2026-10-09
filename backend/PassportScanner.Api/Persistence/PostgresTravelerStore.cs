@@ -702,9 +702,77 @@ public sealed class PostgresTravelerStore(
             }
         }
 
+        var currentDocuments = db.DocumentVersions
+            .Where(item =>
+                item.TravelerId == travelerId &&
+                item.IsCurrent)
+            .ToList();
+
+        var currentNationalIdDocuments =
+            currentDocuments
+                .Where(item =>
+                    item.DocumentType ==
+                        "TAIWAN_NATIONAL_ID")
+                .ToList();
+
+        if (currentNationalIdDocuments.Count > 1)
+        {
+            throw new InvalidOperationException(
+                "同一旅客存在多張目前使用中的台灣身分證，請先修復證件版本資料。");
+        }
+
+        if (currentNationalIdDocuments.Count == 1)
+        {
+            var currentNationalId =
+                currentNationalIdDocuments[0]
+                    .DocumentNumber;
+
+            if (
+                effectiveNationalIdNumber is not null &&
+                effectiveNationalIdNumber !=
+                    currentNationalId)
+            {
+                throw new ArgumentException(
+                    "旅客主檔身分證字號與目前身分證證件號碼不一致。");
+            }
+
+            effectiveNationalIdNumber =
+                currentNationalId;
+        }
+
+        var requiresChineseName =
+            currentDocuments.Any(document =>
+                document.DocumentType is
+                    "TAIWAN_COMPATRIOT_PERMIT" or
+                    "TAIWAN_NATIONAL_ID" ||
+                (
+                    document.DocumentType ==
+                        "PASSPORT" &&
+                    (
+                        document.Nationality ==
+                            "TWN" ||
+                        document.IssuingCountry ==
+                            "TWN"
+                    )
+                ));
+
+        if (
+            requiresChineseName &&
+            string.IsNullOrWhiteSpace(nameZh))
+        {
+            throw new ArgumentException(
+                "目前證件包含台灣身分證、台胞證或台灣護照，旅客中文姓名不可空白。");
+        }
+
         if (
             effectiveNationalIdNumber is not null)
         {
+            if (gender is not ("M" or "F"))
+            {
+                throw new ArgumentException(
+                    "有台灣身分證字號的旅客性別必須為 M 或 F。");
+            }
+
             ValidateNationalIdGender(
                 effectiveNationalIdNumber,
                 gender);
@@ -1800,7 +1868,8 @@ public sealed class PostgresTravelerStore(
     {
         if (gender is not ("M" or "F"))
         {
-            return;
+            throw new ArgumentException(
+                "有台灣身分證字號的旅客性別必須為 M 或 F。");
         }
 
         var expectedGender =
