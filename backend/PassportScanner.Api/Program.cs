@@ -740,13 +740,18 @@ app.MapPost(
 app.MapGet(
     "/api/tours/{tourId:guid}/review-queue",
     (Guid tourId, IScanQueueStore store) =>
-        Results.Ok(store.ListReviewQueue(tourId)));
+        Results.Ok(
+            store.ListReviewQueue(
+                tourId,
+                DateTimeOffset.UtcNow)));
 
 app.MapGet(
     "/api/scan-items/{scanItemId:guid}/image",
     (Guid scanItemId, IScanQueueStore store) =>
     {
-        var image = store.GetItemImage(scanItemId);
+        var image = store.GetItemImage(
+            scanItemId,
+            DateTimeOffset.UtcNow);
 
         return image is null
             ? Results.NotFound()
