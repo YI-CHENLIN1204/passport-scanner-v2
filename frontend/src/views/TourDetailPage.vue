@@ -1882,8 +1882,17 @@ onBeforeUnmount(() => {
               <strong>
                 {{ documentLabel(batch.documentType) }}
               </strong>
-              <span>
-                {{ batch.itemCount }} 張
+              <span
+                v-if="batch.status === 'COMPLETED'"
+              >
+                成功 {{ batch.itemCount }}
+                / {{ batch.attemptCount }} 張
+                <template v-if="batch.failedCount">
+                  · 失敗 {{ batch.failedCount }}
+                </template>
+              </span>
+              <span v-else>
+                已加入 {{ batch.itemCount }} 張
               </span>
             </div>
 
