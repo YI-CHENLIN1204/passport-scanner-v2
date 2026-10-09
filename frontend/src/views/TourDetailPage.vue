@@ -1259,7 +1259,7 @@ const permitNameConversion = computed(() =>
 )
 
 const currentImageUrl = computed(() =>
-  currentDocument.value
+  currentDocument.value?.imageAvailable
     ? getScanItemImageUrl(
         currentDocument.value.scanItemId,
       )
@@ -1476,6 +1476,16 @@ async function onTrainingSelectionChange(
 
   const selected = input.checked
   const previous = reviewUseForTraining.value
+
+  if (
+    selected &&
+    !document.imageAvailable
+  ) {
+    input.checked = previous
+    reviewError.value =
+      '正式收件照片已依保存期限刪除，無法再加入 OCR 訓練資料集。'
+    return
+  }
 
   reviewUseForTraining.value = selected
   reviewError.value = ''
@@ -2420,7 +2430,10 @@ onBeforeUnmount(() => {
                 原始覆核圖
               </span>
 
-              <div class="image-controls">
+              <div
+                v-if="currentDocument.imageAvailable"
+                class="image-controls"
+              >
                 <div class="rotation-controls">
                   <button
                     type="button"
@@ -2478,6 +2491,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div
+              v-if="currentDocument.imageAvailable"
               ref="reviewImagePanel"
               class="review-image-panel"
               :class="{ dragging: reviewDragging }"
@@ -2511,7 +2525,22 @@ onBeforeUnmount(() => {
               />
             </div>
 
-            <small class="zoom-help">
+            <div
+              v-else
+              class="review-image-expired"
+            >
+              <strong>覆核照片已刪除</strong>
+              <span>
+                此 production 證件照片已依「回國日 + 7 天」保存規則清除。
+                結構化旅客與證件資料仍保留；若之前已選入 OCR Training Dataset，
+                訓練樣本的獨立副本不受影響。
+              </span>
+            </div>
+
+            <small
+              v-if="currentDocument.imageAvailable"
+              class="zoom-help"
+            >
               外框固定不動；可左右旋轉 90°、縮放，
               並直接按住照片用滑鼠左鍵自由拖曳查看。
             </small>
@@ -2720,7 +2749,13 @@ onBeforeUnmount(() => {
               <input
                 type="checkbox"
                 :checked="reviewUseForTraining"
-                :disabled="trainingSelectionSaving"
+                :disabled="
+                  trainingSelectionSaving ||
+                  (
+                    !currentDocument.imageAvailable &&
+                    !reviewUseForTraining
+                  )
+                "
                 @change="onTrainingSelectionChange"
               />
               <span class="training-check" aria-hidden="true">
@@ -2735,6 +2770,14 @@ onBeforeUnmount(() => {
                 </strong>
                 <small
                   v-if="
+                    !currentDocument.imageAvailable &&
+                    !reviewUseForTraining
+                  "
+                >
+                  正式收件照片已依保存期限刪除，無法再新增為訓練樣本。
+                </small>
+                <small
+                  v-else-if="
                     currentDocument.reviewStatus ===
                     'REVIEWED'
                   "
@@ -3699,6 +3742,31 @@ tbody tr:last-child td {
 
 .review-image-panel.dragging {
   cursor: grabbing;
+}
+
+.review-image-expired {
+  width: 100%;
+  height: clamp(470px, 62vh, 720px);
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px solid #334156;
+  border-radius: 10px;
+  background: #111827;
+  color: #9eabbf;
+  text-align: center;
+}
+
+.review-image-expired strong {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.review-image-expired span {
+  max-width: 420px;
+  font-size: 10px;
+  line-height: 1.7;
 }
 
 .review-image-panel img {
