@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   addScanItem,
+  completeScanBatch,
   createScanBatch,
   getTourDetail,
   listTours,
@@ -1011,6 +1012,10 @@ async function runBatch() {
         completedCount.value = index + 1
       }
     }
+
+    await completeScanBatch(
+      batch.scanBatchId,
+    )
 
     progressMessage.value =
       failedCount.value > 0
