@@ -19,9 +19,18 @@ public interface ITourStore
         Guid tourId,
         UpdateTourRequest request,
         DateTimeOffset now);
-    bool EnsureMember(
+    bool EnsureMemberDocument(
         Guid tourId,
         Guid travelerId,
+        Guid documentVersionId,
+        string documentType,
         DateTimeOffset now);
+
+    bool RemoveMemberDocument(
+        Guid tourId,
+        Guid travelerId,
+        string documentType,
+        DateTimeOffset now);
+
     byte[] ExportCsv(Guid tourId);
 }
