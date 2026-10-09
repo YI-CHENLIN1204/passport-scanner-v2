@@ -297,6 +297,25 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")/review-queue" > /tmp/queue-after-invalid-id.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-invalid-id.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs"
 
+      - name: Verify tour date edit cannot immediately expire pending photos
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+          PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
+
+          BEFORE_DELETE_AFTER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT delete_after FROM scan_items WHERE scan_item_id = '$PASSPORT_ITEM_ID';" | tr -d '\r')
+
+          STATUS=$(curl --silent --output /tmp/rejected-expiring-tour-edit.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/tours/$TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2020-01-01","returnDate":"2020-01-02","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}')
+          test "$STATUS" = "400"
+          grep -q '尚未審核' /tmp/rejected-expiring-tour-edit.json
+
+          AFTER_DELETE_AFTER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT delete_after FROM scan_items WHERE scan_item_id = '$PASSPORT_ITEM_ID';" | tr -d '\r')
+          test "$BEFORE_DELETE_AFTER" = "$AFTER_DELETE_AFTER"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-after-rejected-date-edit.json
+          python3 -c "import json; data=json.load(open('/tmp/tour-after-rejected-date-edit.json')); assert data['tour']['departureDate'] == '2099-10-10', data; assert data['tour']['returnDate'] == '2099-10-12', data"
+
       - name: Verify expired pending photo cannot be reviewed
         run: |
           PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
