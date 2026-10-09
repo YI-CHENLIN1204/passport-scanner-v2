@@ -3,6 +3,7 @@ using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Validation;
 using PassportScanner.Api.Persistence;
 using PassportScanner.Api.Mapping;
+using PassportScanner.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +27,7 @@ builder.Services.AddScoped<IScanQueueStore, PostgresScanQueueStore>();
 builder.Services.AddScoped<IOcrBenchmarkStore, PostgresOcrBenchmarkStore>();
 builder.Services.AddScoped<IOcrBenchmarkRunStore, PostgresOcrBenchmarkRunStore>();
 builder.Services.AddScoped<ITrainingDatasetStore, PostgresTrainingDatasetStore>();
+builder.Services.AddHostedService<PhotoRetentionHostedService>();
 
 builder.Services.AddCors(options =>
 {
