@@ -297,6 +297,37 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")/review-queue" > /tmp/queue-after-invalid-id.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-invalid-id.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs"
 
+      - name: Verify expired pending photo cannot be reviewed
+        run: |
+          PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -v ON_ERROR_STOP=1 -c "UPDATE scan_items SET delete_after = NOW() - INTERVAL '1 hour' WHERE scan_item_id = '$PASSPORT_ITEM_ID';"
+
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          for i in {1..30}; do
+            IMAGE_BYTES=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT octet_length(image_bytes) FROM scan_items WHERE scan_item_id = '$PASSPORT_ITEM_ID';" | tr -d '\r')
+            if [ "$IMAGE_BYTES" = "0" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          STATUS=$(curl --silent --output /tmp/expired-pending-review.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$PASSPORT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameZhOnDocument":"王小明","nameEn":"WANG HSIAO MING","birthDate":"1990-01-15","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"T12345678","issuingCountry":"TWN","expiryDate":"2030-12-31","useForTraining":false}')
+          test "$STATUS" = "400"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/expired-pending-queue.json
+          python3 -c "import json; rows=json.load(open('/tmp/expired-pending-queue.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs; assert docs[0]['imageAvailable'] is False, docs"
+
       - name: Verify legacy review preflight leaves no partial master data
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
