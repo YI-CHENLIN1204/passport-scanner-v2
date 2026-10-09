@@ -561,7 +561,8 @@ public sealed class PostgresTrainingDatasetStore(
                     $"Validation: {samples.Count(sample => splitBySample[sample.TrainingSampleId] == "validation")}\n" +
                     $"Test: {samples.Count(sample => splitBySample[sample.TrainingSampleId] == "test")}\n\n" +
                     "Split policy: deterministic 70/15/15 by traveler identity. " +
-                    "All retained documents from the same traveler stay in one split.\n\n" +
+                    "All retained documents from the same traveler stay in one split. " +
+                    "Traveler groups containing a fixed evaluation baseline are pinned to test.\n\n" +
                     "This ZIP contains real identity-document images " +
                     "and reviewed ground truth. Keep it outside Git.\n" +
                     "Newer samples also include ocr-inputs/: the exact working " +
@@ -646,18 +647,51 @@ public sealed class PostgresTrainingDatasetStore(
                     return $"draft:{item.DraftPersonId:N}";
                 });
 
+        var groupBySample =
+            samples.ToDictionary(
+                sample => sample.TrainingSampleId,
+                sample =>
+                    sourceGroups.TryGetValue(
+                        sample.SourceScanItemId,
+                        out var key)
+                        ? key
+                        : $"scan:{sample.SourceScanItemId:N}");
+
+        var sampleIds = samples
+            .Select(sample =>
+                sample.TrainingSampleId)
+            .ToList();
+
+        var baselineSampleIds =
+            db.OcrEvaluationBaselines
+                .AsNoTracking()
+                .Where(baseline =>
+                    sampleIds.Contains(
+                        baseline.TrainingSampleId))
+                .Select(baseline =>
+                    baseline.TrainingSampleId)
+                .ToHashSet();
+
+        var fixedTestGroups =
+            baselineSampleIds
+                .Where(groupBySample.ContainsKey)
+                .Select(sampleId =>
+                    groupBySample[sampleId])
+                .ToHashSet(
+                    StringComparer.Ordinal);
+
         return samples.ToDictionary(
             sample => sample.TrainingSampleId,
             sample =>
             {
                 var groupKey =
-                    sourceGroups.TryGetValue(
-                        sample.SourceScanItemId,
-                        out var key)
-                        ? key
-                        : $"scan:{sample.SourceScanItemId:N}";
+                    groupBySample[
+                        sample.TrainingSampleId];
 
-                return StableSplit(groupKey);
+                return fixedTestGroups.Contains(
+                    groupKey)
+                    ? "test"
+                    : StableSplit(groupKey);
             });
     }
 
