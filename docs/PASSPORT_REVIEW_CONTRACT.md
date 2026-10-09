@@ -139,7 +139,7 @@ TD3 Line 1 沒有像 Line 2 的護照號碼／生日／效期那樣具有可獨�
 
 ## Schema v2：中文姓名
 
-V2 CRM 需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，因此 schema v2 新增：
+V2 內部旅客主檔需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，因此 schema v2 新增：
 
 - `chineseName`
 - `reviewAssertions.chineseNameVisuallyConfirmed`
@@ -158,7 +158,7 @@ V2 CRM 需要旅客中文姓名，但護照 MRZ 本身不包含中文姓名，�
 非台灣護照：
 
 - 沒有中文姓名時允許空字串。
-- 不為了 CRM 強行翻譯或音譯。
+- 不為了補齊內部旅客主檔而強行翻譯或音譯。
 
 
 ## MRZ 英文姓名輔助中文姓名驗證
