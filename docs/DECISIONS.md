@@ -796,3 +796,14 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - Traveler 主檔編輯與跨證件篩選不屬於單一證件畫面，顯示 `男 (M) / 女 (F) / X`，讓使用者同時理解中文語意與 canonical value。
 
 目的：人工審核時讓畫面文字盡量與證件實際印刷內容一致，但不為了 UI 顯示建立第二套資料格式。
+
+### D-059：Traveler merge 不可默默改變本團使用的不同證件
+
+人工或自動整理重複 Traveler 時，如果兩筆 Traveler 已同時存在於同一團，TourMemberDocument 必須保守處理。
+
+- 同一團、同一證件類型若兩邊指向同一本證件 identity（同類型、同證件號碼；護照另含 issuing country），可視為重複 link，合併後只保留一筆。
+- 同一團、同一證件類型若兩邊指向不同證件 identity，系統不得依 updatedAt、current version 或其他推測自動選擇。
+- 此情況直接阻止 Traveler merge，提示操作人員先回團別移除不正確的本團證件，再重新執行旅客合併。
+- 阻止合併時整個 merge transaction rollback，Traveler、DocumentVersion、TourMember 與 TourMemberDocument 都不可留下半套變更。
+
+目的：Traveler 主檔合併是在確認「兩筆是同一個人」，不代表系統有權順便決定某一團實際應使用哪一本不同證件。
