@@ -1000,3 +1000,17 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 新增一般樣本不會改變固定 baseline 本身；同一 fixed-Test Traveler 後續新增的樣本可能一起落入 Test，固定 benchmark 的 baseline 樣本數則仍以 `ocr_evaluation_baselines` 為準。
 
 目的：固定 Test 的核心是固定比較樣本與防止同人跨 split，不是強迫所有時點 Train / Validation / Test 的百分比永遠精確等於 70/15/15。
+
+### D-077：固定 Benchmark cohort 必須在第一次 OCR 執行前原子凍結
+
+固定 Test 不能以「哪幾張第一次 OCR 成功」決定 membership，否則第一次重測途中失敗的困難樣本會被永久排除，造成 benchmark selection bias。
+
+- 當資料庫尚未存在任何 evaluation baseline 時，第一次固定 Test 執行先依當下 deterministic Test split 算出完整 cohort。
+- backend 以單一 transaction 為 cohort 內每張 Training Sample 建立 `state = pending` 的 baseline reservation，再開始瀏覽器 OCR。
+- `pending` 只表示固定 membership 已建立、尚未成功產生第一版 OCR baseline；它不能拿來當實際辨識結果計分。
+- OCR 成功後，`SaveEvaluationBaseline` 只允許把該 sample 的 pending reservation 完成為正式、不可覆寫的 baseline。
+- 一旦任何 fixed cohort 已存在，reserve 操作不得把之後新增的 Test sample 追加進 cohort。
+- 若第一次重測途中失敗、重新整理或關閉頁面，pending sample 下次仍包含在 `fixed-test`，可以繼續重試，不會從固定 Test 消失。
+- 為相容舊版呼叫，若 SaveEvaluationBaseline 發現尚未有 cohort，backend 會先自動 reserve 當下完整 Test cohort；若該 sample 不在固定 cohort，拒絕追加。
+
+目的：固定 Benchmark cohort 是在『開始第一次測試』時決定，而不是由 OCR 成功與否決定，避免失敗樣本被系統性排除。
