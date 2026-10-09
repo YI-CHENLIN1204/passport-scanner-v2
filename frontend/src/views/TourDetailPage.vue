@@ -11,7 +11,7 @@ import {
   convertTraditionalNameToSimplified,
 } from '../services/nameScriptConversion'
 import {
-  deletePendingScanItem,
+  deleteScanItem,
   getReviewQueue,
   getScanItemImageUrl,
   getTourDetail,
@@ -1582,29 +1582,61 @@ async function onTrainingSelectionChange(
 
 async function deleteCurrentReviewItem() {
   const document = currentDocument.value
+  const person = reviewPerson.value
 
   if (
     !document ||
-    reviewSaving.value ||
-    document.reviewStatus !== 'PENDING'
+    !person ||
+    reviewSaving.value
   ) {
     return
   }
 
+  const reviewed =
+    document.reviewStatus === 'REVIEWED'
+
   const confirmed = window.confirm(
-    `確定刪除這張${documentLabel(document.documentType)}嗎？這筆待審核資料與覆核圖片會從目前團別移除。`,
+    reviewed
+      ? `確定從目前團別移除這張${documentLabel(document.documentType)}嗎？全域旅客主檔與證件版本不會刪除；如果這張曾選入 OCR Training Dataset，對應訓練樣本也會同步移除。`
+      : `確定刪除這張${documentLabel(document.documentType)}嗎？這筆待審核資料與覆核圖片會從目前團別移除。`,
   )
 
   if (!confirmed) return
+
+  const previousDraftPersonId =
+    person.draftPersonId
+  const previousIndex =
+    reviewDocumentIndex.value
 
   reviewSaving.value = true
   reviewError.value = ''
 
   try {
-    await deletePendingScanItem(
+    await deleteScanItem(
       document.scanItemId,
     )
     await reloadQueue()
+
+    const updatedPerson =
+      queue.value.find(
+        item =>
+          item.draftPersonId ===
+            previousDraftPersonId,
+      )
+
+    if (
+      updatedPerson &&
+      updatedPerson.documents.length
+    ) {
+      reviewPerson.value = updatedPerson
+      reviewDocumentIndex.value =
+        Math.min(
+          previousIndex,
+          updatedPerson.documents.length - 1,
+        )
+      resetReviewViewer()
+      return
+    }
 
     const next = firstPendingPerson(
       document.scanItemId,
@@ -1619,7 +1651,7 @@ async function deleteCurrentReviewItem() {
     reviewError.value =
       err instanceof Error
         ? err.message
-        : '刪除待審核證件失敗。'
+        : '刪除證件失敗。'
   } finally {
     reviewSaving.value = false
   }
@@ -2960,16 +2992,17 @@ onBeforeUnmount(() => {
 
           <div>
             <button
-              v-if="
-                currentDocument.reviewStatus ===
-                'PENDING'
-              "
               type="button"
               class="danger-action"
               :disabled="reviewSaving"
               @click="deleteCurrentReviewItem"
             >
-              刪除
+              {{
+                currentDocument.reviewStatus ===
+                  'REVIEWED'
+                  ? '從本團移除'
+                  : '刪除'
+              }}
             </button>
 
             <button
