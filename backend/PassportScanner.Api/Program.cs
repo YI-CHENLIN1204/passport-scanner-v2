@@ -895,6 +895,39 @@ app.MapPut(
     });
 
 app.MapPost(
+    "/api/travelers/{targetTravelerId:guid}/merge",
+    (
+        Guid targetTravelerId,
+        MergeTravelerRequest request,
+        ITravelerStore store) =>
+    {
+        try
+        {
+            var merged = store.MergeTravelers(
+                targetTravelerId,
+                request.SourceTravelerId,
+                DateTimeOffset.UtcNow);
+
+            return merged is null
+                ? Results.NotFound(
+                    new { message = "找不到指定旅客。" })
+                : Results.Ok(
+                    TravelerReadMapper.ToResponse(
+                        merged));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapPost(
     "/api/passport-reviews",
     (
         PassportReviewRequest request,
