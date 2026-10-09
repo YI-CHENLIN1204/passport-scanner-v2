@@ -313,6 +313,37 @@ function uniqueFormalMemberForDraft(
 ) {
   if (!detail.value) return null
 
+  const savedDocumentIds =
+    new Set(
+      person.documents
+        .map(document =>
+          document.savedDocumentVersionId,
+        )
+        .filter(
+          (value): value is string =>
+            Boolean(value),
+        ),
+    )
+
+  if (savedDocumentIds.size) {
+    const linkedMembers =
+      detail.value.members.filter(member =>
+        member.documents.some(document =>
+          savedDocumentIds.has(
+            document.documentVersionId,
+          ),
+        ),
+      )
+
+    if (linkedMembers.length === 1) {
+      return linkedMembers[0]
+    }
+
+    if (linkedMembers.length > 1) {
+      return null
+    }
+  }
+
   let candidates =
     detail.value.members
 
