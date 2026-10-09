@@ -21,6 +21,7 @@ public interface IScanQueueStore
 
     ScanBatchResponse CompleteBatch(
         Guid batchId,
+        CompleteScanBatchRequest request,
         DateTimeOffset now);
 
     IReadOnlyList<ScanBatchResponse> ListBatches(
