@@ -680,6 +680,7 @@ public sealed class PostgresTourStore(
             item => item.TravelerId,
             item => IdentityKey(
                 item.NameZh,
+                item.NameEn,
                 item.BirthDate,
                 item.Gender,
                 item.TravelerId));
@@ -693,11 +694,31 @@ public sealed class PostgresTourStore(
             item => item.TourMemberId,
             item => item.TravelerId);
 
+        var draftEnglishNames = stagedItems
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(
+                    item.NameEn))
+            .GroupBy(item =>
+                item.DraftPersonId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(item =>
+                        item.UpdatedAt)
+                    .Select(item => item.NameEn)
+                    .FirstOrDefault() ??
+                    string.Empty);
+
         var draftKeys = drafts.ToDictionary(
             item => item.DraftPersonId,
             item => item.BirthDate.HasValue
                 ? IdentityKey(
                     item.NameZh,
+                    draftEnglishNames.TryGetValue(
+                        item.DraftPersonId,
+                        out var draftNameEn)
+                        ? draftNameEn
+                        : string.Empty,
                     item.BirthDate.Value,
                     item.Gender,
                     item.DraftPersonId)
@@ -760,13 +781,22 @@ public sealed class PostgresTourStore(
 
     private static string IdentityKey(
         string nameZh,
+        string nameEn,
         DateOnly birthDate,
         string gender,
         Guid fallbackId)
     {
+        var preferredName =
+            !string.IsNullOrWhiteSpace(nameZh)
+                ? nameZh
+                : nameEn;
+
         var normalizedName = string.Concat(
-            nameZh.Trim().Where(
-                character => !char.IsWhiteSpace(character)));
+            preferredName
+                .Trim()
+                .Where(character =>
+                    !char.IsWhiteSpace(character)))
+            .ToUpperInvariant();
         var normalizedGender =
             gender.Trim().ToUpperInvariant();
 
