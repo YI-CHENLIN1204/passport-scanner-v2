@@ -281,12 +281,52 @@ export async function getDocumentStoreStatus() {
   return response.json() as Promise<DocumentStoreStatusResponse>
 }
 
+export interface TravelerSearchFilters {
+  documentType?: string
+  gender?: string
+  nationality?: string
+  offset?: number
+}
+
 export async function searchTravelers(
   query = '',
   limit = 20,
+  filters: TravelerSearchFilters = {},
 ) {
   const params = new URLSearchParams()
-  if (query.trim()) params.set('query', query.trim())
+
+  if (query.trim()) {
+    params.set('query', query.trim())
+  }
+
+  if (filters.documentType?.trim()) {
+    params.set(
+      'documentType',
+      filters.documentType.trim(),
+    )
+  }
+
+  if (filters.gender?.trim()) {
+    params.set('gender', filters.gender.trim())
+  }
+
+  if (filters.nationality?.trim()) {
+    params.set(
+      'nationality',
+      filters.nationality.trim(),
+    )
+  }
+
+  if (
+    filters.offset !== undefined &&
+    filters.offset > 0
+  ) {
+    params.set(
+      'offset',
+      String(Math.floor(filters.offset)),
+    )
+  }
+
   params.set('limit', String(limit))
 
   const response = await fetch(
@@ -294,9 +334,19 @@ export async function searchTravelers(
   )
 
   if (!response.ok) {
-    throw new Error(
-      `Traveler search failed: ${response.status}`,
-    )
+    let message =
+      `Traveler search failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
   }
 
   return response.json() as Promise<TravelerSummaryResponse[]>
