@@ -299,11 +299,17 @@ function retentionDate(value: string) {
 
 function identityKey(
   nameZh: string,
+  nameEn: string,
   birthDate: string | null,
   gender: string,
 ) {
+  const preferredName =
+    nameZh.trim() || nameEn.trim()
+
   return [
-    nameZh.replace(/\s+/g, ''),
+    preferredName
+      .replace(/\s+/g, '')
+      .toUpperCase(),
     birthDate ?? '',
     gender.trim().toUpperCase(),
   ].join('|')
@@ -342,8 +348,13 @@ const rows = computed<OperationalRow[]>(() => {
   const stagedKeys = new Set<string>()
 
   for (const person of queue.value) {
+    const stagedNameEn =
+      person.documents.find(item => item.nameEn)
+        ?.nameEn ?? ''
+
     const key = identityKey(
       person.nameZh,
+      stagedNameEn,
       person.birthDate,
       person.gender,
     )
@@ -367,10 +378,6 @@ const rows = computed<OperationalRow[]>(() => {
         : { status: 'missing' }
     }
 
-    const stagedNameEn =
-      person.documents.find(item => item.nameEn)
-        ?.nameEn ?? ''
-
     result.push({
       key: `draft:${person.draftPersonId}`,
       nameZh:
@@ -388,6 +395,7 @@ const rows = computed<OperationalRow[]>(() => {
   for (const member of detail.value.members) {
     const key = identityKey(
       member.nameZh,
+      member.nameEn,
       member.birthDate,
       member.gender,
     )
