@@ -821,6 +821,44 @@ jobs:
 
           grep -q '"scanItemId"' /tmp/large-scan-item.json
 
+      - name: Verify fixed Test baseline cannot be removed by normal actions
+        run: |
+          FIXED_SCAN_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/same-reviewed-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
+            -H 'Content-Type: application/json' \
+            -d '{"selected":true}' \
+            > /tmp/fixed-training-selection.json
+
+          FIXED_TRAINING_SAMPLE_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id = '$FIXED_SCAN_ITEM_ID';" | tr -d '\r')
+          test -n "$FIXED_TRAINING_SAMPLE_ID"
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/ocr-training/samples/$FIXED_TRAINING_SAMPLE_ID/evaluation-baseline" \
+            -H 'Content-Type: application/json' \
+            -d '{"resultJson":"{\"ciFixedBaseline\":true}"}' \
+            > /tmp/fixed-baseline.json
+
+          BASELINE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM ocr_evaluation_baselines WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          test "$BASELINE_COUNT" = "1"
+
+          DESELECT_STATUS=$(curl --silent --output /tmp/fixed-baseline-deselect.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
+            -H 'Content-Type: application/json' \
+            -d '{"selected":false}')
+          test "$DESELECT_STATUS" = "400"
+          grep -q '固定 Test baseline' /tmp/fixed-baseline-deselect.json
+
+          DELETE_STATUS=$(curl --silent --output /tmp/fixed-baseline-delete.json --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID")
+          test "$DELETE_STATUS" = "400"
+          grep -q '固定 Test baseline' /tmp/fixed-baseline-delete.json
+
+          SAMPLE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          BASELINE_COUNT_AFTER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM ocr_evaluation_baselines WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          SOURCE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM scan_items WHERE scan_item_id = '$FIXED_SCAN_ITEM_ID';" | tr -d '\r')
+
+          test "$SAMPLE_COUNT" = "1"
+          test "$BASELINE_COUNT_AFTER" = "1"
+          test "$SOURCE_COUNT" = "1"
+
       - name: Verify database backup scripts
         run: |
           pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw './scripts/backup-db.ps1')); [void][scriptblock]::Create((Get-Content -Raw './scripts/restore-db.ps1'))"
