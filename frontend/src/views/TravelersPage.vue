@@ -84,6 +84,24 @@ const historicalDocuments = computed(
     ) ?? [],
 )
 
+const editNationalIdDocument = computed(
+  () =>
+    editForm.value.documents.find(
+      document =>
+        editingDocumentType(
+          document.documentVersionId,
+        ) === 'TAIWAN_NATIONAL_ID',
+    ) ?? null,
+)
+
+const editRequiresBinaryGender = computed(
+  () =>
+    Boolean(
+      editNationalIdDocument.value ||
+      editForm.value.nationalIdNumber?.trim(),
+    ),
+)
+
 function documentLabel(type: string) {
   if (type === 'PASSPORT') return '護照'
   if (type === 'TAIWAN_COMPATRIOT_PERMIT') return '台胞證'
@@ -214,6 +232,25 @@ async function saveEdit() {
   if (!editForm.value.gender) {
     editError.value = '請確認性別。'
     return
+  }
+
+  if (
+    editRequiresBinaryGender.value &&
+    !['M', 'F'].includes(
+      editForm.value.gender,
+    )
+  ) {
+    editError.value =
+      '有台灣身分證字號時，性別只能選男或女。'
+    return
+  }
+
+  if (editNationalIdDocument.value) {
+    editForm.value.nationalIdNumber =
+      editNationalIdDocument.value
+        .documentNumber
+        .trim()
+        .toUpperCase() || null
   }
 
   editSaving.value = true
@@ -969,7 +1006,12 @@ onMounted(() => load())
                 <option value="">待確認</option>
                 <option value="M">男 (M)</option>
                 <option value="F">女 (F)</option>
-                <option value="X">X</option>
+                <option
+                  v-if="!editRequiresBinaryGender"
+                  value="X"
+                >
+                  X
+                </option>
               </select>
             </label>
           </div>
@@ -986,10 +1028,23 @@ onMounted(() => load())
             <label>
               <span>身分證字號</span>
               <input
+                v-if="editNationalIdDocument"
+                :value="
+                  editNationalIdDocument.documentNumber
+                "
+                type="text"
+                maxlength="10"
+                disabled
+              />
+              <input
+                v-else
                 v-model="editForm.nationalIdNumber"
                 type="text"
                 maxlength="10"
               />
+              <small v-if="editNationalIdDocument">
+                由目前身分證的證號同步；要修正請修改下方「目前證件」。
+              </small>
             </label>
           </div>
 
