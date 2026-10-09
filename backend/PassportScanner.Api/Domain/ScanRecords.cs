@@ -7,6 +7,8 @@ public sealed class ScanBatchRecord
     public required string DocumentType { get; init; }
     public required string Status { get; set; }
     public required int ItemCount { get; set; }
+    public required int AttemptCount { get; set; }
+    public required int FailedCount { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }
 }
