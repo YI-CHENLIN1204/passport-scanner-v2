@@ -758,6 +758,7 @@ async function rerunTestSet() {
         'fixed-test',
       )
 
+    fixedTestSamples.value = samples
     retestProgress.value.total = samples.length
 
     await warmupPaddleOcr()
