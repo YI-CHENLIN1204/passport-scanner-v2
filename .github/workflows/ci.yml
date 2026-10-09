@@ -649,6 +649,17 @@ jobs:
           MERGED_PERSONAL_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT personal_id_number FROM travelers WHERE traveler_id = '$CURRENT_MERGE_TARGET';" | tr -d '\r')
           test "$MERGED_PERSONAL_ID" = "M44444444"
 
+          HISTORICAL_PASSPORT_ID=$(python3 -c "import json; data=json.load(open('/tmp/current-merge-result.json')); print(next(d['documentVersionId'] for d in data['documents'] if d['documentType']=='PASSPORT' and not d['isCurrent']))")
+
+          HISTORICAL_EDIT_STATUS=$(curl --silent --output /tmp/historical-edit-rejected.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$CURRENT_MERGE_TARGET" \
+            -H 'Content-Type: application/json' \
+            -d "{\"nameZh\":\"合併舊證\",\"nameEn\":\"MERGE OLD\",\"birthDate\":\"1992-02-02\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":null,\"documents\":[{\"documentVersionId\":\"$HISTORICAL_PASSPORT_ID\",\"nameZhOnDocument\":\"合併舊證\",\"nameEnOnDocument\":\"MERGE OLD\",\"documentNumber\":\"M33333334\",\"issuingCountry\":\"TWN\",\"nationality\":\"TWN\",\"expiryDate\":\"2034-01-01\"}]}")
+          test "$HISTORICAL_EDIT_STATUS" = "400"
+          grep -q '歷史證件版本僅供查看' /tmp/historical-edit-rejected.json
+
+          HISTORICAL_NUMBER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document_number FROM document_versions WHERE document_version_id = '$HISTORICAL_PASSPORT_ID';" | tr -d '\r')
+          test "$HISTORICAL_NUMBER" = "M33333333"
+
       - name: Verify traveler merge does not overwrite conflicting tour document
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
