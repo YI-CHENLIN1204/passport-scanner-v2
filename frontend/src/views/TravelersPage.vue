@@ -283,7 +283,7 @@ async function openMerge(
   mergeSource.value = null
   mergeCandidates.value = []
   mergeAcknowledged.value = false
-  mergeQuery.value = traveler.nameZh
+  mergeQuery.value = traveler.nameZh || traveler.nameEn
 
   try {
     const detail = await getTravelerDetail(
@@ -356,7 +356,7 @@ async function confirmMerge() {
   }
 
   const confirmed = window.confirm(
-    `確定把「${source.nameZh}」合併到「${target.nameZh}」嗎？來源 Traveler 主檔會被刪除，但證件版本與團別資料會移到保留 Traveler。此動作無法從畫面直接復原。`,
+    `確定把「${source.nameZh || source.nameEn || '未命名旅客'}」合併到「${target.nameZh || target.nameEn || '未命名旅客'}」嗎？來源 Traveler 主檔會被刪除，但證件版本與團別資料會移到保留 Traveler。此動作無法從畫面直接復原。`,
   )
 
   if (!confirmed) return
@@ -681,7 +681,7 @@ onMounted(() => load())
           <span class="merge-role keep">保留</span>
           <div>
             <strong>
-              {{ mergeTarget.traveler.nameZh }}
+              {{ mergeTarget.traveler.nameZh || mergeTarget.traveler.nameEn || '未命名旅客' }}
             </strong>
             <span v-if="mergeTarget.traveler.nameEn">
               {{ mergeTarget.traveler.nameEn }}
@@ -763,7 +763,7 @@ onMounted(() => load())
               }"
               @click="selectMergeSource(candidate)"
             >
-              <strong>{{ candidate.nameZh }}</strong>
+              <strong>{{ candidate.nameZh || candidate.nameEn || '未命名旅客' }}</strong>
               <span>
                 {{ candidate.birthDate }}
                 · {{ candidate.gender }}
@@ -795,7 +795,7 @@ onMounted(() => load())
 
           <div>
             <strong>
-              {{ mergeSource.traveler.nameZh }}
+              {{ mergeSource.traveler.nameZh || mergeSource.traveler.nameEn || '未命名旅客' }}
             </strong>
             <span v-if="mergeSource.traveler.nameEn">
               {{ mergeSource.traveler.nameEn }}
