@@ -18,3 +18,13 @@ public sealed class TourMemberRecord
     public required Guid TravelerId { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
 }
+
+public sealed class TourMemberDocumentRecord
+{
+    public required Guid TourMemberDocumentId { get; init; }
+    public required Guid TourMemberId { get; set; }
+    public required Guid DocumentVersionId { get; set; }
+    public required string DocumentType { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public required DateTimeOffset UpdatedAt { get; set; }
+}
