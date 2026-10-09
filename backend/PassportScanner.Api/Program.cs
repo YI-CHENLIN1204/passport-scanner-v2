@@ -88,6 +88,39 @@ using (var scope = app.Services.CreateScope())
             )
             WHERE is_current = TRUE;
 
+        WITH ranked_primary_documents AS (
+            SELECT
+                traveler_id,
+                document_type,
+                document_number,
+                ROW_NUMBER() OVER (
+                    PARTITION BY traveler_id
+                    ORDER BY
+                        verified_at DESC,
+                        created_at DESC,
+                        document_version_id DESC
+                ) AS primary_rank
+            FROM document_versions
+            WHERE is_current = TRUE
+        )
+        UPDATE travelers AS traveler
+        SET
+            personal_id_type =
+                ranked.document_type,
+            personal_id_number =
+                ranked.document_number
+        FROM ranked_primary_documents AS ranked
+        WHERE
+            traveler.traveler_id =
+                ranked.traveler_id
+            AND ranked.primary_rank = 1
+            AND (
+                traveler.personal_id_type IS DISTINCT FROM
+                    ranked.document_type
+                OR traveler.personal_id_number IS DISTINCT FROM
+                    ranked.document_number
+            );
+
         CREATE TABLE IF NOT EXISTS tours (
             tour_id uuid PRIMARY KEY,
             tour_name varchar(160) NOT NULL,
