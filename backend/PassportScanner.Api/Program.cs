@@ -876,6 +876,13 @@ app.MapGet(
         }
     });
 
+app.MapPost(
+    "/api/ocr-training/fixed-test/reserve",
+    (ITrainingDatasetStore store) =>
+        Results.Ok(
+            store.ReserveFixedTestCohort(
+                DateTimeOffset.UtcNow)));
+
 app.MapPut(
     "/api/ocr-training/samples/{trainingSampleId:guid}/evaluation-baseline",
     (
