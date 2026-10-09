@@ -1,6 +1,6 @@
 # Decisions
 
-最後更新：2026-10-01
+最後更新：2026-10-09
 
 ## 已確認
 
@@ -551,3 +551,39 @@ OCR 品質頁允許匯出已明確選入的 `training_samples`。
 Dataset ZIP 以隨機 sample ID 命名檔案，不以旅客姓名或證號作檔名；內容包含原圖／覆核圖、OCR 原始 payload、人工 ground truth 與 manifest。
 
 ZIP 含真實身分證件資料，只能放在受控私人儲存位置，不得提交 GitHub。Repository 的 `.gitignore` 必須持續排除 training data、export、checkpoint 與 private model。
+
+
+### D-044：本機 PostgreSQL 必須支援可攜式備份與還原
+
+V2 目前使用 Docker named volume 保存 PostgreSQL；named volume 只存在該台電腦，不會隨 Git repository 移動。
+
+因此專案正式提供：
+
+- `scripts/backup-db.ps1`：以 PostgreSQL custom-format dump 備份完整資料庫。
+- `scripts/restore-db.ps1`：在另一台電腦重建並還原資料庫。
+- 備份預設放在 `backups/`，並由 `.gitignore` 排除。
+- `*.dump` 不得提交 GitHub，因為內容可能包含旅客主檔、證件圖片、ground truth 與私人 OCR Dataset。
+
+換電腦、重設 Docker Desktop 或進行可能刪除 volume 的操作前，應先建立資料庫備份。
+
+
+### D-045：團別與旅客資料提供後端條件篩選
+
+隨著正式旅客與團別數量增加，V2 不只依靠瀏覽器端已載入資料做假篩選。
+
+旅客資料查詢支援：
+
+- 姓名／證件號碼文字搜尋。
+- 目前證件類別。
+- 性別。
+- 國籍。
+- offset / limit 分頁。
+
+團別管理查詢支援：
+
+- 團別名稱。
+- 收件狀態：尚未收件、收件中、待審核、收件完成。
+- 此團需要的證件類別。
+- 出發日期區間。
+
+篩選條件由 API / PostgreSQL 查詢處理；既有簡單呼叫仍保留預設參數，避免影響證件掃描頁等既有流程。
