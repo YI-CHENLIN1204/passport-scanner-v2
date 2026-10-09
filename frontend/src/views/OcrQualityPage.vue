@@ -7,6 +7,7 @@ import {
   getTrainingEvaluationSamples,
   getTrainingSampleImageFile,
   listOcrBenchmarkRuns,
+  reserveFixedTestCohort,
   saveOcrBenchmarkRun,
   saveTrainingEvaluationBaseline,
   type OcrBenchmarkDocumentSummary,
@@ -295,11 +296,17 @@ function evaluationBaselineFieldsForSample(
 
   const payload =
     parseJsonRecord(sample.evaluationBaselineJson)
+
+  if (
+    payload.state === 'pending' ||
+    !payload.fields ||
+    typeof payload.fields !== 'object'
+  ) {
+    return null
+  }
+
   const fields =
-    payload.fields &&
-    typeof payload.fields === 'object'
-      ? payload.fields as Record<string, unknown>
-      : {}
+    payload.fields as Record<string, unknown>
 
   return Object.fromEntries(
     (fieldsByDocumentType[sample.documentType] ?? [])
@@ -319,6 +326,11 @@ function evaluationBaselineVersionForSample(
 
   const payload =
     parseJsonRecord(sample.evaluationBaselineJson)
+
+  if (payload.state === 'pending') {
+    return null
+  }
+
   const version = stringOrNull(
     payload.pipelineVersion,
   )?.trim()
@@ -731,7 +743,7 @@ async function rerunTestSet() {
   retestProgress.value = {
     completed: 0,
     total: fixedBenchmarkCount.value,
-    message: '正在載入固定 Test set…',
+    message: '正在確認固定 Test cohort…',
   }
 
   const outcomes: RetestSampleOutcome[] = []
@@ -739,17 +751,12 @@ async function rerunTestSet() {
   let baselineCreated = 0
 
   try {
-    const existingFixedSamples =
+    await reserveFixedTestCohort()
+
+    const samples =
       await getTrainingEvaluationSamples(
         'fixed-test',
       )
-
-    const samples =
-      existingFixedSamples.length
-        ? existingFixedSamples
-        : await getTrainingEvaluationSamples(
-            'test',
-          )
 
     retestProgress.value.total = samples.length
 
@@ -1333,9 +1340,10 @@ onMounted(load)
           <h2>用最新版 OCR 重跑固定 Test set</h2>
           <p>
             不建立旅客、不修改人工答案，也不把 Test 資料拿去訓練。
-            第一次建立基準時使用當下 Test split；
-            一旦固定基準存在，後續只重跑原本的固定 cohort，
-            新加入 Test 的樣本不會自動擴張固定比較集合。
+            第一次建立基準時會先凍結當下完整 Test cohort，
+            再開始逐張跑 OCR；即使中途失敗或關閉頁面，
+            下次仍會從同一批固定樣本繼續。之後新增的 Test 樣本
+            不會自動擴張固定比較集合。
           </p>
           <small>
             舊樣本當時沒有保存 OCR 工作圖片，只能用人工審核影像做
