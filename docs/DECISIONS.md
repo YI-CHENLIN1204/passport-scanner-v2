@@ -939,3 +939,20 @@ D-047 已將非 current 的歷史證件版本定義為唯讀顯示；backend API
 - request 若指定 historical DocumentVersion，直接拒絕，不修改歷史證件內容。
 - historical version 保留當時人工確認的證件快照與版本歷程，不因後續一般主檔修正被靜默覆寫。
 - 若未來確實需要修正歷史資料，應建立明確的歷史修正／稽核流程，不與一般 Traveler edit 混用。
+
+### D-072：累積到資料不等於立即重新調整 OCR
+
+目前 OCR recognition / parser 仍以固定 Test baseline `2026.10.09.1` 凍結。正式系統開始累積人工覆核資料後，資料先用於建立可靠 Dataset 與觀察真實錯誤分布，不因「已經有一些資料」就立即修改 OCR。
+
+重新開啟 OCR 改善至少需要同時滿足以下 gate：
+
+- 樣本必須經人工覆核，ground truth 可被信任。
+- 三類證件要有足夠的不同真人、拍攝角度、裝置、光線與品質分布；不能主要由少數人的多角度照片組成。
+- Train / Validation / Test 依 Traveler group 分離，同一真人不可跨 split。
+- 固定 Test split 不拿來反覆調 threshold / parser / model，也不因目前表現不佳把困難樣本移出。
+- 已有固定 baseline 與可重跑的評估流程，能比較修改前後，而不是靠單張照片觀感。
+- 改善方向應由 Train / Validation 與真實錯誤分類決定；Test 只用於最後泛化確認。
+- 每次只調整可歸因的一組變因，避免 model、threshold、parser、orientation 同時改動而無法判斷效果。
+- 使用者明確決定重新開啟 OCR 改善階段後，才解除目前凍結。
+
+因此目前新資料的優先用途是：收集 → 人工覆核 → 建立 ground truth → 維持 split integrity → 累積 benchmark；V2 系統本體與資料正確性仍優先於 OCR 調參。
