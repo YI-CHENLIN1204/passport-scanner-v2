@@ -110,6 +110,12 @@ jobs:
           DUPLICATE_CURRENT_GROUPS=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM (SELECT traveler_id, document_type FROM document_versions WHERE is_current = TRUE GROUP BY traveler_id, document_type HAVING COUNT(*) > 1) AS duplicated;" | tr -d '\r')
           test "$DUPLICATE_CURRENT_GROUPS" = "0"
 
+          TRAINING_SOURCE_FK=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_training_samples_source_scan_item';" | tr -d '\r')
+          test "$TRAINING_SOURCE_FK" = "1"
+
+          ORPHAN_TRAINING_SAMPLES=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM training_samples AS sample LEFT JOIN scan_items AS scan ON scan.scan_item_id = sample.source_scan_item_id WHERE scan.scan_item_id IS NULL;" | tr -d '\r')
+          test "$ORPHAN_TRAINING_SAMPLES" = "0"
+
       - name: Verify tour create and filters
         run: |
           curl --fail --silent -X POST http://localhost:5080/api/tours \
