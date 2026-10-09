@@ -185,6 +185,49 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/ocr-benchmark/runs?limit=5" > /tmp/benchmark-runs.json
           python3 -c "import json; rows=json.load(open('/tmp/benchmark-runs.json')); assert rows and rows[0]['pipelineVersion'] == 'ci-smoke', rows"
 
+      - name: Verify production photo retention preserves training copy
+        run: |
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+          TRAINING_SAMPLE_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id = '$PERMIT_ITEM_ID';" | tr -d '\r')
+
+          test -n "$TRAINING_SAMPLE_ID"
+
+          curl --fail --silent "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/image" -o /tmp/production-before.png
+          curl --fail --silent "http://localhost:5080/api/ocr-training/samples/$TRAINING_SAMPLE_ID/image" -o /tmp/training-before.png
+
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -v ON_ERROR_STOP=1 -c "UPDATE scan_items SET delete_after = NOW() - INTERVAL '1 hour' WHERE scan_item_id = '$PERMIT_ITEM_ID';"
+
+          docker compose restart backend
+
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:5080/api/health > /dev/null
+
+          for i in {1..30}; do
+            IMAGE_BYTES=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT octet_length(image_bytes) FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID';" | tr -d '\r')
+            if [ "$IMAGE_BYTES" = "0" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          IMAGE_BYTES=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT octet_length(image_bytes) FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID';" | tr -d '\r')
+          test "$IMAGE_BYTES" = "0"
+
+          STATUS=$(curl --silent --output /tmp/production-after.txt --write-out "%{http_code}" "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/image")
+          test "$STATUS" = "404"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/samples/$TRAINING_SAMPLE_ID/image" -o /tmp/training-after.png
+          test -s /tmp/training-after.png
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-retention.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-retention.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PERMIT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['imageAvailable'] is False, docs[0]"
+
       - name: Verify large scan payload passes through frontend proxy
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
