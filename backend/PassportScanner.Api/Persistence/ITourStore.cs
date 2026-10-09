@@ -4,7 +4,12 @@ namespace PassportScanner.Api.Persistence;
 
 public interface ITourStore
 {
-    IReadOnlyList<TourSummaryResponse> ListTours(string? query);
+    IReadOnlyList<TourSummaryResponse> ListTours(
+        string? query,
+        string? status,
+        string? documentType,
+        DateOnly? departureFrom,
+        DateOnly? departureTo);
     TourDetailResponse? GetTour(Guid tourId);
     TourSummaryResponse CreateTour(
         CreateTourRequest request,
