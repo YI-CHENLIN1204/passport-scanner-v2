@@ -306,23 +306,53 @@ function retentionDate(value: string) {
   }).format(date)
 }
 
-function identityKey(
-  nameZh: string,
-  nameEn: string,
-  birthDate: string | null,
-  gender: string,
+function uniqueFormalMemberForDraft(
+  person: ReviewQueuePersonResponse,
+  stagedNameEn: string,
+  stagedNationalId: string | null,
 ) {
-  const preferredName =
-    nameZh.trim() || nameEn.trim()
+  if (!detail.value) return null
 
-  return [
-    preferredName
-      .replace(/\s+/g, '')
-      .toUpperCase(),
-    birthDate ?? '',
-    gender.trim().toUpperCase(),
-  ].join('|')
+  let candidates =
+    detail.value.members
+
+  if (stagedNationalId) {
+    candidates = candidates.filter(
+      member =>
+        member.nationalIdNumber ===
+          stagedNationalId,
+    )
+  } else if (
+    person.birthDate &&
+    person.gender &&
+    person.nameZh.trim()
+  ) {
+    candidates = candidates.filter(
+      member =>
+        member.nameZh === person.nameZh &&
+        member.birthDate === person.birthDate &&
+        member.gender === person.gender,
+    )
+  } else if (
+    person.birthDate &&
+    person.gender &&
+    stagedNameEn.trim()
+  ) {
+    candidates = candidates.filter(
+      member =>
+        member.nameEn === stagedNameEn &&
+        member.birthDate === person.birthDate &&
+        member.gender === person.gender,
+    )
+  } else {
+    return null
+  }
+
+  return candidates.length === 1
+    ? candidates[0]
+    : null
 }
+
 
 function latestDocument(
   person: ReviewQueuePersonResponse,
@@ -354,21 +384,30 @@ const rows = computed<OperationalRow[]>(() => {
   const required =
     detail.value.tour.requiredDocumentTypes
   const result: OperationalRow[] = []
-  const stagedKeys = new Set<string>()
+  const stagedTravelerIds =
+    new Set<string>()
 
   for (const person of queue.value) {
     const stagedNameEn =
       person.documents.find(item => item.nameEn)
         ?.nameEn ?? ''
+    const stagedNationalId =
+      person.documents.find(
+        item => item.nationalIdNumber,
+      )?.nationalIdNumber ?? null
 
-    const key = identityKey(
-      person.nameZh,
-      stagedNameEn,
-      person.birthDate,
-      person.gender,
-    )
+    const matchedMember =
+      uniqueFormalMemberForDraft(
+        person,
+        stagedNameEn,
+        stagedNationalId,
+      )
 
-    stagedKeys.add(key)
+    if (matchedMember) {
+      stagedTravelerIds.add(
+        matchedMember.travelerId,
+      )
+    }
 
     const documents:
       Record<string, DocumentCell> = {}
@@ -402,14 +441,13 @@ const rows = computed<OperationalRow[]>(() => {
   }
 
   for (const member of detail.value.members) {
-    const key = identityKey(
-      member.nameZh,
-      member.nameEn,
-      member.birthDate,
-      member.gender,
-    )
-
-    if (stagedKeys.has(key)) continue
+    if (
+      stagedTravelerIds.has(
+        member.travelerId,
+      )
+    ) {
+      continue
+    }
 
     const documents:
       Record<string, DocumentCell> = {}
