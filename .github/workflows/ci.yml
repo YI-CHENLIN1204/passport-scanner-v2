@@ -712,7 +712,7 @@ jobs:
 
           curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
             -H 'Content-Type: application/json' \
-            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"\",\"englishName\":\"ALEX MORGAN\",\"passportNumber\":\"X9876543\",\"nationality\":\"USA\",\"issuingState\":\"USA\",\"birthDate\":\"1990-06-15\",\"sex\":\"X\",\"expiryDate\":\"2038-06-14\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":false,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":null,\"chineseNameScore\":null,\"chineseNameRomanizationStatus\":\"unknown\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"\",\"englishName\":\"ALEX MORGAN\",\"passportNumber\":\"X9876543\",\"nationality\":\"USA\",\"issuingState\":\"USA\",\"birthDate\":\"1990-06-15\",\"sex\":\"X\",\"expiryDate\":\"2020-06-14\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":false,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":null,\"chineseNameScore\":null,\"chineseNameRomanizationStatus\":\"unknown\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
             > /tmp/foreign-x-passport.json
 
           FOREIGN_X_ID=$(python3 -c "import json; print(json.load(open('/tmp/foreign-x-passport.json'))['travelerId'])")
@@ -721,7 +721,7 @@ jobs:
 
           IMPOSSIBLE_BIRTH_STATUS=$(curl --silent --output /tmp/foreign-x-impossible-birth.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$FOREIGN_X_ID" \
             -H 'Content-Type: application/json' \
-            -d '{"nameZh":"","nameEn":"ALEX MORGAN","birthDate":"2040-01-01","gender":"X","nationality":"USA","nationalIdNumber":null,"documents":[]}')
+            -d '{"nameZh":"","nameEn":"ALEX MORGAN","birthDate":"2021-01-01","gender":"X","nationality":"USA","nationalIdNumber":null,"documents":[]}')
           test "$IMPOSSIBLE_BIRTH_STATUS" = "400"
           grep -q '護照有效期限必須晚於出生日期' /tmp/foreign-x-impossible-birth.json
 
