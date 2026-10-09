@@ -680,6 +680,12 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/travelers/$FOREIGN_X_ID" > /tmp/foreign-x-traveler.json
           python3 -c "import json; data=json.load(open('/tmp/foreign-x-traveler.json')); t=data['traveler']; assert t['gender']=='X', data; assert t['nationalIdNumber'] is None, data; assert t['nameZh']=='', data; assert len([d for d in data['documents'] if d['documentType']=='PASSPORT' and d['isCurrent']])==1, data"
 
+          IMPOSSIBLE_BIRTH_STATUS=$(curl --silent --output /tmp/foreign-x-impossible-birth.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$FOREIGN_X_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"","nameEn":"ALEX MORGAN","birthDate":"2040-01-01","gender":"X","nationality":"USA","nationalIdNumber":null,"documents":[]}')
+          test "$IMPOSSIBLE_BIRTH_STATUS" = "400"
+          grep -q '護照有效期限必須晚於出生日期' /tmp/foreign-x-impossible-birth.json
+
       - name: Verify foreign passport through batch review
         run: |
           IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
