@@ -911,11 +911,21 @@ public sealed class PostgresTravelerStore(
                 source.NationalIdNumber;
         }
 
+        var targetDocuments = db.DocumentVersions
+            .Where(item =>
+                item.TravelerId ==
+                    targetTravelerId)
+            .ToList();
+
         var sourceDocuments = db.DocumentVersions
             .Where(item =>
                 item.TravelerId ==
                     sourceTravelerId)
             .ToList();
+
+        ReconcileMergedCurrentDocuments(
+            targetDocuments,
+            sourceDocuments);
 
         foreach (var document in sourceDocuments)
         {
@@ -1411,6 +1421,35 @@ public sealed class PostgresTravelerStore(
             sourceLink.UpdatedAt = now;
             targetLinks[sourceLink.DocumentType] =
                 sourceLink;
+        }
+    }
+
+    private static void ReconcileMergedCurrentDocuments(
+        IReadOnlyList<DocumentVersionRecord> targetDocuments,
+        IReadOnlyList<DocumentVersionRecord> sourceDocuments)
+    {
+        var currentDocuments = targetDocuments
+            .Concat(sourceDocuments)
+            .Where(item => item.IsCurrent)
+            .ToList();
+
+        foreach (var group in currentDocuments.GroupBy(
+            item => item.DocumentType,
+            StringComparer.Ordinal))
+        {
+            var ordered = group
+                .OrderByDescending(item =>
+                    item.VerifiedAt)
+                .ThenByDescending(item =>
+                    item.CreatedAt)
+                .ThenByDescending(item =>
+                    item.DocumentVersionId)
+                .ToList();
+
+            foreach (var oldDocument in ordered.Skip(1))
+            {
+                oldDocument.IsCurrent = false;
+            }
         }
     }
 
