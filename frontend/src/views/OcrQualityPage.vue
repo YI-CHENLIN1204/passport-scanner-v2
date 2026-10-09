@@ -6,8 +6,11 @@ import {
   getTrainingDatasetSummary,
   getTrainingEvaluationSamples,
   getTrainingSampleImageFile,
+  listOcrBenchmarkRuns,
+  saveOcrBenchmarkRun,
   saveTrainingEvaluationBaseline,
   type OcrBenchmarkDocumentSummary,
+  type OcrBenchmarkRunResponse,
   type TrainingEvaluationSampleResponse,
   type OcrBenchmarkSummaryResponse,
   type TrainingDatasetSummaryResponse,
@@ -34,6 +37,9 @@ const retestProgress = ref({
   message: '',
 })
 const retestResult = ref<RetestRunSummary | null>(null)
+const benchmarkHistory =
+  ref<OcrBenchmarkRunResponse[]>([])
+const historyError = ref('')
 const error = ref('')
 
 const documentOrder = [
@@ -807,13 +813,42 @@ async function rerunTestSet() {
         index + 1
     }
 
-    retestResult.value = {
+    const completedRun: RetestRunSummary = {
       generatedAt: new Date().toISOString(),
       pipelineVersion: OCR_PIPELINE_VERSION,
       sampleCount: outcomes.length,
       failedCount: failed,
       baselineCreatedCount: baselineCreated,
       documents: summarizeRetest(outcomes),
+    }
+
+    retestResult.value = completedRun
+
+    try {
+      const savedRun = await saveOcrBenchmarkRun({
+        pipelineVersion:
+          completedRun.pipelineVersion,
+        sampleCount: completedRun.sampleCount,
+        failedCount: completedRun.failedCount,
+        baselineCreatedCount:
+          completedRun.baselineCreatedCount,
+        summaryJson: JSON.stringify(completedRun),
+      })
+
+      benchmarkHistory.value = [
+        savedRun,
+        ...benchmarkHistory.value.filter(
+          run =>
+            run.benchmarkRunId !==
+            savedRun.benchmarkRunId,
+        ),
+      ].slice(0, 8)
+      historyError.value = ''
+    } catch (historyErr) {
+      historyError.value =
+        historyErr instanceof Error
+          ? historyErr.message
+          : 'Benchmark 歷史紀錄儲存失敗。'
     }
 
     if (baselineCreated > 0) {
@@ -1057,6 +1092,25 @@ function sampleStatus(
   return '樣本不足'
 }
 
+function formatBenchmarkRunTime(
+  value: string,
+) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
 function splitPercent(
   count: number | null | undefined,
   total: number | null | undefined,
@@ -1070,14 +1124,19 @@ async function load() {
   error.value = ''
 
   try {
-    const [benchmarkData, trainingData] =
-      await Promise.all([
-        getOcrBenchmarkSummary(),
-        getTrainingDatasetSummary(),
-      ])
+    const [
+      benchmarkData,
+      trainingData,
+      historyData,
+    ] = await Promise.all([
+      getOcrBenchmarkSummary(),
+      getTrainingDatasetSummary(),
+      listOcrBenchmarkRuns(8).catch(() => []),
+    ])
 
     benchmark.value = benchmarkData
     training.value = trainingData
+    benchmarkHistory.value = historyData
   } catch (err) {
     error.value =
       err instanceof Error
@@ -1463,6 +1522,55 @@ onMounted(load)
             有 {{ retestResult.failedCount }} 張 Test
             圖片未完成重測，未納入本次結果。
           </p>
+        </div>
+
+        <div
+          v-if="historyError"
+          class="history-warning"
+        >
+          這次 Benchmark 已完成，但歷史紀錄未儲存：
+          {{ historyError }}
+        </div>
+
+        <div
+          v-if="benchmarkHistory.length"
+          class="benchmark-history"
+        >
+          <div class="benchmark-history-heading">
+            <div>
+              <p class="page-kicker">BENCHMARK HISTORY</p>
+              <strong>最近重測紀錄</strong>
+            </div>
+            <small>
+              只保存版本與聚合統計，不保存旅客姓名或證件號碼。
+            </small>
+          </div>
+
+          <div class="benchmark-history-list">
+            <div
+              v-for="run in benchmarkHistory"
+              :key="run.benchmarkRunId"
+              class="benchmark-history-row"
+            >
+              <span>
+                {{ formatBenchmarkRunTime(run.createdAt) }}
+              </span>
+              <strong>
+                {{ run.pipelineVersion }}
+              </strong>
+              <span>
+                Test {{ run.sampleCount }} 張
+              </span>
+              <span>
+                失敗 {{ run.failedCount }}
+              </span>
+              <span
+                v-if="run.baselineCreatedCount"
+              >
+                新基準 {{ run.baselineCreatedCount }}
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -2245,6 +2353,70 @@ onMounted(load)
 
 .retest-full-rate strong {
   color: #1f6d4a;
+}
+
+.history-warning {
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(180, 83, 9, 0.08);
+  font-size: 0.9rem;
+}
+
+.benchmark-history {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.4rem;
+}
+
+.benchmark-history-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.benchmark-history-heading > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.benchmark-history-heading small {
+  max-width: 34rem;
+  text-align: right;
+}
+
+.benchmark-history-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.benchmark-history-row {
+  display: grid;
+  grid-template-columns:
+    minmax(9rem, 1.2fr)
+    minmax(8rem, 1fr)
+    repeat(3, minmax(5.5rem, auto));
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.7rem;
+  background: rgba(15, 23, 42, 0.035);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 900px) {
+  .benchmark-history-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .benchmark-history-heading small {
+    text-align: left;
+  }
+
+  .benchmark-history-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .passport-name-diagnosis {
