@@ -988,3 +988,15 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 若未來確實要更換固定 Test，應建立獨立、明確且可稽核的 reset / rebaseline 流程，不得借用「取消用於訓練」或「刪除證件」操作。
 
 目的：固定 Test 的樣本集合必須穩定，避免因一般資料維護把 26 張固定基準悄悄變成 25 張，造成不同 OCR 版本比較失真。
+
+### D-076：含固定 baseline 的 Traveler group 永久鎖在 Test split
+
+一般 Training Dataset split 仍使用 Traveler / draft group key 的 deterministic SHA256 70/15/15，因此新增其他旅客樣本不會讓既有 group 洗牌；但 Traveler merge 可能改變 group key。
+
+- 若某 Training Sample 已有 `ocr_evaluation_baselines`，它所在的目前 Traveler group 一律指定為 `test`，不再重新套用 hash split。
+- 同一 group 的其他 Training Sample 一起進入 `test`，避免同一真人一部分在 Test、一部分跑到 Train / Validation 造成資料洩漏。
+- Traveler merge 後重新計算 group 時，只要合併後 group 內仍有任一 fixed baseline sample，整個新 group 仍鎖 Test。
+- 沒有 fixed baseline 的 group 完全維持既有 deterministic 70/15/15 規則。
+- 新增一般樣本不會改變固定 baseline 本身；同一 fixed-Test Traveler 後續新增的樣本可能一起落入 Test，固定 benchmark 的 baseline 樣本數則仍以 `ocr_evaluation_baselines` 為準。
+
+目的：固定 Test 的核心是固定比較樣本與防止同人跨 split，不是強迫所有時點 Train / Validation / Test 的百分比永遠精確等於 70/15/15。
