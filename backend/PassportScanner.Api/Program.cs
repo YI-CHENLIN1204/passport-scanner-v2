@@ -641,6 +641,11 @@ app.MapPut(
                     message = ex.Message
                 });
         }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapDelete(
