@@ -46,7 +46,7 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
@@ -90,16 +90,1149 @@ jobs:
 
       - name: Verify database schema exists
         run: |
-          docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions','tours','tour_members','scan_batches','scan_items','tour_person_drafts','training_samples') ORDER BY table_name;" > /tmp/tables.txt
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('travelers','document_versions','tours','tour_members','scan_batches','scan_items','tour_person_drafts','training_samples','ocr_evaluation_baselines','ocr_benchmark_runs') ORDER BY table_name;" > /tmp/tables.txt
           cat /tmp/tables.txt
-          grep -q '^document_versions$' /tmp/tables.txt
-          grep -q '^scan_batches$' /tmp/tables.txt
-          grep -q '^scan_items$' /tmp/tables.txt
-          grep -q '^tour_members$' /tmp/tables.txt
-          grep -q '^tour_person_drafts$' /tmp/tables.txt
-          grep -q '^tours$' /tmp/tables.txt
-          grep -q '^training_samples$' /tmp/tables.txt
-          grep -q '^travelers$' /tmp/tables.txt
+          grep -q '^document_versions
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+          curl --fail --silent "http://localhost:5080/api/tours?status=empty&documentType=PASSPORT&departureFrom=2026-10-01&departureTo=2026-10-31" > /tmp/tours-filtered.json
+          grep -q "$TOUR_ID" /tmp/tours-filtered.json
+
+          curl --fail --silent "http://localhost:5080/api/tours?status=complete" > /tmp/tours-complete.json
+          if grep -q "$TOUR_ID" /tmp/tours-complete.json; then
+            echo "Empty tour must not appear in complete filter."
+            exit 1
+          fi
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+          curl --fail --silent "http://localhost:5080/api/travelers?documentType=TAIWAN_COMPATRIOT_PERMIT&gender=M&limit=10" > /tmp/travelers-filtered.json
+          python3 -c "import json; rows=json.load(open('/tmp/travelers-filtered.json')); assert len(rows) == 1, rows; assert 'TAIWAN_COMPATRIOT_PERMIT' in rows[0]['currentDocumentTypes'], rows"
+
+          curl --fail --silent "http://localhost:5080/api/travelers?documentType=PASSPORT&limit=10" > /tmp/travelers-passport.json
+          python3 -c "import json; rows=json.load(open('/tmp/travelers-passport.json')); assert len(rows) == 0, rows"
+
+          curl --fail --silent -X POST "http://localhost:5080/api/ocr-benchmark/runs"             -H 'Content-Type: application/json'             -d '{"pipelineVersion":"ci-smoke","sampleCount":1,"failedCount":0,"baselineCreatedCount":0,"summaryJson":"{\"sampleCount\":1}"}'             > /tmp/benchmark-run.json
+          grep -q '"pipelineVersion":"ci-smoke"' /tmp/benchmark-run.json
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/runs?limit=5" > /tmp/benchmark-runs.json
+          python3 -c "import json; rows=json.load(open('/tmp/benchmark-runs.json')); assert rows and rows[0]['pipelineVersion'] == 'ci-smoke', rows"
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^ocr_benchmark_runs
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^ocr_evaluation_baselines
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^scan_batches
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^scan_items
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^tour_members
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^tour_person_drafts
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^tours
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^training_samples
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
+          grep -q '^travelers
+
+      - name: Verify tour create/list/detail flow
+        run: |
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI 測試團","departureDate":"2026-10-10","returnDate":"2026-10-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/tour.json
+
+          grep -q '"tourName":"CI 測試團"' /tmp/tour.json
+          grep -q '"requiredDocumentTypes":\["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"\]' /tmp/tour.json
+
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent http://localhost:5080/api/tours > /tmp/tours.json
+          grep -q "$TOUR_ID" /tmp/tours.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-detail.json
+          grep -q '"members":\[\]' /tmp/tour-detail.json
+
+      - name: Verify staged documents regroup and training opt-in
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/passport-batch.json
+          PASSPORT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' \
+            > /tmp/permit-batch.json
+          PERMIT_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-batch.json'))['scanBatchId'])")
+
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/passport-scan-item.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
+            > /tmp/permit-scan-item.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-before.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-before.json')); assert len(rows) == 2, rows"
+
+          PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王小明","nameEn":"","birthDate":"1990-01-15","gender":"M","nationality":null,"documentNumber":"12345678","issuingCountry":null,"expiryDate":"2030-12-31","useForTraining":true}' \
+            > /tmp/permit-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-after.json
+          python3 -c "import json; rows=json.load(open('/tmp/review-queue-after.json')); assert len(rows) == 1, rows; assert rows[0]['nameZh'] == '王小明', rows; assert len(rows[0]['documents']) == 2, rows"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-benchmark/summary" > /tmp/ocr-benchmark.json
+          python3 -c "import json; data=json.load(open('/tmp/ocr-benchmark.json')); assert data['reviewedSampleCount'] == 1, data; assert data['scoredSampleCount'] == 1, data; doc=data['documents'][0]; assert doc['manualCorrectionCount'] == 1, doc; assert doc['averageTotalMs'] == 1234, doc"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/summary" > /tmp/training-summary.json
+          python3 -c "import json; data=json.load(open('/tmp/training-summary.json')); assert data['sampleCount'] == 1, data; assert data['documents'][0]['sampleCount'] == 1, data"
+
+          curl --fail --silent "http://localhost:5080/api/ocr-training/export.zip" -o /tmp/training.zip
+          unzip -l /tmp/training.zip > /tmp/training-files.txt
+          grep -q 'manifest.jsonl' /tmp/training-files.txt
+          grep -q 'README.txt' /tmp/training-files.txt
+
+      - name: Verify large scan payload passes through frontend proxy
+        run: |
+          TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5173/api/tours/$TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/proxy-batch.json
+
+          PROXY_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/proxy-batch.json'))['scanBatchId'])")
+
+          python3 -c 'import json; payload={"originalFileName":"large-review.jpg","imageContentType":"image/jpeg","imageBase64":"A"*2000000,"nameZh":"大型測試","nameEn":"LARGE TEST","birthDate":"1991-02-03","gender":"M","nationality":"TWN","documentNumber":"T87654321","issuingCountry":"TWN","expiryDate":"2031-12-31","ocrPayloadJson":"{}"}; json.dump(payload, open("/tmp/large-scan.json","w"), ensure_ascii=False)'
+
+          curl --fail --silent -X POST "http://localhost:5173/api/scan-batches/$PROXY_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/large-scan.json \
+            > /tmp/large-scan-item.json
+
+          grep -q '"scanItemId"' /tmp/large-scan-item.json
+
+      - name: Restart backend and verify API reconnects
+        run: |
+          docker compose restart backend
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:5080/api/tours > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend backend database
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs frontend backend database
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose down -v
+ /tmp/tables.txt
 
       - name: Verify tour create/list/detail flow
         run: |
