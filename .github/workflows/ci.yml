@@ -281,6 +281,43 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/queue-after-reviewed-delete.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-reviewed-delete.json')); assert len(rows) == 1, rows; assert len(rows[0]['documents']) == 1, rows; assert rows[0]['documents'][0]['documentType'] == 'PASSPORT', rows"
 
+      - name: Verify manual traveler merge
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Merge 團","departureDate":"2099-11-10","returnDate":"2099-11-12","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/merge-tour.json
+          MERGE_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/passport-reviews?tourId=$MERGE_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"王甲甲\",\"englishName\":\"WANG CHIA CHIA\",\"passportNumber\":\"T11111111\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1990-05-06\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/merge-target.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/taiwan-compatriot-permit-reviews?tourId=$MERGE_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"taiwan-compatriot-permit\",\"chineseName\":\"王甲乙\",\"permitNumber\":\"87654320\",\"birthDate\":\"1990-05-06\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":5,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/merge-source.json
+
+          TARGET_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-target.json'))['travelerId'])")
+          SOURCE_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-source.json'))['travelerId'])")
+          test "$TARGET_ID" != "$SOURCE_ID"
+
+          curl --fail --silent -X POST "http://localhost:5080/api/travelers/$TARGET_ID/merge" \
+            -H 'Content-Type: application/json' \
+            -d "{\"sourceTravelerId\":\"$SOURCE_ID\"}" \
+            > /tmp/merged-traveler.json
+
+          python3 -c "import json; data=json.load(open('/tmp/merged-traveler.json')); t=data['traveler']; assert t['travelerId'] == '$TARGET_ID', data; assert t['nameZh'] == '王甲甲', data; assert len(data['documents']) == 2, data"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$MERGE_TOUR_ID" > /tmp/merge-tour-after.json
+          python3 -c "import json; data=json.load(open('/tmp/merge-tour-after.json')); assert len(data['members']) == 1, data; member=data['members'][0]; assert member['travelerId'] == '$TARGET_ID', member; assert {d['documentType'] for d in member['documents']} == {'PASSPORT','TAIWAN_COMPATRIOT_PERMIT'}, member"
+
+          SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
+          test "$SOURCE_STATUS" = "404"
+
       - name: Verify large scan payload passes through frontend proxy
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
