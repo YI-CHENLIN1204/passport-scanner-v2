@@ -874,3 +874,15 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 對既有資料庫加 constraint 前，若發現指向不存在 DocumentVersion 的 orphan UUID，先清成 NULL。
 
 目的：migration 只修復能確定的舊資料，不在背景啟動流程替操作人員做身份猜測。
+
+### D-066：同一 Traveler／證件類型只能有一筆 Current DocumentVersion
+
+`DocumentVersion.IsCurrent` 是正式資料規則，不只是 UI 標籤。
+
+- 同一 `traveler_id + document_type` 最多只能有一筆 `is_current = true`。
+- 換證時先將同類型舊 current 版本轉為 historical，再建立新的 current 版本。
+- Traveler merge 後重新 reconcile current documents；若兩邊都有 current，同類型只保留 `VerifiedAt` 最新，其次 `CreatedAt` 最新的版本。
+- 啟動既有資料庫時，若歷史資料已有多筆 current，先依相同排序規則修復，再建立 PostgreSQL partial unique index。
+- 團別的 `TourMemberDocument` 可以繼續引用 historical DocumentVersion；全域 current 不等於某一歷史團別當時使用的證件。
+
+資料庫以 partial unique index `ux_document_versions_one_current_per_type` 強制這條 invariant。
