@@ -503,6 +503,29 @@ jobs:
 
           grep -q '"scanItemId"' /tmp/large-scan-item.json
 
+      - name: Verify database backup scripts
+        run: |
+          pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw './scripts/backup-db.ps1')); [void][scriptblock]::Create((Get-Content -Raw './scripts/restore-db.ps1'))"
+
+          rm -rf ./ci-backups
+          pwsh -NoProfile -File ./scripts/backup-db.ps1 -OutputDirectory ./ci-backups
+
+          BACKUP_FILE=$(find ./ci-backups -maxdepth 1 -type f -name '*.dump' | head -n 1)
+          HASH_FILE=$(find ./ci-backups -maxdepth 1 -type f -name '*.dump.sha256.txt' | head -n 1)
+
+          test -n "$BACKUP_FILE"
+          test -f "$BACKUP_FILE"
+          test -n "$HASH_FILE"
+          test -f "$HASH_FILE"
+
+          EXPECTED_HASH=$(awk '{print $1}' "$HASH_FILE" | tr '[:lower:]' '[:upper:]')
+          ACTUAL_HASH=$(sha256sum "$BACKUP_FILE" | awk '{print $1}' | tr '[:lower:]' '[:upper:]')
+          test "$EXPECTED_HASH" = "$ACTUAL_HASH"
+
+          docker compose cp "$BACKUP_FILE" database:/tmp/ci-backup.dump
+          docker compose exec -T database pg_restore --list /tmp/ci-backup.dump > /dev/null
+          docker compose exec -T database rm -f /tmp/ci-backup.dump
+
       - name: Restart backend and verify API reconnects
         run: |
           docker compose restart backend
