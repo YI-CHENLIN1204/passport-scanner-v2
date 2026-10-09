@@ -67,6 +67,7 @@ public sealed record ScanItemResponse(
     string DocumentNumber,
     string? IssuingCountry,
     DateOnly? ExpiryDate,
+    Guid? SavedDocumentVersionId,
     string ReviewStatus,
     bool TrainingSelected,
     DateTimeOffset? ReviewedAt,
