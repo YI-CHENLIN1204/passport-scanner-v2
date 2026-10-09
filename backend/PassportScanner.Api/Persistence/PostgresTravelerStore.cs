@@ -35,6 +35,22 @@ public sealed class PostgresTravelerStore(
         var issuingCountry = NormalizeNullable(input.IssuingCountry);
         var sex = Normalize(input.Sex);
 
+        ValidateFormalIdentity(
+            nameZh,
+            input.BirthDate,
+            sex,
+            nationality,
+            now);
+
+        ValidateDocumentFields(
+            documentType,
+            documentNumber,
+            nameEn,
+            nationality,
+            issuingCountry,
+            input.ExpiryDate,
+            input.BirthDate);
+
         if (documentType == "TAIWAN_NATIONAL_ID")
         {
             if (!TaiwanNationalIdReviewValidator
@@ -494,11 +510,12 @@ public sealed class PostgresTravelerStore(
         var gender = Normalize(
             request.Gender ?? string.Empty);
 
-        if (string.IsNullOrWhiteSpace(gender))
-        {
-            throw new ArgumentException(
-                "旅客性別不可空白。");
-        }
+        ValidateFormalIdentity(
+            nameZh,
+            birthDate,
+            gender,
+            NormalizeNullable(request.Nationality),
+            now);
 
         var effectiveNationalIdNumber =
             NormalizeNullable(
@@ -638,21 +655,35 @@ public sealed class PostgresTravelerStore(
                 expiryDate = parsedExpiry;
             }
 
+            var updatedNameEn =
+                Normalize(
+                    update.NameEnOnDocument ??
+                    string.Empty);
+            var updatedNationality =
+                NormalizeNullable(
+                    update.Nationality);
+
+            ValidateDocumentFields(
+                document.DocumentType,
+                documentNumber,
+                updatedNameEn,
+                updatedNationality,
+                issuingCountry,
+                expiryDate,
+                birthDate);
+
             document.NameZhOnDocument =
                 NormalizeIdentityName(
                     update.NameZhOnDocument ??
                     string.Empty);
             document.NameEnOnDocument =
-                Normalize(
-                    update.NameEnOnDocument ??
-                    string.Empty);
+                updatedNameEn;
             document.DocumentNumber =
                 documentNumber;
             document.IssuingCountry =
                 issuingCountry;
             document.Nationality =
-                NormalizeNullable(
-                    update.Nationality);
+                updatedNationality;
             document.ExpiryDate = expiryDate;
             document.VerifiedAt = now;
 
@@ -1441,6 +1472,150 @@ public sealed class PostgresTravelerStore(
         }
 
         traveler.UpdatedAt = now;
+    }
+
+    private static void ValidateFormalIdentity(
+        string nameZh,
+        DateOnly birthDate,
+        string gender,
+        string? nationality,
+        DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(nameZh))
+        {
+            throw new ArgumentException(
+                "旅客中文姓名不可空白。");
+        }
+
+        if (
+            birthDate >
+            DateOnly.FromDateTime(
+                now.UtcDateTime))
+        {
+            throw new ArgumentException(
+                "出生日期不可晚於目前日期。");
+        }
+
+        if (gender is not ("M" or "F" or "X"))
+        {
+            throw new ArgumentException(
+                "旅客性別必須為 M、F 或 X。");
+        }
+
+        ValidateCountryCode(
+            nationality,
+            "國籍",
+            required: false);
+    }
+
+    private static void ValidateDocumentFields(
+        string documentType,
+        string documentNumber,
+        string nameEn,
+        string? nationality,
+        string? issuingCountry,
+        DateOnly? expiryDate,
+        DateOnly birthDate)
+    {
+        if (
+            documentType is not (
+                "PASSPORT" or
+                "TAIWAN_COMPATRIOT_PERMIT" or
+                "TAIWAN_NATIONAL_ID"))
+        {
+            throw new ArgumentException(
+                "不支援的證件類型。");
+        }
+
+        if (documentType == "PASSPORT")
+        {
+            if (
+                documentNumber.Length is < 5 or > 20 ||
+                !documentNumber.All(character =>
+                    character is >= 'A' and <= 'Z' ||
+                    character is >= '0' and <= '9'))
+            {
+                throw new ArgumentException(
+                    "護照號碼格式不正確。");
+            }
+
+            if (string.IsNullOrWhiteSpace(nameEn))
+            {
+                throw new ArgumentException(
+                    "護照英文姓名不可空白。");
+            }
+
+            ValidateCountryCode(
+                nationality,
+                "護照國籍",
+                required: true);
+            ValidateCountryCode(
+                issuingCountry,
+                "護照簽發國",
+                required: true);
+
+            if (!expiryDate.HasValue)
+            {
+                throw new ArgumentException(
+                    "護照有效期限不可空白。");
+            }
+        }
+        else if (
+            documentType ==
+                "TAIWAN_COMPATRIOT_PERMIT")
+        {
+            if (
+                documentNumber.Length != 8 ||
+                !documentNumber.All(
+                    char.IsDigit))
+            {
+                throw new ArgumentException(
+                    "台胞證號碼必須為 8 位數字。");
+            }
+
+            if (!expiryDate.HasValue)
+            {
+                throw new ArgumentException(
+                    "台胞證有效期限不可空白。");
+            }
+
+            if (expiryDate.Value <= birthDate)
+            {
+                throw new ArgumentException(
+                    "台胞證有效期限必須晚於出生日期。");
+            }
+        }
+        else if (expiryDate.HasValue)
+        {
+            throw new ArgumentException(
+                "台灣身分證沒有有效期限。");
+        }
+    }
+
+    private static void ValidateCountryCode(
+        string? value,
+        string label,
+        bool required)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            if (required)
+            {
+                throw new ArgumentException(
+                    $"{label}不可空白。");
+            }
+
+            return;
+        }
+
+        if (
+            value.Length != 3 ||
+            !value.All(character =>
+                character is >= 'A' and <= 'Z'))
+        {
+            throw new ArgumentException(
+                $"{label}必須為 3 碼大寫英文字母。");
+        }
     }
 
     private static void ValidateNationalIdGender(
