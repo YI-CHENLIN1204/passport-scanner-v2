@@ -596,13 +596,22 @@ onMounted(() => load())
             </td>
             <td>{{ traveler.documentVersionCount }}</td>
             <td class="action-cell">
-              <button
-                type="button"
-                class="edit-button"
-                @click="openEdit(traveler)"
-              >
-                編輯
-              </button>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="merge-button"
+                  @click="openMerge(traveler)"
+                >
+                  合併
+                </button>
+                <button
+                  type="button"
+                  class="edit-button"
+                  @click="openEdit(traveler)"
+                >
+                  編輯
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -637,6 +646,254 @@ onMounted(() => load())
           下一頁
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="mergeOpen && mergeTarget"
+      class="modal-backdrop"
+      @click.self="closeMerge"
+    >
+      <section
+        class="merge-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header>
+          <div>
+            <p class="page-kicker">MERGE TRAVELERS</p>
+            <h2>人工合併旅客</h2>
+            <p>
+              保留左側 Traveler 主檔，將另一筆的證件版本與團別關聯併入。
+            </p>
+          </div>
+          <button
+            type="button"
+            class="close-button"
+            :disabled="mergeSaving"
+            @click="closeMerge"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="merge-target-card">
+          <span class="merge-role keep">保留</span>
+          <div>
+            <strong>
+              {{ mergeTarget.traveler.nameZh }}
+            </strong>
+            <span v-if="mergeTarget.traveler.nameEn">
+              {{ mergeTarget.traveler.nameEn }}
+            </span>
+          </div>
+          <dl>
+            <div>
+              <dt>出生日期</dt>
+              <dd>{{ mergeTarget.traveler.birthDate }}</dd>
+            </div>
+            <div>
+              <dt>性別</dt>
+              <dd>{{ mergeTarget.traveler.gender }}</dd>
+            </div>
+            <div>
+              <dt>身分證字號</dt>
+              <dd>
+                {{ mergeTarget.traveler.nationalIdNumber || '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt>證件版本</dt>
+              <dd>
+                {{ mergeTarget.traveler.documentVersionCount }}
+              </dd>
+            </div>
+          </dl>
+
+          <div class="merge-document-list">
+            <span
+              v-for="document in mergeTarget.documents"
+              :key="document.documentVersionId"
+            >
+              {{ documentLabel(document.documentType) }}
+              · {{ document.documentNumber }}
+              <template v-if="document.isCurrent">
+                · 目前
+              </template>
+            </span>
+          </div>
+        </div>
+
+        <div class="merge-search">
+          <label>
+            <span>搜尋要併入的另一筆旅客</span>
+            <div>
+              <input
+                v-model="mergeQuery"
+                type="search"
+                placeholder="輸入姓名、身分證字號或證件號碼"
+                @keyup.enter="searchMergeCandidates"
+              />
+              <button
+                type="button"
+                :disabled="mergeSearching"
+                @click="searchMergeCandidates"
+              >
+                {{
+                  mergeSearching
+                    ? '搜尋中…'
+                    : '搜尋'
+                }}
+              </button>
+            </div>
+          </label>
+
+          <div
+            v-if="mergeCandidates.length"
+            class="merge-candidates"
+          >
+            <button
+              v-for="candidate in mergeCandidates"
+              :key="candidate.travelerId"
+              type="button"
+              :class="{
+                selected:
+                  mergeSource?.traveler.travelerId ===
+                  candidate.travelerId,
+              }"
+              @click="selectMergeSource(candidate)"
+            >
+              <strong>{{ candidate.nameZh }}</strong>
+              <span>
+                {{ candidate.birthDate }}
+                · {{ candidate.gender }}
+                · 身分證
+                {{ candidate.nationalIdNumber || '—' }}
+                · {{ candidate.documentVersionCount }} 版本
+              </span>
+            </button>
+          </div>
+
+          <p
+            v-else-if="
+              mergeQuery.trim() &&
+              !mergeSearching
+            "
+            class="merge-search-empty"
+          >
+            沒有找到其他符合條件的旅客。
+          </p>
+        </div>
+
+        <div
+          v-if="mergeSource"
+          class="merge-source-card"
+        >
+          <span class="merge-role remove">
+            併入後刪除
+          </span>
+
+          <div>
+            <strong>
+              {{ mergeSource.traveler.nameZh }}
+            </strong>
+            <span v-if="mergeSource.traveler.nameEn">
+              {{ mergeSource.traveler.nameEn }}
+            </span>
+          </div>
+
+          <dl>
+            <div>
+              <dt>出生日期</dt>
+              <dd>{{ mergeSource.traveler.birthDate }}</dd>
+            </div>
+            <div>
+              <dt>性別</dt>
+              <dd>{{ mergeSource.traveler.gender }}</dd>
+            </div>
+            <div>
+              <dt>身分證字號</dt>
+              <dd>
+                {{ mergeSource.traveler.nationalIdNumber || '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt>證件版本</dt>
+              <dd>
+                {{ mergeSource.traveler.documentVersionCount }}
+              </dd>
+            </div>
+          </dl>
+
+          <div class="merge-document-list">
+            <span
+              v-for="document in mergeSource.documents"
+              :key="document.documentVersionId"
+            >
+              {{ documentLabel(document.documentType) }}
+              · {{ document.documentNumber }}
+              <template v-if="document.isCurrent">
+                · 目前
+              </template>
+            </span>
+          </div>
+        </div>
+
+        <p
+          v-if="mergeBlockedReason"
+          class="merge-blocked"
+        >
+          {{ mergeBlockedReason }}
+        </p>
+
+        <p
+          v-if="mergeError"
+          class="error-message"
+        >
+          {{ mergeError }}
+        </p>
+
+        <label
+          v-if="mergeSource && !mergeBlockedReason"
+          class="merge-confirmation"
+        >
+          <input
+            v-model="mergeAcknowledged"
+            type="checkbox"
+          />
+          <span>
+            我已確認這兩筆是同一位旅客，並知道來源 Traveler
+            主檔會被刪除。
+          </span>
+        </label>
+
+        <footer>
+          <button
+            type="button"
+            class="cancel-button"
+            :disabled="mergeSaving"
+            @click="closeMerge"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="merge-confirm-button"
+            :disabled="
+              mergeSaving ||
+              !mergeSource ||
+              !!mergeBlockedReason ||
+              !mergeAcknowledged
+            "
+            @click="confirmMerge"
+          >
+            {{
+              mergeSaving
+                ? '合併中…'
+                : '確認合併'
+            }}
+          </button>
+        </footer>
+      </section>
     </div>
 
     <div
