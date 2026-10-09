@@ -188,8 +188,12 @@ async function saveEdit() {
 
   editError.value = ''
 
-  if (!editForm.value.nameZh.trim()) {
-    editError.value = '中文姓名不可空白。'
+  if (
+    !editForm.value.nameZh.trim() &&
+    !editForm.value.nameEn.trim()
+  ) {
+    editError.value =
+      '中文姓名與英文姓名至少需要一個。'
     return
   }
 
