@@ -229,7 +229,10 @@ public sealed class PostgresScanQueueStore(
         batch.UpdatedAt = now;
         db.SaveChanges();
 
-        return ToItemResponse(item);
+        return ToItemResponse(
+            item,
+            false,
+            now);
     }
 
     public ScanBatchResponse CompleteBatch(
@@ -304,7 +307,8 @@ public sealed class PostgresScanQueueStore(
     }
 
     public IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
-        Guid tourId)
+        Guid tourId,
+        DateTimeOffset now)
     {
         var drafts = db.TourPersonDrafts
             .AsNoTracking()
@@ -352,12 +356,15 @@ public sealed class PostgresScanQueueStore(
                             ToItemResponse(
                                 item,
                                 selectedTrainingIds.Contains(
-                                    item.ScanItemId)))
+                                    item.ScanItemId),
+                                now))
                         .ToList()))
             .ToList();
     }
 
-    public ScanItemImage? GetItemImage(Guid scanItemId)
+    public ScanItemImage? GetItemImage(
+        Guid scanItemId,
+        DateTimeOffset now)
     {
         var item = db.ScanItems
             .AsNoTracking()
@@ -365,6 +372,7 @@ public sealed class PostgresScanQueueStore(
                 value => value.ScanItemId == scanItemId);
 
         return item is null ||
+            item.DeleteAfter <= now ||
             item.ImageBytes.Length == 0
             ? null
             : new ScanItemImage(
@@ -388,10 +396,13 @@ public sealed class PostgresScanQueueStore(
 
         if (
             item.ReviewStatus == Pending &&
-            item.ImageBytes.Length == 0)
+            (
+                item.DeleteAfter <= now ||
+                item.ImageBytes.Length == 0
+            ))
         {
             throw new InvalidOperationException(
-                "正式收件照片已依保存期限刪除，無法在沒有原圖的情況下完成人工審核。");
+                "正式收件照片已達保存期限或已刪除，無法在沒有有效原圖的情況下完成人工審核。");
         }
 
         using var transaction =
@@ -512,7 +523,8 @@ public sealed class PostgresScanQueueStore(
 
         return ToItemResponse(
             item,
-            request.UseForTraining);
+            request.UseForTraining,
+            now);
     }
 
     public bool DeleteItem(
@@ -1278,7 +1290,8 @@ public sealed class PostgresScanQueueStore(
 
     private static ScanItemResponse ToItemResponse(
         ScanItemRecord item,
-        bool trainingSelected = false) =>
+        bool trainingSelected,
+        DateTimeOffset now) =>
         new(
             item.ScanItemId,
             item.ScanBatchId,
@@ -1286,7 +1299,8 @@ public sealed class PostgresScanQueueStore(
             item.DocumentType,
             item.OriginalFileName,
             item.ImageContentType,
-            item.ImageBytes.Length > 0,
+            item.DeleteAfter > now &&
+                item.ImageBytes.Length > 0,
             item.NameZh,
             item.NameZhOnDocument,
             item.NameEn,
