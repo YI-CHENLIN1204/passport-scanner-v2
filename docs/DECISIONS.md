@@ -920,3 +920,13 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - API 必須從資料庫實際 current documents 重新判斷，不假設前端一定把所有 current document 都送回。
 
 目的：人工編輯是修正可信資料，不是繞過掃描人工覆核 validation 的另一條入口。
+
+### D-070：超過 Production Photo Retention Cutoff 的團不得再新增掃描收件
+
+production 證件照片保存期限仍以團別回國日後 7 天為準，因此新收件不能在寫入當下就已經過期。
+
+- 建立 scan batch 前先計算 `ProductionPhotoDeleteAfter(tour.ReturnDate)`；若 cutoff 已小於或等於目前時間，拒絕建立新批次。
+- 每張 scan item 寫入前再次檢查 cutoff，防止批次建立後團別日期被改成過期日期。
+- 過期團別仍可保留、查詢既有正式旅客與歷史資料；限制的是新的 production 圖片收件。
+- 若確實需要重新收件，操作人員應先確認並修正團別日期，而不是讓新照片以已過期的 `delete_after` 寫入。
+- 此規則與 D-062 相同目的：不可讓 PENDING 人工審核資料在使用者不知情時立即失去原圖。
