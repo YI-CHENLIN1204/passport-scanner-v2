@@ -937,7 +937,7 @@ app.MapPost(
         ITravelerStore store,
         ITourStore tourStore) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = PassportReviewValidator.Validate(request, today);
 
         if (errors.Count > 0)
@@ -1041,7 +1041,7 @@ app.MapPost(
         ITravelerStore store,
         ITourStore tourStore) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanNationalIdReviewValidator.Validate(
             request,
             today);
@@ -1134,7 +1134,7 @@ app.MapPost(
     "/api/taiwan-national-id-reviews/validate",
     (TaiwanNationalIdReviewRequest request) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanNationalIdReviewValidator.Validate(
             request,
             today);
@@ -1163,7 +1163,7 @@ app.MapPost(
         ITravelerStore store,
         ITourStore tourStore) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanCompatriotPermitReviewValidator.Validate(
             request,
             today);
@@ -1258,7 +1258,7 @@ app.MapPost(
     "/api/taiwan-compatriot-permit-reviews/validate",
     (TaiwanCompatriotPermitReviewRequest request) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = TaiwanCompatriotPermitReviewValidator.Validate(
             request,
             today);
@@ -1287,7 +1287,7 @@ app.MapPost(
     "/api/passport-reviews/validate",
     (PassportReviewRequest request) =>
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessDate.Taiwan(DateTimeOffset.UtcNow);
         var errors = PassportReviewValidator.Validate(request, today);
 
         if (errors.Count > 0)
