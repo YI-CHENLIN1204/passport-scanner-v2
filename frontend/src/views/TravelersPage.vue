@@ -5,6 +5,7 @@ import {
 } from '../services/nameScriptConversion'
 import {
   getTravelerDetail,
+  mergeTravelers,
   searchTravelers,
   updateTraveler,
   type TravelerDetailResponse,
@@ -35,6 +36,45 @@ const editForm = ref<UpdateTravelerRequest>({
   nationality: null,
   nationalIdNumber: null,
   documents: [],
+})
+
+const mergeOpen = ref(false)
+const mergeSaving = ref(false)
+const mergeSearching = ref(false)
+const mergeError = ref('')
+const mergeQuery = ref('')
+const mergeAcknowledged = ref(false)
+const mergeTarget =
+  ref<TravelerDetailResponse | null>(null)
+const mergeSource =
+  ref<TravelerDetailResponse | null>(null)
+const mergeCandidates =
+  ref<TravelerSummaryResponse[]>([])
+
+const mergeBlockedReason = computed(() => {
+  const target = mergeTarget.value?.traveler
+  const source = mergeSource.value?.traveler
+
+  if (!target || !source) return ''
+
+  if (target.birthDate !== source.birthDate) {
+    return '出生日期不同，請先修正資料後再合併。'
+  }
+
+  if (target.gender !== source.gender) {
+    return '性別不同，請先修正資料後再合併。'
+  }
+
+  if (
+    target.nationalIdNumber &&
+    source.nationalIdNumber &&
+    target.nationalIdNumber !==
+      source.nationalIdNumber
+  ) {
+    return '兩筆都有身分證字號且內容不同，為避免誤合併，請先確認並修正資料。'
+  }
+
+  return ''
 })
 
 const historicalDocuments = computed(
@@ -197,6 +237,148 @@ async function saveEdit() {
         : '旅客資料更新失敗。'
   } finally {
     editSaving.value = false
+  }
+}
+
+async function searchMergeCandidates() {
+  const targetId =
+    mergeTarget.value?.traveler.travelerId
+
+  if (
+    !targetId ||
+    !mergeQuery.value.trim()
+  ) {
+    mergeCandidates.value = []
+    return
+  }
+
+  mergeSearching.value = true
+  mergeError.value = ''
+
+  try {
+    const rows = await searchTravelers(
+      mergeQuery.value,
+      12,
+    )
+
+    mergeCandidates.value =
+      rows.filter(
+        traveler =>
+          traveler.travelerId !== targetId,
+      )
+  } catch (err) {
+    mergeError.value =
+      err instanceof Error
+        ? err.message
+        : '旅客搜尋失敗。'
+  } finally {
+    mergeSearching.value = false
+  }
+}
+
+async function openMerge(
+  traveler: TravelerSummaryResponse,
+) {
+  mergeError.value = ''
+  mergeSource.value = null
+  mergeCandidates.value = []
+  mergeAcknowledged.value = false
+  mergeQuery.value = traveler.nameZh
+
+  try {
+    const detail = await getTravelerDetail(
+      traveler.travelerId,
+    )
+
+    if (!detail) {
+      throw new Error('找不到要保留的旅客資料。')
+    }
+
+    mergeTarget.value = detail
+    mergeOpen.value = true
+    await searchMergeCandidates()
+  } catch (err) {
+    error.value =
+      err instanceof Error
+        ? err.message
+        : '旅客資料載入失敗。'
+  }
+}
+
+function closeMerge() {
+  if (mergeSaving.value) return
+
+  mergeOpen.value = false
+  mergeTarget.value = null
+  mergeSource.value = null
+  mergeCandidates.value = []
+  mergeQuery.value = ''
+  mergeAcknowledged.value = false
+  mergeError.value = ''
+}
+
+async function selectMergeSource(
+  traveler: TravelerSummaryResponse,
+) {
+  mergeError.value = ''
+  mergeAcknowledged.value = false
+
+  try {
+    const detail = await getTravelerDetail(
+      traveler.travelerId,
+    )
+
+    if (!detail) {
+      throw new Error('找不到要併入的旅客資料。')
+    }
+
+    mergeSource.value = detail
+  } catch (err) {
+    mergeError.value =
+      err instanceof Error
+        ? err.message
+        : '旅客資料載入失敗。'
+  }
+}
+
+async function confirmMerge() {
+  const target = mergeTarget.value?.traveler
+  const source = mergeSource.value?.traveler
+
+  if (
+    !target ||
+    !source ||
+    mergeSaving.value ||
+    mergeBlockedReason.value ||
+    !mergeAcknowledged.value
+  ) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `確定把「${source.nameZh}」合併到「${target.nameZh}」嗎？來源 Traveler 主檔會被刪除，但證件版本與團別資料會移到保留 Traveler。此動作無法從畫面直接復原。`,
+  )
+
+  if (!confirmed) return
+
+  mergeSaving.value = true
+  mergeError.value = ''
+
+  try {
+    await mergeTravelers(
+      target.travelerId,
+      source.travelerId,
+    )
+
+    closeMerge()
+    await load(true)
+  } catch (err) {
+    mergeError.value =
+      err instanceof Error
+        ? err.message
+        : '旅客合併失敗。'
+  } finally {
+    mergeSaving.value = false
   }
 }
 
