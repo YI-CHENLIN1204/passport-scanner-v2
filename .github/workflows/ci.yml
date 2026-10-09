@@ -667,6 +667,19 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/travelers/$FOREIGN_TRAVELER_1" > /tmp/foreign-traveler.json
           python3 -c "import json; data=json.load(open('/tmp/foreign-traveler.json')); assert data['traveler']['nameZh'] == '', data; assert data['traveler']['nameEn'] == 'JOHN SMITH', data; assert len(data['documents']) == 2, data"
 
+      - name: Verify foreign passport can keep X sex without Taiwan ID
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"\",\"englishName\":\"ALEX MORGAN\",\"passportNumber\":\"X9876543\",\"nationality\":\"USA\",\"issuingState\":\"USA\",\"birthDate\":\"1990-06-15\",\"sex\":\"X\",\"expiryDate\":\"2038-06-14\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":false,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":null,\"chineseNameScore\":null,\"chineseNameRomanizationStatus\":\"unknown\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/foreign-x-passport.json
+
+          FOREIGN_X_ID=$(python3 -c "import json; print(json.load(open('/tmp/foreign-x-passport.json'))['travelerId'])")
+          curl --fail --silent "http://localhost:5080/api/travelers/$FOREIGN_X_ID" > /tmp/foreign-x-traveler.json
+          python3 -c "import json; data=json.load(open('/tmp/foreign-x-traveler.json')); t=data['traveler']; assert t['gender']=='X', data; assert t['nationalIdNumber'] is None, data; assert t['nameZh']=='', data; assert len([d for d in data['documents'] if d['documentType']=='PASSPORT' and d['isCurrent']])==1, data"
+
       - name: Verify foreign passport through batch review
         run: |
           IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
