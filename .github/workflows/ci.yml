@@ -305,6 +305,29 @@ jobs:
           SOURCE_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-source.json'))['travelerId'])")
           test "$TARGET_ID" != "$SOURCE_ID"
 
+          INVALID_ID_STATUS=$(curl --silent --output /tmp/invalid-national-id.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$TARGET_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王甲甲","nameEn":"WANG CHIA CHIA","birthDate":"1990-05-06","gender":"M","nationality":"TWN","nationalIdNumber":"A123456788","documents":[]}')
+          test "$INVALID_ID_STATUS" = "400"
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$TARGET_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王甲甲","nameEn":"WANG CHIA CHIA","birthDate":"1990-05-06","gender":"M","nationality":"TWN","nationalIdNumber":"A123456789","documents":[]}' \
+            > /tmp/valid-national-id.json
+
+          curl --fail --silent -X POST http://localhost:5080/api/passport-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"王丙丙\",\"englishName\":\"WANG PING PING\",\"passportNumber\":\"T22222222\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1993-03-03\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/collision-traveler.json
+
+          COLLISION_ID=$(python3 -c "import json; print(json.load(open('/tmp/collision-traveler.json'))['travelerId'])")
+          COLLISION_DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/collision-traveler.json'))['documentVersionId'])")
+
+          COLLISION_STATUS=$(curl --silent --output /tmp/document-collision.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/travelers/$COLLISION_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"nameZh\":\"王丙丙\",\"nameEn\":\"WANG PING PING\",\"birthDate\":\"1993-03-03\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":null,\"documents\":[{\"documentVersionId\":\"$COLLISION_DOC_ID\",\"nameZhOnDocument\":\"王丙丙\",\"nameEnOnDocument\":\"WANG PING PING\",\"documentNumber\":\"T11111111\",\"issuingCountry\":\"TWN\",\"nationality\":\"TWN\",\"expiryDate\":\"2035-01-01\"}]}")
+          test "$COLLISION_STATUS" = "400"
+
           curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$SOURCE_ID" \
             -H 'Content-Type: application/json' \
             -d '{"nameZh":"王甲甲","nameEn":"","birthDate":"1990-05-06","gender":"M","nationality":null,"nationalIdNumber":null,"documents":[]}' \
