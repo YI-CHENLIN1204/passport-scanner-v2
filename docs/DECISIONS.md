@@ -766,3 +766,17 @@ V2 人物歸組採保守策略：
 - 再確認該 Tour 的 `required_document_types` 包含這種證件。
 - preflight 通過後才可建立／更新 Traveler 與 DocumentVersion。
 - 不允許 API 最後回 404/400，但前面的正式旅客／證件資料已經先寫進資料庫。
+
+### D-057：護照流程不得假設所有旅客都有中文姓名
+
+V2 支援外國護照；正式身份資料與團別畫面不得把「中文姓名存在」當成所有 Passport Traveler 的必要條件。
+
+- 台灣護照（nationality 或 issuing country 為 TWN）仍必須人工確認中文姓名。
+- 台胞證與台灣身分證仍必須有中文姓名。
+- 外國護照允許中文姓名空白，但英文姓名必須存在。
+- Traveler 主檔允許中文姓名空白，只要英文姓名存在。
+- 外國 Traveler 的次級人物匹配在中文姓名空白時使用「英文姓名 + 出生日期 + 性別」。
+- 若英文身份條件命中多位 Traveler，仍視為 ambiguous，不自動合併。
+- 團別統計、待審核人物卡與正式團員畫面在中文姓名空白時使用英文姓名作為 identity/display fallback。
+- 待審核 draft grouping 在中文姓名空白時使用既有 scan item 的英文姓名 + 出生日期 + 性別，不為此額外擴充 draft schema。
+- CSV 與歷史團別仍以該團實際 link 的 DocumentVersion 為準，不因 Traveler 後來改名或換證而改寫過去團別使用的證件版本。
