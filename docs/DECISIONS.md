@@ -827,3 +827,13 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 儲存目前待審核證件後，優先尋找另一位仍有 PENDING 證件的 draft person。
 - 若其他旅客都沒有待審核資料，但目前這位仍有另一張 PENDING 證件，才留在目前這位並切到下一張待審核證件。
 - 全部待審核資料都完成後才關閉審核視窗。
+
+### D-062：編輯團別日期不得讓待審核照片立即失效
+
+`scan_items.delete_after` 會隨團別回國日重新計算，但團別日期修改不能在使用者不知情的情況下讓 PENDING 原圖立即超過 retention cutoff。
+
+- 編輯團別時先依新回國日計算 production photo delete-after。
+- 若新的 cutoff 已經早於／等於目前時間，而且本團仍有 `PENDING` 且 image bytes 尚存在的 scan item，拒絕這次團別修改。
+- 操作人員必須先完成審核或刪除這些待審核資料，再把回國日改到會立即過期的日期。
+- 已審核資料不阻止日期修改；其 production 圖片仍依正式 retention 政策清除，Training Dataset 為獨立副本。
+- 被拒絕的團別修改不可改變 tour 日期或既有 scan item 的 `delete_after`。
