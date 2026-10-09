@@ -661,10 +661,25 @@ public sealed class PostgresScanQueueStore(
         ScanItemRecord item,
         DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(item.NameZh))
+        var requiresChineseName =
+            item.DocumentType != "PASSPORT" ||
+            item.Nationality == "TWN" ||
+            item.IssuingCountry == "TWN";
+
+        if (
+            requiresChineseName &&
+            string.IsNullOrWhiteSpace(item.NameZh))
         {
             throw new ArgumentException(
                 "審核完成前必須確認中文姓名。");
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(item.NameZh) &&
+            string.IsNullOrWhiteSpace(item.NameEn))
+        {
+            throw new ArgumentException(
+                "審核完成前中文姓名與英文姓名至少需要一個。");
         }
 
         if (!item.BirthDate.HasValue)
