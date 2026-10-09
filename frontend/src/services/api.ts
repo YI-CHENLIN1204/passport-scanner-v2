@@ -892,6 +892,78 @@ export async function getOcrBenchmarkSummary() {
   return response.json() as Promise<OcrBenchmarkSummaryResponse>
 }
 
+export interface OcrBenchmarkRunResponse {
+  benchmarkRunId: string
+  pipelineVersion: string
+  sampleCount: number
+  failedCount: number
+  baselineCreatedCount: number
+  summaryJson: string
+  createdAt: string
+}
+
+export async function listOcrBenchmarkRuns(
+  limit = 10,
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+  })
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-benchmark/runs?${params.toString()}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `OCR benchmark history failed: ${response.status}`,
+    )
+  }
+
+  return response.json() as Promise<
+    OcrBenchmarkRunResponse[]
+  >
+}
+
+export async function saveOcrBenchmarkRun(
+  request: {
+    pipelineVersion: string
+    sampleCount: number
+    failedCount: number
+    baselineCreatedCount: number
+    summaryJson: string
+  },
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/ocr-benchmark/runs`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `OCR benchmark history save failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<
+    OcrBenchmarkRunResponse
+  >
+}
+
 export interface TrainingEvaluationSampleResponse {
   trainingSampleId: string
   documentType: string
