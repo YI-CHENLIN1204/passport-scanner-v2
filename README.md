@@ -108,7 +108,7 @@ PostgresTravelerStore
 - 儲存前需人工對照原圖確認所有欄位。
 - 儲存後與護照共用 traveler_master / document_versions 版本邏輯。
 
-## CRM / 旅客資料
+## 旅客資料／正式主檔
 
 主介面目前分為：
 
