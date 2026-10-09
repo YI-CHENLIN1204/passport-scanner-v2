@@ -540,9 +540,47 @@ export interface CreateTourRequest {
 export interface UpdateTourRequest
   extends CreateTourRequest {}
 
-export async function listTours(query = '') {
+export interface TourListFilters {
+  status?: string
+  documentType?: string
+  departureFrom?: string
+  departureTo?: string
+}
+
+export async function listTours(
+  query = '',
+  filters: TourListFilters = {},
+) {
   const params = new URLSearchParams()
-  if (query.trim()) params.set('query', query.trim())
+
+  if (query.trim()) {
+    params.set('query', query.trim())
+  }
+
+  if (filters.status?.trim()) {
+    params.set('status', filters.status.trim())
+  }
+
+  if (filters.documentType?.trim()) {
+    params.set(
+      'documentType',
+      filters.documentType.trim(),
+    )
+  }
+
+  if (filters.departureFrom?.trim()) {
+    params.set(
+      'departureFrom',
+      filters.departureFrom.trim(),
+    )
+  }
+
+  if (filters.departureTo?.trim()) {
+    params.set(
+      'departureTo',
+      filters.departureTo.trim(),
+    )
+  }
 
   const suffix = params.toString()
     ? `?${params.toString()}`
@@ -553,9 +591,19 @@ export async function listTours(query = '') {
   )
 
   if (!response.ok) {
-    throw new Error(
-      `Tour list failed: ${response.status}`,
-    )
+    let message =
+      `Tour list failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
   }
 
   return response.json() as Promise<TourSummaryResponse[]>
