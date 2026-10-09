@@ -757,6 +757,7 @@ export interface ScanItemResponse {
   documentType: string
   originalFileName: string
   imageContentType: string
+  imageAvailable: boolean
   nameZh: string
   nameZhOnDocument: string
   nameEn: string
