@@ -216,6 +216,42 @@ public sealed class PostgresTrainingDatasetStore(
                 nameof(split));
         }
 
+        if (normalizedSplit == "fixed-test")
+        {
+            var fixedRows = (
+                from baseline in
+                    db.OcrEvaluationBaselines
+                        .AsNoTracking()
+                join sample in
+                    db.TrainingSamples
+                        .AsNoTracking()
+                    on baseline.TrainingSampleId
+                    equals sample.TrainingSampleId
+                orderby
+                    sample.DocumentType,
+                    sample.SelectedAt,
+                    sample.TrainingSampleId
+                select new
+                {
+                    Sample = sample,
+                    baseline.ResultJson
+                }
+            ).ToList();
+
+            return fixedRows
+                .Select(row =>
+                    new TrainingEvaluationSampleResponse(
+                        row.Sample.TrainingSampleId,
+                        row.Sample.DocumentType,
+                        "test",
+                        row.Sample.OcrPayloadJson,
+                        row.ResultJson,
+                        row.Sample.GroundTruthJson,
+                        row.Sample.OcrInputImageBytes is
+                            { Length: > 0 }))
+                .ToList();
+        }
+
         var usableSamples = db.TrainingSamples
             .AsNoTracking()
             .OrderBy(item => item.DocumentType)
@@ -224,53 +260,35 @@ public sealed class PostgresTrainingDatasetStore(
             .Where(IsUsableTrainingSample)
             .ToList();
 
-        var usableIds = usableSamples
-            .Select(sample =>
-                sample.TrainingSampleId)
+        var splitBySample =
+            BuildSplitAssignments(usableSamples);
+
+        var selectedSamples = usableSamples
+            .Where(sample =>
+                splitBySample[sample.TrainingSampleId] ==
+                    normalizedSplit)
+            .ToList();
+
+        var selectedIds = selectedSamples
+            .Select(sample => sample.TrainingSampleId)
             .ToList();
 
         var baselineBySample =
             db.OcrEvaluationBaselines
                 .AsNoTracking()
                 .Where(item =>
-                    usableIds.Contains(
+                    selectedIds.Contains(
                         item.TrainingSampleId))
                 .ToDictionary(
                     item => item.TrainingSampleId,
                     item => item.ResultJson);
-
-        List<TrainingSampleRecord> selectedSamples;
-        string responseSplit;
-
-        if (normalizedSplit == "fixed-test")
-        {
-            selectedSamples = usableSamples
-                .Where(sample =>
-                    baselineBySample.ContainsKey(
-                        sample.TrainingSampleId))
-                .ToList();
-            responseSplit = "test";
-        }
-        else
-        {
-            var splitBySample =
-                BuildSplitAssignments(usableSamples);
-
-            selectedSamples = usableSamples
-                .Where(sample =>
-                    splitBySample[
-                        sample.TrainingSampleId] ==
-                    normalizedSplit)
-                .ToList();
-            responseSplit = normalizedSplit;
-        }
 
         return selectedSamples
             .Select(sample =>
                 new TrainingEvaluationSampleResponse(
                     sample.TrainingSampleId,
                     sample.DocumentType,
-                    responseSplit,
+                    normalizedSplit,
                     sample.OcrPayloadJson,
                     baselineBySample.TryGetValue(
                         sample.TrainingSampleId,
