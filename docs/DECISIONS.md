@@ -975,3 +975,16 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - background worker 持續約每小時執行，負責最終把 `image_bytes / ocr_input_image_bytes` 從 production scan row 清除。
 
 目的：保存政策的法律／隱私語意由 `delete_after` 決定，不因背景排程延遲而多出最多約一小時的可讀取窗口。
+
+### D-075：固定 Test baseline 樣本不可被一般取消或刪除流程移除
+
+一旦 `training_samples` 已建立對應的 `ocr_evaluation_baselines`，該樣本已成為固定 benchmark 的一部分；一般資料整理操作不得讓固定 Test 集合默默縮水。
+
+- `SetSelection(..., selected: false)` 若發現 Training Sample 已有 evaluation baseline，直接拒絕。
+- reviewed source scan item 的一般刪除流程會先取消 Training Sample，因此同樣不得刪除已建立固定 baseline 的來源 scan item。
+- 被拒絕時 Training Sample、EvaluationBaseline 與 source ScanItem 必須全部保持不變。
+- production photo retention 不受此限制：production bytes 仍依 D-074 到期清除；固定 Test 使用的是 Training Dataset 已保存的獨立副本。
+- 目前 V2 不提供一般 UI/API 直接刪除 evaluation baseline。
+- 若未來確實要更換固定 Test，應建立獨立、明確且可稽核的 reset / rebaseline 流程，不得借用「取消用於訓練」或「刪除證件」操作。
+
+目的：固定 Test 的樣本集合必須穩定，避免因一般資料維護把 26 張固定基準悄悄變成 25 張，造成不同 OCR 版本比較失真。
