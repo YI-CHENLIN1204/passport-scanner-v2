@@ -19,9 +19,11 @@ V2 採「瀏覽器端 OCR + 後端資料管理」的方向。
        Backend API
           │
           ├─ 團別 / 旅客資料
-          ├─ traveler_master
+          ├─ travelers
           ├─ document_versions
-          └─ Google Sheets 匯出
+          ├─ scan_batches / scan_items
+          ├─ training_samples / benchmark
+          └─ CSV 匯出
 ```
 
 ## OCR 與照片保存必須分開理解
@@ -47,14 +49,15 @@ V2 採「瀏覽器端 OCR + 後端資料管理」的方向。
 - 證件版本管理。
 - 接收已結構化的 OCR / 人工修正結果。
 - 資料一致性檢查。
-- 管理受控的證件照片保存（若啟用）。
-- 人工觸發 Google Sheets 匯出。
+- 管理受控的 production 證件照片保存與到期清除。
+- 管理 Training Dataset 與固定 benchmark metadata。
+- 人工觸發 CSV 匯出。
 
 ## 部署方向
 
 V2 不要求 OCR server 常駐；網站可部署於一般 Web hosting / Render 類環境，但 OCR 計算仍在使用者瀏覽器。
 
-具體前端框架、後端框架、資料庫與 OCR runtime 尚未在本文件鎖定；實作時不可因方便而改變「瀏覽器端 OCR」這個核心架構。
+目前實作已固定為 Vue 3 + TypeScript + Vite、ASP.NET Core Web API (.NET 10)、PostgreSQL 16，以及瀏覽器端 PaddleOCR / MRZ / parser pipeline。OCR recognition / parser 目前以固定 Test benchmark 為基準暫時凍結；後續實作仍不可因方便而改變「瀏覽器端 OCR」這個核心架構。
 
 ## 安全原則
 
