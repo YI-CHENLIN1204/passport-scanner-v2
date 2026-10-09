@@ -563,6 +563,12 @@ public sealed class PostgresTravelerStore(
                     "包含不屬於此旅客的證件版本。");
             }
 
+            if (!document.IsCurrent)
+            {
+                throw new ArgumentException(
+                    "歷史證件版本僅供查看，不能透過一般旅客編輯直接修改。");
+            }
+
             var documentNumber = Normalize(
                 update.DocumentNumber ??
                     string.Empty);
