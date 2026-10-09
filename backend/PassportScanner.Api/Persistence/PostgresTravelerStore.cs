@@ -161,6 +161,7 @@ public sealed class PostgresTravelerStore(
 
             var matchingTravelers = FindTravelerMatches(
                 nameZh,
+                nameEn,
                 input.BirthDate,
                 sex,
                 nationalIdNumber);
@@ -202,6 +203,7 @@ public sealed class PostgresTravelerStore(
 
         var travelerMatches = FindTravelerMatches(
             nameZh,
+            nameEn,
             input.BirthDate,
             sex,
             nationalIdNumber);
@@ -1026,6 +1028,7 @@ public sealed class PostgresTravelerStore(
 
     private List<TravelerRecord> FindTravelerMatches(
         string nameZh,
+        string nameEn,
         DateOnly birthDate,
         string sex,
         string? nationalIdNumber)
@@ -1048,19 +1051,39 @@ public sealed class PostgresTravelerStore(
             }
         }
 
-        if (string.IsNullOrWhiteSpace(nameZh))
+        List<TravelerRecord> identityMatches;
+
+        if (!string.IsNullOrWhiteSpace(nameZh))
+        {
+            identityMatches = db.Travelers
+                .Where(traveler =>
+                    traveler.NameZh == nameZh &&
+                    traveler.BirthDate == birthDate &&
+                    traveler.Gender == sex)
+                .OrderBy(traveler =>
+                    traveler.CreatedAt)
+                .ThenBy(traveler =>
+                    traveler.TravelerId)
+                .ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(nameEn))
+        {
+            identityMatches = db.Travelers
+                .Where(traveler =>
+                    traveler.NameZh == string.Empty &&
+                    traveler.NameEn == nameEn &&
+                    traveler.BirthDate == birthDate &&
+                    traveler.Gender == sex)
+                .OrderBy(traveler =>
+                    traveler.CreatedAt)
+                .ThenBy(traveler =>
+                    traveler.TravelerId)
+                .ToList();
+        }
+        else
         {
             return [];
         }
-
-        var identityMatches = db.Travelers
-            .Where(traveler =>
-                traveler.NameZh == nameZh &&
-                traveler.BirthDate == birthDate &&
-                traveler.Gender == sex)
-            .OrderBy(traveler => traveler.CreatedAt)
-            .ThenBy(traveler => traveler.TravelerId)
-            .ToList();
 
         if (!string.IsNullOrWhiteSpace(nationalIdNumber))
         {
