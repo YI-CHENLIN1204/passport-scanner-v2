@@ -13,13 +13,99 @@
 - .NET 10 LTS
 - 開發 port：5080
 
-OCR runtime 與資料庫目前仍等待 PoC / schema 階段確認。
+目前正式架構已確定：
+
+- OCR：瀏覽器端 PaddleOCR / MRZ / parser pipeline。
+- 資料庫：PostgreSQL。
+- 執行方式：開發可分別啟動 frontend/backend；日常整合測試建議直接使用 Docker Compose。
+- 正式匯出：CSV，不做 Google Sheets 即時同步。
+- OCR recognition / parser 目前以固定 Test benchmark 為基準暫時凍結，優先完成 V2 系統本體。
 
 ## 需求
 
+日常使用／整合測試建議：
+
+- Docker Desktop
+- Git
+
+若要分別直接開發 frontend / backend：
+
 - .NET 10 SDK
-- Node.js 20.19+ 或 22.12+（建議直接使用目前受支援的新版 Node.js）
+- Node.js 20.19+ 或 22.12+
 - npm
+
+## 日常啟動方式（建議）
+
+在 repository 根目錄：
+
+```powershell
+git pull origin main
+docker compose up -d --build
+```
+
+查看容器：
+
+```powershell
+docker compose ps
+```
+
+停止：
+
+```powershell
+docker compose down
+```
+
+一般程式碼更新後重新執行：
+
+```powershell
+docker compose up -d --build
+```
+
+即可 rebuild image 並 recreate 需要更新的 container。
+
+> 不要隨便執行 `docker compose down -v`。  
+> `-v` 會刪除 PostgreSQL named volume；若沒有備份，正式旅客與 OCR Dataset 資料會一起消失。
+
+## PostgreSQL 備份與換電腦還原
+
+V2 的正式資料存在本機 Docker named volume，不會隨 Git repository 移動。
+
+換電腦、重設 Docker Desktop、清理 Docker volume 前，先備份：
+
+```powershell
+.\scripts\backup-db.ps1
+```
+
+預設輸出：
+
+```text
+backups/
+├─ passport_scanner-YYYYMMDD-HHMMSS.dump
+└─ passport_scanner-YYYYMMDD-HHMMSS.dump.sha256.txt
+```
+
+備份包含完整 PostgreSQL 資料庫，包括：
+
+- Traveler / DocumentVersion
+- tours / tour members / per-tour document links
+- scan batches / scan items
+- 尚未依期限刪除的 production 圖片
+- Training Dataset
+- OCR benchmark / fixed Test metadata
+
+`backups/` 與 `*.dump` 已由 `.gitignore` 排除，**不要提交 GitHub**。
+
+在另一台電腦先 clone / pull repository，啟動 Docker Desktop，然後：
+
+```powershell
+.\scripts\restore-db.ps1 -BackupFile ".\backups\passport_scanner-YYYYMMDD-HHMMSS.dump"
+```
+
+restore 會在破壞現有資料庫前先：
+
+1. 驗證 SHA256（若 sidecar 存在）。
+2. 使用 `pg_restore --list` 確認 archive 可讀。
+3. 通過後才停止 application services 並替換資料庫。
 
 ## 啟動後端
 
@@ -105,16 +191,38 @@ Repository 只保留：
 frontend/.env.example
 ```
 
-## 下一階段
+## 目前 V2 開發範圍
 
-骨架確認能正常啟動後，再進入：
+目前 V2 是旅行社**內部證件掃描／旅客資料建立系統**，不是 ERP、CRM，也不是旅客自助端。
 
-1. 證件圖片上傳／預覽元件。
-2. 瀏覽器端 OCR engine PoC。
-3. 先用少量測試證件比較準確率、載入時間與模型大小。
-4. 決定 OCR engine 後，再建立正式欄位解析與人工覆核流程。
-5. 最後才接資料庫與 Google Sheets。
+正式流程：
 
+```text
+建立團別
+→ 設定本團需要的證件
+→ 批次上傳
+→ 瀏覽器端 OCR
+→ 自動人物歸組／必要時人工合併
+→ 人工審核
+→ Traveler / DocumentVersion / TourMemberDocument
+→ CSV 匯出
+```
+
+目前主要功能已包含：
+
+- 團別建立、編輯、篩選與收件進度。
+- 護照／台胞證／台灣身分證資料結構。
+- 批次掃描與失敗項目單獨重跑。
+- 人工審核與已審核再編輯。
+- Traveler 自動／人工合併。
+- per-tour document link。
+- production 照片 retention。
+- OCR Training Dataset 與固定 Train / Validation / Test split。
+- Current Test Benchmark / history。
+- CSV 欄位選擇與排序。
+- PostgreSQL portable backup / restore。
+
+V3 才考慮旅客自行拍攝／上傳證件；ERP / CRM 整合也不屬於目前 V2 範圍。
 
 ## PaddleOCR 模型 CORS
 
