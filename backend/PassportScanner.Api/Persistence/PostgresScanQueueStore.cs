@@ -373,6 +373,14 @@ public sealed class PostgresScanQueueStore(
             return null;
         }
 
+        if (
+            item.ReviewStatus == Pending &&
+            item.ImageBytes.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "正式收件照片已依保存期限刪除，無法在沒有原圖的情況下完成人工審核。");
+        }
+
         using var transaction =
             db.Database.BeginTransaction();
 
