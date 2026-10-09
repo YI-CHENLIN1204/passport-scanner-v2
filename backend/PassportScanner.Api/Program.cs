@@ -634,16 +634,35 @@ app.MapGet(
 
 app.MapGet(
     "/api/travelers",
-    (string? query, int? limit, ITravelerStore store) =>
+    (
+        string? query,
+        string? documentType,
+        string? gender,
+        string? nationality,
+        int? offset,
+        int? limit,
+        ITravelerStore store) =>
     {
-        var travelers = store.SearchTravelers(
-            query,
-            limit ?? 20);
+        try
+        {
+            var travelers = store.SearchTravelers(
+                query,
+                documentType,
+                gender,
+                nationality,
+                offset ?? 0,
+                limit ?? 20);
 
-        return Results.Ok(
-            travelers
-                .Select(TravelerReadMapper.ToResponse)
-                .ToList());
+            return Results.Ok(
+                travelers
+                    .Select(TravelerReadMapper.ToResponse)
+                    .ToList());
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapGet(
