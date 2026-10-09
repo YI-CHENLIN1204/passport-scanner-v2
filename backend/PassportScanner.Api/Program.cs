@@ -598,6 +598,11 @@ app.MapPost(
             return Results.BadRequest(
                 new { message = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapGet(
