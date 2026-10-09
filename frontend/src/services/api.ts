@@ -808,6 +808,7 @@ export interface ScanItemResponse {
   documentNumber: string
   issuingCountry: string | null
   expiryDate: string | null
+  savedDocumentVersionId: string | null
   reviewStatus: 'PENDING' | 'REVIEWED'
   trainingSelected: boolean
   reviewedAt: string | null
