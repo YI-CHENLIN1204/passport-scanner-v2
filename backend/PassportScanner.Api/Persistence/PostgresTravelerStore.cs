@@ -230,11 +230,50 @@ public sealed class PostgresTravelerStore(
 
     public IReadOnlyList<TravelerSummary> SearchTravelers(
         string? query,
+        string? documentType,
+        string? gender,
+        string? nationality,
+        int offset,
         int limit)
     {
-        var safeLimit = Math.Clamp(limit, 1, 50);
+        var safeOffset = Math.Max(0, offset);
+        var safeLimit = Math.Clamp(limit, 1, 500);
         var trimmedQuery = query?.Trim() ?? string.Empty;
         var normalizedQuery = trimmedQuery.ToUpperInvariant();
+        var normalizedDocumentType =
+            NormalizeNullable(documentType);
+        var normalizedGender =
+            NormalizeNullable(gender);
+        var normalizedNationality =
+            NormalizeNullable(nationality);
+
+        var allowedDocumentTypes = new HashSet<string>(
+            StringComparer.Ordinal)
+        {
+            "PASSPORT",
+            "TAIWAN_COMPATRIOT_PERMIT",
+            "TAIWAN_NATIONAL_ID"
+        };
+
+        if (
+            normalizedDocumentType is not null &&
+            !allowedDocumentTypes.Contains(
+                normalizedDocumentType))
+        {
+            throw new ArgumentException(
+                "不支援的證件類別。",
+                nameof(documentType));
+        }
+
+        if (
+            normalizedGender is not null &&
+            normalizedGender is not
+                ("M" or "F" or "X"))
+        {
+            throw new ArgumentException(
+                "性別篩選必須是 M、F 或 X。",
+                nameof(gender));
+        }
 
         var travelerQuery = db.Travelers.AsNoTracking();
 
@@ -243,20 +282,61 @@ public sealed class PostgresTravelerStore(
             var matchingTravelerIds = db.DocumentVersions
                 .AsNoTracking()
                 .Where(document =>
-                    document.DocumentNumber.Contains(normalizedQuery))
+                    document.DocumentNumber.Contains(
+                        normalizedQuery))
                 .Select(document => document.TravelerId);
 
             travelerQuery = travelerQuery.Where(traveler =>
                 traveler.NameZh.Contains(trimmedQuery) ||
                 traveler.NameEn.Contains(normalizedQuery) ||
-                traveler.PersonalIdNumber.Contains(normalizedQuery) ||
+                traveler.PersonalIdNumber.Contains(
+                    normalizedQuery) ||
                 (traveler.NationalIdNumber != null &&
-                 traveler.NationalIdNumber.Contains(normalizedQuery)) ||
-                matchingTravelerIds.Contains(traveler.TravelerId));
+                 traveler.NationalIdNumber.Contains(
+                     normalizedQuery)) ||
+                matchingTravelerIds.Contains(
+                    traveler.TravelerId));
+        }
+
+        if (normalizedDocumentType is not null)
+        {
+            var matchingTravelerIds = db.DocumentVersions
+                .AsNoTracking()
+                .Where(document =>
+                    document.IsCurrent &&
+                    document.DocumentType ==
+                        normalizedDocumentType)
+                .Select(document => document.TravelerId);
+
+            travelerQuery = travelerQuery.Where(
+                traveler =>
+                    matchingTravelerIds.Contains(
+                        traveler.TravelerId));
+        }
+
+        if (normalizedGender is not null)
+        {
+            travelerQuery = travelerQuery.Where(
+                traveler =>
+                    traveler.Gender ==
+                        normalizedGender);
+        }
+
+        if (normalizedNationality is not null)
+        {
+            travelerQuery = travelerQuery.Where(
+                traveler =>
+                    traveler.Nationality != null &&
+                    traveler.Nationality.Contains(
+                        normalizedNationality));
         }
 
         var travelers = travelerQuery
-            .OrderByDescending(traveler => traveler.UpdatedAt)
+            .OrderByDescending(
+                traveler => traveler.UpdatedAt)
+            .ThenBy(
+                traveler => traveler.TravelerId)
+            .Skip(safeOffset)
             .Take(safeLimit)
             .ToList();
 
@@ -271,7 +351,8 @@ public sealed class PostgresTravelerStore(
 
         var documents = db.DocumentVersions
             .AsNoTracking()
-            .Where(item => travelerIds.Contains(item.TravelerId))
+            .Where(item =>
+                travelerIds.Contains(item.TravelerId))
             .ToList();
 
         return travelers
