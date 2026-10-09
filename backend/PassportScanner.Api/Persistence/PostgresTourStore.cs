@@ -18,9 +18,47 @@ public sealed class PostgresTourStore(
             "TAIWAN_NATIONAL_ID"
         };
     public IReadOnlyList<TourSummaryResponse> ListTours(
-        string? query)
+        string? query,
+        string? status,
+        string? documentType,
+        DateOnly? departureFrom,
+        DateOnly? departureTo)
     {
         var trimmed = query?.Trim() ?? string.Empty;
+        var normalizedStatus =
+            status?.Trim().ToLowerInvariant();
+        var normalizedDocumentType =
+            documentType?.Trim().ToUpperInvariant();
+
+        if (
+            !string.IsNullOrWhiteSpace(normalizedStatus) &&
+            normalizedStatus is not
+                ("empty" or "progress" or "pending" or "complete"))
+        {
+            throw new ArgumentException(
+                "不支援的團別狀態。",
+                nameof(status));
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(normalizedDocumentType) &&
+            !AllowedDocumentTypes.Contains(
+                normalizedDocumentType))
+        {
+            throw new ArgumentException(
+                "不支援的證件類別。",
+                nameof(documentType));
+        }
+
+        if (
+            departureFrom.HasValue &&
+            departureTo.HasValue &&
+            departureTo.Value < departureFrom.Value)
+        {
+            throw new ArgumentException(
+                "出發日期結束日不可早於開始日。");
+        }
+
         var tours = db.Tours.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(trimmed))
@@ -29,12 +67,76 @@ public sealed class PostgresTourStore(
                 item => item.TourName.Contains(trimmed));
         }
 
-        return tours
-            .OrderByDescending(item => item.DepartureDate)
-            .ThenByDescending(item => item.CreatedAt)
+        if (!string.IsNullOrWhiteSpace(normalizedDocumentType))
+        {
+            tours = tours.Where(
+                item =>
+                    item.RequiredDocumentTypes.Contains(
+                        normalizedDocumentType));
+        }
+
+        if (departureFrom.HasValue)
+        {
+            tours = tours.Where(
+                item =>
+                    item.DepartureDate >=
+                        departureFrom.Value);
+        }
+
+        if (departureTo.HasValue)
+        {
+            tours = tours.Where(
+                item =>
+                    item.DepartureDate <=
+                        departureTo.Value);
+        }
+
+        var summaries = tours
+            .OrderByDescending(
+                item => item.DepartureDate)
+            .ThenByDescending(
+                item => item.CreatedAt)
             .ToList()
             .Select(ToSummary)
             .ToList();
+
+        if (string.IsNullOrWhiteSpace(normalizedStatus))
+        {
+            return summaries;
+        }
+
+        return summaries
+            .Where(item =>
+                CollectionStatus(item) ==
+                    normalizedStatus)
+            .ToList();
+    }
+
+    private static string CollectionStatus(
+        TourSummaryResponse tour)
+    {
+        var expected =
+            tour.MemberCount *
+            tour.RequiredDocumentTypes.Count;
+
+        if (tour.MemberCount == 0)
+        {
+            return "empty";
+        }
+
+        if (tour.PendingReviewCount > 0)
+        {
+            return "pending";
+        }
+
+        if (
+            expected > 0 &&
+            tour.ReceivedDocumentCount >= expected)
+        {
+            return "complete";
+        }
+
+        return "progress";
     }
 
     public TourDetailResponse? GetTour(Guid tourId)
