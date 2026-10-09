@@ -208,10 +208,11 @@ public sealed class PostgresTrainingDatasetStore(
 
         if (
             normalizedSplit is not
-            ("train" or "validation" or "test"))
+            ("train" or "validation" or "test" or
+                "fixed-test"))
         {
             throw new ArgumentException(
-                "split 必須是 train、validation 或 test。",
+                "split 必須是 train、validation、test 或 fixed-test。",
                 nameof(split));
         }
 
@@ -223,35 +224,53 @@ public sealed class PostgresTrainingDatasetStore(
             .Where(IsUsableTrainingSample)
             .ToList();
 
-        var splitBySample =
-            BuildSplitAssignments(usableSamples);
-
-        var selectedSamples = usableSamples
-            .Where(sample =>
-                splitBySample[sample.TrainingSampleId] ==
-                    normalizedSplit)
-            .ToList();
-
-        var selectedIds = selectedSamples
-            .Select(sample => sample.TrainingSampleId)
+        var usableIds = usableSamples
+            .Select(sample =>
+                sample.TrainingSampleId)
             .ToList();
 
         var baselineBySample =
             db.OcrEvaluationBaselines
                 .AsNoTracking()
                 .Where(item =>
-                    selectedIds.Contains(
+                    usableIds.Contains(
                         item.TrainingSampleId))
                 .ToDictionary(
                     item => item.TrainingSampleId,
                     item => item.ResultJson);
+
+        List<TrainingSampleRecord> selectedSamples;
+        string responseSplit;
+
+        if (normalizedSplit == "fixed-test")
+        {
+            selectedSamples = usableSamples
+                .Where(sample =>
+                    baselineBySample.ContainsKey(
+                        sample.TrainingSampleId))
+                .ToList();
+            responseSplit = "test";
+        }
+        else
+        {
+            var splitBySample =
+                BuildSplitAssignments(usableSamples);
+
+            selectedSamples = usableSamples
+                .Where(sample =>
+                    splitBySample[
+                        sample.TrainingSampleId] ==
+                    normalizedSplit)
+                .ToList();
+            responseSplit = normalizedSplit;
+        }
 
         return selectedSamples
             .Select(sample =>
                 new TrainingEvaluationSampleResponse(
                     sample.TrainingSampleId,
                     sample.DocumentType,
-                    normalizedSplit,
+                    responseSplit,
                     sample.OcrPayloadJson,
                     baselineBySample.TryGetValue(
                         sample.TrainingSampleId,
