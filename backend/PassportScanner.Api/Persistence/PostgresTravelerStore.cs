@@ -621,6 +621,156 @@ public sealed class PostgresTravelerStore(
         return GetTraveler(travelerId);
     }
 
+    public TravelerDetail? MergeTravelers(
+        Guid targetTravelerId,
+        Guid sourceTravelerId,
+        DateTimeOffset now)
+    {
+        if (targetTravelerId == sourceTravelerId)
+        {
+            throw new ArgumentException(
+                "保留旅客與併入旅客不能是同一筆。");
+        }
+
+        using var transaction =
+            db.Database.BeginTransaction();
+
+        var target = db.Travelers.SingleOrDefault(
+            item =>
+                item.TravelerId ==
+                    targetTravelerId);
+        var source = db.Travelers.SingleOrDefault(
+            item =>
+                item.TravelerId ==
+                    sourceTravelerId);
+
+        if (target is null || source is null)
+        {
+            return null;
+        }
+
+        if (target.BirthDate != source.BirthDate)
+        {
+            throw new ArgumentException(
+                "兩筆旅客出生日期不同，請先修正資料後再合併。");
+        }
+
+        if (!string.Equals(
+            target.Gender,
+            source.Gender,
+            StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "兩筆旅客性別不同，請先修正資料後再合併。");
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                target.NationalIdNumber) &&
+            !string.IsNullOrWhiteSpace(
+                source.NationalIdNumber) &&
+            !string.Equals(
+                target.NationalIdNumber,
+                source.NationalIdNumber,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "兩筆旅客都有身分證字號且內容不同，為避免誤合併，請先確認並修正資料。");
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(target.NameEn) &&
+            !string.IsNullOrWhiteSpace(source.NameEn))
+        {
+            target.NameEn = source.NameEn;
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(target.Nationality) &&
+            !string.IsNullOrWhiteSpace(
+                source.Nationality))
+        {
+            target.Nationality =
+                source.Nationality;
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
+                target.NationalIdNumber) &&
+            !string.IsNullOrWhiteSpace(
+                source.NationalIdNumber))
+        {
+            target.NationalIdNumber =
+                source.NationalIdNumber;
+        }
+
+        var sourceDocuments = db.DocumentVersions
+            .Where(item =>
+                item.TravelerId ==
+                    sourceTravelerId)
+            .ToList();
+
+        foreach (var document in sourceDocuments)
+        {
+            document.TravelerId =
+                targetTravelerId;
+        }
+
+        var targetMemberships = db.TourMembers
+            .Where(item =>
+                item.TravelerId ==
+                    targetTravelerId)
+            .ToDictionary(
+                item => item.TourId);
+
+        var sourceMemberships = db.TourMembers
+            .Where(item =>
+                item.TravelerId ==
+                    sourceTravelerId)
+            .ToList();
+
+        foreach (var membership in sourceMemberships)
+        {
+            if (
+                targetMemberships.TryGetValue(
+                    membership.TourId,
+                    out var targetMembership))
+            {
+                MergeMemberDocuments(
+                    membership.TourMemberId,
+                    targetMembership.TourMemberId,
+                    now);
+
+                db.TourMembers.Remove(
+                    membership);
+                continue;
+            }
+
+            membership.TravelerId =
+                targetTravelerId;
+            targetMemberships[
+                membership.TourId] =
+                    membership;
+        }
+
+        db.Travelers.Remove(source);
+        target.UpdatedAt = now;
+
+        db.SaveChanges();
+
+        ReconcileCurrentDocuments(
+            targetTravelerId);
+        SyncTravelerScansAndDrafts(
+            target,
+            now);
+
+        db.SaveChanges();
+        transaction.Commit();
+
+        return GetTraveler(
+            targetTravelerId);
+    }
+
     private DocumentVersionRecord? FindExistingDocument(
         string documentType,
         string documentNumber,
@@ -787,6 +937,124 @@ public sealed class PostgresTravelerStore(
         db.SaveChanges();
 
         return canonical;
+    }
+
+    private void SyncTravelerScansAndDrafts(
+        TravelerRecord traveler,
+        DateTimeOffset now)
+    {
+        var documentIds = db.DocumentVersions
+            .AsNoTracking()
+            .Where(item =>
+                item.TravelerId ==
+                    traveler.TravelerId)
+            .Select(item =>
+                item.DocumentVersionId)
+            .ToList();
+
+        var documentById = db.DocumentVersions
+            .AsNoTracking()
+            .Where(item =>
+                documentIds.Contains(
+                    item.DocumentVersionId))
+            .ToDictionary(
+                item => item.DocumentVersionId);
+
+        var reviewedItems = db.ScanItems
+            .Where(item =>
+                item.SavedDocumentVersionId.HasValue &&
+                documentIds.Contains(
+                    item.SavedDocumentVersionId.Value))
+            .ToList();
+
+        foreach (var scanItem in reviewedItems)
+        {
+            if (
+                !scanItem.SavedDocumentVersionId.HasValue ||
+                !documentById.TryGetValue(
+                    scanItem.SavedDocumentVersionId.Value,
+                    out var document))
+            {
+                continue;
+            }
+
+            scanItem.NameZh =
+                traveler.NameZh;
+            scanItem.NameZhOnDocument =
+                document.NameZhOnDocument;
+            scanItem.NameEn =
+                document.NameEnOnDocument;
+            scanItem.BirthDate =
+                traveler.BirthDate;
+            scanItem.Gender =
+                traveler.Gender;
+            scanItem.Nationality =
+                document.Nationality;
+            scanItem.NationalIdNumber =
+                traveler.NationalIdNumber;
+            scanItem.DocumentNumber =
+                document.DocumentNumber;
+            scanItem.IssuingCountry =
+                document.IssuingCountry;
+            scanItem.ExpiryDate =
+                document.ExpiryDate;
+            scanItem.UpdatedAt = now;
+        }
+
+        var linkedDraftIds = reviewedItems
+            .Select(item => item.DraftPersonId)
+            .Distinct()
+            .ToList();
+
+        var linkedDrafts = db.TourPersonDrafts
+            .Where(item =>
+                linkedDraftIds.Contains(
+                    item.DraftPersonId))
+            .OrderBy(item => item.CreatedAt)
+            .ThenBy(item => item.DraftPersonId)
+            .ToList();
+
+        foreach (var group in linkedDrafts.GroupBy(
+            item => item.TourId))
+        {
+            var canonical = group.First();
+
+            canonical.NameZh =
+                traveler.NameZh;
+            canonical.BirthDate =
+                traveler.BirthDate;
+            canonical.Gender =
+                traveler.Gender;
+            canonical.UpdatedAt = now;
+
+            foreach (var duplicate in group.Skip(1))
+            {
+                var draftItems = db.ScanItems
+                    .Where(item =>
+                        item.DraftPersonId ==
+                            duplicate.DraftPersonId)
+                    .ToList();
+
+                foreach (var item in draftItems)
+                {
+                    item.DraftPersonId =
+                        canonical.DraftPersonId;
+                    item.UpdatedAt = now;
+                }
+
+                db.TourPersonDrafts.Remove(
+                    duplicate);
+            }
+        }
+
+        db.SaveChanges();
+
+        foreach (var scanItem in reviewedItems)
+        {
+            trainingDatasetStore.RefreshSelectedSample(
+                scanItem.ScanItemId,
+                now);
+        }
     }
 
     private void MergeMemberDocuments(
