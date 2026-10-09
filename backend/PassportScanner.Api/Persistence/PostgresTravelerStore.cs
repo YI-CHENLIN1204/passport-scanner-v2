@@ -977,6 +977,8 @@ public sealed class PostgresTravelerStore(
 
         ReconcileCurrentDocuments(
             targetTravelerId);
+        SyncLegacyPersonalIdToCurrentDocument(
+            target);
         SyncTravelerScansAndDrafts(
             target,
             now);
@@ -1451,6 +1453,45 @@ public sealed class PostgresTravelerStore(
                 oldDocument.IsCurrent = false;
             }
         }
+    }
+
+    private void SyncLegacyPersonalIdToCurrentDocument(
+        TravelerRecord traveler)
+    {
+        var currentDocuments = db.DocumentVersions
+            .Where(item =>
+                item.TravelerId ==
+                    traveler.TravelerId &&
+                item.IsCurrent)
+            .OrderByDescending(item =>
+                item.VerifiedAt)
+            .ThenByDescending(item =>
+                item.CreatedAt)
+            .ThenByDescending(item =>
+                item.DocumentVersionId)
+            .ToList();
+
+        if (currentDocuments.Count == 0)
+        {
+            return;
+        }
+
+        var existingSelection =
+            currentDocuments.FirstOrDefault(
+                item =>
+                    item.DocumentType ==
+                        traveler.PersonalIdType &&
+                    item.DocumentNumber ==
+                        traveler.PersonalIdNumber);
+
+        var selected =
+            existingSelection ??
+            currentDocuments[0];
+
+        traveler.PersonalIdType =
+            selected.DocumentType;
+        traveler.PersonalIdNumber =
+            selected.DocumentNumber;
     }
 
     private void ReconcileCurrentDocuments(Guid travelerId)
