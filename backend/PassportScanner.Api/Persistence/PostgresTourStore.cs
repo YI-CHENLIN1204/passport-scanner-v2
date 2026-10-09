@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
+using PassportScanner.Api.Services;
 
 namespace PassportScanner.Api.Persistence;
 
@@ -369,12 +370,10 @@ public sealed class PostgresTourStore(
         tour.RequiredDocumentTypes = requiredDocumentTypes;
         tour.UpdatedAt = now;
 
-        var deleteAfter = new DateTimeOffset(
-            request.ReturnDate
-                .AddDays(8)
-                .ToDateTime(
-                    TimeOnly.MinValue,
-                    DateTimeKind.Utc));
+        var deleteAfter =
+            BusinessDate
+                .ProductionPhotoDeleteAfter(
+                    request.ReturnDate);
 
         var tourDraftIds = db.TourPersonDrafts
             .Where(item => item.TourId == tourId)
