@@ -372,6 +372,9 @@ public sealed class PostgresScanQueueStore(
             return null;
         }
 
+        using var transaction =
+            db.Database.BeginTransaction();
+
         var oldDraftId = item.DraftPersonId;
         Guid? previousReviewedTravelerId = null;
 
@@ -479,6 +482,8 @@ public sealed class PostgresScanQueueStore(
             item.ScanItemId,
             request.UseForTraining,
             now);
+
+        transaction.Commit();
 
         return ToItemResponse(
             item,
