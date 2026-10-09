@@ -393,4 +393,4 @@ ONNX Runtime Console 中出現的 unused initializer / execution provider assign
 6. 沒有欄位錨點時不猜；低於保守信心門檻時不 autofill。
 7. 無可靠結果時中文姓名留空，交由人工輸入與確認。
 
-此策略優先降低 CRM 誤寫風險，即使因此提高少量人工輸入比例也可接受。
+此策略優先降低正式旅客主檔誤寫風險，即使因此提高少量人工輸入比例也可接受。
