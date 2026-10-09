@@ -1026,6 +1026,16 @@ app.MapPost(
                     message = ex.Message
                 });
         }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapGet(
@@ -1132,6 +1142,16 @@ app.MapPost(
                     code = "ambiguousTravelerMatch",
                     message = ex.Message
                 });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
         }
     });
 
@@ -1256,6 +1276,16 @@ app.MapPost(
                     code = "ambiguousTravelerMatch",
                     message = ex.Message
                 });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
         }
     });
 
