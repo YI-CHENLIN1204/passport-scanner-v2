@@ -305,6 +305,17 @@ jobs:
           SOURCE_ID=$(python3 -c "import json; print(json.load(open('/tmp/merge-source.json'))['travelerId'])")
           test "$TARGET_ID" != "$SOURCE_ID"
 
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$SOURCE_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"王甲甲","nameEn":"","birthDate":"1990-05-06","gender":"M","nationality":null,"nationalIdNumber":null,"documents":[]}' \
+            > /tmp/merge-source-renamed.json
+
+          AMBIGUOUS_STATUS=$(curl --silent --output /tmp/ambiguous-match.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/taiwan-compatriot-permit-reviews" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"taiwan-compatriot-permit\",\"chineseName\":\"王甲甲\",\"permitNumber\":\"11223344\",\"birthDate\":\"1990-05-06\",\"sex\":\"M\",\"expiryDate\":\"2035-01-01\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":5,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}")
+          test "$AMBIGUOUS_STATUS" = "409"
+          grep -q '"code":"ambiguousTravelerMatch"' /tmp/ambiguous-match.json
+
           curl --fail --silent -X POST "http://localhost:5080/api/travelers/$TARGET_ID/merge" \
             -H 'Content-Type: application/json' \
             -d "{\"sourceTravelerId\":\"$SOURCE_ID\"}" \
