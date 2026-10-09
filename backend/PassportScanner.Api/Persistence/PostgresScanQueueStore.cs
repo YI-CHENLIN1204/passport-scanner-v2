@@ -60,6 +60,12 @@ public sealed class PostgresScanQueueStore(
             item => item.ScanBatchId == batchId)
             ?? throw new KeyNotFoundException("找不到指定掃描批次。");
 
+        if (batch.Status != "OPEN")
+        {
+            throw new InvalidOperationException(
+                "這個掃描批次已完成，不能再新增證件。");
+        }
+
         var tour = db.Tours.Single(
             item => item.TourId == batch.TourId);
 
@@ -208,6 +214,33 @@ public sealed class PostgresScanQueueStore(
         db.SaveChanges();
 
         return ToItemResponse(item);
+    }
+
+    public ScanBatchResponse CompleteBatch(
+        Guid batchId,
+        DateTimeOffset now)
+    {
+        var batch = db.ScanBatches.SingleOrDefault(
+            item => item.ScanBatchId == batchId)
+            ?? throw new KeyNotFoundException(
+                "找不到指定掃描批次。");
+
+        if (batch.Status == "COMPLETED")
+        {
+            return ToBatchResponse(batch);
+        }
+
+        if (batch.Status != "OPEN")
+        {
+            throw new InvalidOperationException(
+                "掃描批次狀態不允許完成。");
+        }
+
+        batch.Status = "COMPLETED";
+        batch.UpdatedAt = now;
+        db.SaveChanges();
+
+        return ToBatchResponse(batch);
     }
 
     public IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
