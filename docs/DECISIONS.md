@@ -736,3 +736,33 @@ V2 人物歸組採保守策略：
 - 新證件帶有身分證字號時，姓名／生日／性別候選若已有另一個不同的非空身分證字號，該 Traveler 不列入自動匹配候選。
 
 目的：避免同名同生日等低機率但高影響情境造成錯誤合併。既然 V2 已提供人工 Traveler merge，就優先保留可人工解決的重複資料，而不是冒險自動合錯人。
+
+### D-054：正式旅客資料的強識別驗證必須在資料層執行
+
+前端 OCR、人工審核與旅客編輯都可以提供即時提示，但不能把正式資料完整性只交給前端。
+
+目前正式規則：
+
+- `NationalIdNumber` 只要非空，就必須通過台灣國民身分證統一編號格式與 checksum。
+- `TAIWAN_NATIONAL_ID` 的 DocumentNumber 本身必須通過同一套 checksum，且與 Traveler NationalIdNumber 一致。
+- 有合法身分證字號且 Traveler 性別為明確 M/F 時，性別必須與身分證第 2 碼一致。
+- 人工編輯 Traveler 時，如果身分證字號已屬於另一位 Traveler，禁止直接寫入並提示使用 Traveler merge。
+- 人工修改 DocumentVersion 時，如果同類型同證件號碼已存在於另一個 DocumentVersion，禁止直接製造重複；跨 Traveler 衝突應先人工確認／合併。
+- 正式 Review、批次 Review 與 Traveler edit 最終都必須經過 backend / persistence 層驗證，不能靠前端是否曾經驗過來保證。
+
+### D-055：資料 migration / backfill 只補缺，不覆寫正式業務狀態
+
+`tour_member_documents` 的啟動 backfill 只用來把升級前既有 reviewed scan item 補成新的 per-tour document link。
+
+- 若 `tour_member_id + document_type` 已有正式 link，backfill 使用 `ON CONFLICT DO NOTHING`。
+- backend 重啟不能重新用歷史 scan item 覆寫目前已由人工審核、刪除 fallback、Traveler merge 等正式流程決定的 link。
+- migration 應保持可重複執行且非破壞性。
+
+### D-056：舊單張 Review API 也必須先驗證團別收件範圍
+
+雖然正式內部 UI 主要使用批次 scan/review 流程，legacy 單張 review endpoints 仍存在，因此不能允許它們繞過 Tour required document types。
+
+- 若帶 `tourId`，先確認 Tour 存在。
+- 再確認該 Tour 的 `required_document_types` 包含這種證件。
+- preflight 通過後才可建立／更新 Traveler 與 DocumentVersion。
+- 不允許 API 最後回 404/400，但前面的正式旅客／證件資料已經先寫進資料庫。
