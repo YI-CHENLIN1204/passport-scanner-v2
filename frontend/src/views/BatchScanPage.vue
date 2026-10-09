@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   addScanItem,
   completeScanBatch,
@@ -29,6 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   navigate: [path: string]
+  runningChange: [running: boolean]
 }>()
 
 interface BatchFileState {
@@ -1032,6 +1033,21 @@ async function runBatch() {
 }
 
 watch(
+  running,
+  value => {
+    emit('runningChange', value)
+  },
+  { immediate: true },
+)
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!running.value) return
+
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+watch(
   () => selectedTourId.value,
   async (tourId, previous) => {
     if (tourId === previous) return
@@ -1063,11 +1079,25 @@ watch(
 )
 
 onMounted(() => {
+  window.addEventListener(
+    'beforeunload',
+    handleBeforeUnload,
+  )
+
   void warmupPaddleOcr().catch(() => {
     // The normal scan flow will show the initialization error if warmup
     // cannot complete. Do not block the page while the user selects files.
   })
   void load()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    'beforeunload',
+    handleBeforeUnload,
+  )
+
+  emit('runningChange', false)
 })
 </script>
 
