@@ -919,17 +919,46 @@ public sealed class PostgresTravelerStore(
     {
         var query = db.DocumentVersions.Where(
             document =>
-                document.DocumentType == documentType &&
-                document.DocumentNumber == documentNumber);
+                document.DocumentType ==
+                    documentType &&
+                document.DocumentNumber ==
+                    documentNumber);
 
         if (documentType == "PASSPORT")
         {
             query = query.Where(
                 document =>
-                    document.IssuingCountry == issuingCountry);
+                    document.IssuingCountry ==
+                        issuingCountry);
         }
 
-        return query.SingleOrDefault();
+        var matches = query
+            .OrderByDescending(
+                document => document.IsCurrent)
+            .ThenByDescending(
+                document => document.VerifiedAt)
+            .ThenByDescending(
+                document => document.CreatedAt)
+            .ToList();
+
+        if (matches.Count <= 1)
+        {
+            return matches.FirstOrDefault();
+        }
+
+        var travelerCount = matches
+            .Select(document =>
+                document.TravelerId)
+            .Distinct()
+            .Count();
+
+        if (travelerCount > 1)
+        {
+            throw new AmbiguousTravelerMatchException(
+                "同一證件號碼存在於多位旅客主檔，系統不會自動選擇；請先到「旅客資料」確認並人工合併。");
+        }
+
+        return matches[0];
     }
 
     private List<TravelerRecord> FindTravelerMatches(
