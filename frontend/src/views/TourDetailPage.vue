@@ -526,6 +526,26 @@ const rowCounts = computed(() => ({
   ).length,
 }))
 
+const exportMissingPersonCount = computed(
+  () =>
+    rows.value.filter(row =>
+      Object.values(row.documents).some(
+        cell => cell.status === 'missing',
+      ),
+    ).length,
+)
+
+const exportHasIncompleteData = computed(
+  () =>
+    Boolean(
+      detail.value &&
+      (
+        detail.value.tour.pendingReviewCount > 0 ||
+        exportMissingPersonCount.value > 0
+      ),
+    ),
+)
+
 const hasAdvancedFilters = computed(
   () =>
     documentTypeFilter.value !== 'all' ||
@@ -2405,6 +2425,22 @@ onBeforeUnmount(() => {
           </button>
         </header>
 
+        <div
+          v-if="exportHasIncompleteData"
+          class="export-warning"
+        >
+          <strong>這個團目前尚未完成收件</strong>
+          <span>
+            目前有
+            {{ detail?.tour.pendingReviewCount ?? 0 }}
+            張待審核，
+            {{ exportMissingPersonCount }}
+            位旅客至少缺一種本團必收證件。
+            CSV 只會使用已審核並寫入正式資料的內容，
+            不會把待審核 OCR 結果當成可信資料輸出。
+          </span>
+        </div>
+
         <div class="export-kind-picker">
           <label
             v-for="kind in exportKindsForTour()"
@@ -3330,6 +3366,27 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   margin-top: 18px;
+}
+
+.export-warning {
+  display: grid;
+  gap: 4px;
+  margin-top: 15px;
+  padding: 11px 12px;
+  border: 1px solid #ead7a9;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.export-warning strong {
+  color: #765617;
+  font-size: 10px;
+}
+
+.export-warning span {
+  color: #866d3b;
+  font-size: 9px;
+  line-height: 1.65;
 }
 
 .export-kind-picker {
