@@ -50,12 +50,6 @@ if (-not $Force) {
     }
 }
 
-Write-Host "Stopping application services..."
-docker compose stop frontend backend
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to stop application services."
-}
-
 Write-Host "Starting PostgreSQL database..."
 docker compose up -d database
 if ($LASTEXITCODE -ne 0) {
@@ -76,6 +70,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Backup archive is readable."
+
+Write-Host "Stopping application services..."
+docker compose stop frontend backend
+if ($LASTEXITCODE -ne 0) {
+    docker compose exec -T database rm -f $containerPath | Out-Null
+    throw "Failed to stop application services."
+}
 
 Write-Host "Replacing database..."
 docker compose exec -T database psql -U passport_scanner -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS passport_scanner WITH (FORCE);"
