@@ -23,6 +23,10 @@ public interface IScanQueueStore
         Guid batchId,
         DateTimeOffset now);
 
+    IReadOnlyList<ScanBatchResponse> ListBatches(
+        Guid tourId,
+        int limit);
+
     IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
         Guid tourId);
 
