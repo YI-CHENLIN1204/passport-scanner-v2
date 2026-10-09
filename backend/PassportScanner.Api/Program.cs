@@ -923,9 +923,11 @@ app.MapPost(
 
             if (
                 tourId.HasValue &&
-                !tourStore.EnsureMember(
+                !tourStore.EnsureMemberDocument(
                     tourId.Value,
                     result.TravelerId,
+                    result.DocumentVersionId,
+                    "PASSPORT",
                     savedAt))
             {
                 return Results.NotFound(
@@ -997,9 +999,11 @@ app.MapPost(
 
             if (
                 tourId.HasValue &&
-                !tourStore.EnsureMember(
+                !tourStore.EnsureMemberDocument(
                     tourId.Value,
                     result.TravelerId,
+                    result.DocumentVersionId,
+                    "TAIWAN_NATIONAL_ID",
                     savedAt))
             {
                 return Results.NotFound(
@@ -1088,9 +1092,11 @@ app.MapPost(
 
             if (
                 tourId.HasValue &&
-                !tourStore.EnsureMember(
+                !tourStore.EnsureMemberDocument(
                     tourId.Value,
                     result.TravelerId,
+                    result.DocumentVersionId,
+                    "TAIWAN_COMPATRIOT_PERMIT",
                     savedAt))
             {
                 return Results.NotFound(
