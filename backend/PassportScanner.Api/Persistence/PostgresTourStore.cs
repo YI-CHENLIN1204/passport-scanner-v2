@@ -156,6 +156,10 @@ public sealed class PostgresTourStore(
             .OrderBy(item => item.CreatedAt)
             .ToList();
 
+        var memberIds = memberships
+            .Select(item => item.TourMemberId)
+            .ToList();
+
         var travelerIds = memberships
             .Select(item => item.TravelerId)
             .Distinct()
@@ -168,26 +172,42 @@ public sealed class PostgresTourStore(
 
         var requiredDocumentTypes = tour.RequiredDocumentTypes;
 
+        var memberDocumentLinks = db.TourMemberDocuments
+            .AsNoTracking()
+            .Where(item =>
+                memberIds.Contains(item.TourMemberId) &&
+                requiredDocumentTypes.Contains(item.DocumentType))
+            .OrderBy(item => item.CreatedAt)
+            .ToList();
+
+        var documentIds = memberDocumentLinks
+            .Select(item => item.DocumentVersionId)
+            .Distinct()
+            .ToList();
+
         var documents = db.DocumentVersions
             .AsNoTracking()
             .Where(item =>
-                travelerIds.Contains(item.TravelerId) &&
-                requiredDocumentTypes.Contains(item.DocumentType))
-            .OrderByDescending(item => item.IsCurrent)
-            .ThenByDescending(item => item.CreatedAt)
-            .ToList();
+                documentIds.Contains(item.DocumentVersionId))
+            .ToDictionary(item => item.DocumentVersionId);
 
         var members = memberships
             .Where(item => travelers.ContainsKey(item.TravelerId))
             .Select(item =>
             {
                 var traveler = travelers[item.TravelerId];
-                var memberDocuments = documents
-                    .Where(document =>
-                        document.TravelerId == item.TravelerId &&
-                        document.IsCurrent)
-                    .Select(document =>
-                        new TourMemberDocumentResponse(
+
+                var memberDocuments = memberDocumentLinks
+                    .Where(link =>
+                        link.TourMemberId == item.TourMemberId &&
+                        documents.ContainsKey(
+                            link.DocumentVersionId))
+                    .Select(link =>
+                    {
+                        var document =
+                            documents[link.DocumentVersionId];
+
+                        return new TourMemberDocumentResponse(
                             document.DocumentVersionId,
                             document.DocumentType,
                             document.NameZhOnDocument,
@@ -197,7 +217,8 @@ public sealed class PostgresTourStore(
                             document.Nationality,
                             document.ExpiryDate,
                             document.IsCurrent,
-                            document.VerifiedAt))
+                            document.VerifiedAt);
+                    })
                     .ToList();
 
                 return new TourMemberResponse(
@@ -326,14 +347,13 @@ public sealed class PostgresTourStore(
                 draftIds.Contains(item.DraftPersonId) &&
                 removedTypes.Contains(item.DocumentType));
 
-            var travelerIds = db.TourMembers
+            var memberIds = db.TourMembers
                 .Where(item => item.TourId == tourId)
-                .Select(item => item.TravelerId)
+                .Select(item => item.TourMemberId)
                 .ToList();
 
-            var hasFormal = db.DocumentVersions.Any(item =>
-                travelerIds.Contains(item.TravelerId) &&
-                item.IsCurrent &&
+            var hasFormal = db.TourMemberDocuments.Any(item =>
+                memberIds.Contains(item.TourMemberId) &&
                 removedTypes.Contains(item.DocumentType));
 
             if (hasStaged || hasFormal)
@@ -376,36 +396,144 @@ public sealed class PostgresTourStore(
         return ToSummary(tour);
     }
 
-    public bool EnsureMember(
+    public bool EnsureMemberDocument(
         Guid tourId,
         Guid travelerId,
+        Guid documentVersionId,
+        string documentType,
         DateTimeOffset now)
     {
-        if (!db.Tours.Any(item => item.TourId == tourId))
+        var tour = db.Tours.SingleOrDefault(
+            item => item.TourId == tourId);
+
+        if (tour is null)
         {
             return false;
         }
 
-        var exists = db.TourMembers.Any(item =>
-            item.TourId == tourId &&
-            item.TravelerId == travelerId);
+        var normalizedDocumentType =
+            documentType.Trim().ToUpperInvariant();
 
-        if (!exists)
+        var document = db.DocumentVersions
+            .SingleOrDefault(item =>
+                item.DocumentVersionId ==
+                    documentVersionId);
+
+        if (
+            document is null ||
+            document.TravelerId != travelerId ||
+            document.DocumentType !=
+                normalizedDocumentType)
         {
-            db.TourMembers.Add(
-                new TourMemberRecord
-                {
-                    TourMemberId = Guid.NewGuid(),
-                    TourId = tourId,
-                    TravelerId = travelerId,
-                    CreatedAt = now
-                });
+            return false;
         }
 
-        var tour = db.Tours.Single(
-            item => item.TourId == tourId);
-        tour.UpdatedAt = now;
+        var membership = db.TourMembers
+            .SingleOrDefault(item =>
+                item.TourId == tourId &&
+                item.TravelerId == travelerId);
 
+        if (membership is null)
+        {
+            membership = new TourMemberRecord
+            {
+                TourMemberId = Guid.NewGuid(),
+                TourId = tourId,
+                TravelerId = travelerId,
+                CreatedAt = now
+            };
+
+            db.TourMembers.Add(membership);
+            db.SaveChanges();
+        }
+
+        var link = db.TourMemberDocuments
+            .SingleOrDefault(item =>
+                item.TourMemberId ==
+                    membership.TourMemberId &&
+                item.DocumentType ==
+                    normalizedDocumentType);
+
+        if (link is null)
+        {
+            db.TourMemberDocuments.Add(
+                new TourMemberDocumentRecord
+                {
+                    TourMemberDocumentId =
+                        Guid.NewGuid(),
+                    TourMemberId =
+                        membership.TourMemberId,
+                    DocumentVersionId =
+                        documentVersionId,
+                    DocumentType =
+                        normalizedDocumentType,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+        }
+        else
+        {
+            link.DocumentVersionId =
+                documentVersionId;
+            link.UpdatedAt = now;
+        }
+
+        tour.UpdatedAt = now;
+        db.SaveChanges();
+        return true;
+    }
+
+    public bool RemoveMemberDocument(
+        Guid tourId,
+        Guid travelerId,
+        string documentType,
+        DateTimeOffset now)
+    {
+        var tour = db.Tours.SingleOrDefault(
+            item => item.TourId == tourId);
+
+        if (tour is null)
+        {
+            return false;
+        }
+
+        var membership = db.TourMembers
+            .SingleOrDefault(item =>
+                item.TourId == tourId &&
+                item.TravelerId == travelerId);
+
+        if (membership is null)
+        {
+            return true;
+        }
+
+        var normalizedDocumentType =
+            documentType.Trim().ToUpperInvariant();
+
+        var link = db.TourMemberDocuments
+            .SingleOrDefault(item =>
+                item.TourMemberId ==
+                    membership.TourMemberId &&
+                item.DocumentType ==
+                    normalizedDocumentType);
+
+        if (link is not null)
+        {
+            db.TourMemberDocuments.Remove(link);
+            db.SaveChanges();
+        }
+
+        var hasDocuments = db.TourMemberDocuments.Any(
+            item =>
+                item.TourMemberId ==
+                    membership.TourMemberId);
+
+        if (!hasDocuments)
+        {
+            db.TourMembers.Remove(membership);
+        }
+
+        tour.UpdatedAt = now;
         db.SaveChanges();
         return true;
     }
@@ -498,6 +626,10 @@ public sealed class PostgresTourStore(
             .Where(item => item.TourId == tour.TourId)
             .ToList();
 
+        var memberIds = memberships
+            .Select(item => item.TourMemberId)
+            .ToList();
+
         var travelerIds = memberships
             .Select(item => item.TravelerId)
             .Distinct()
@@ -508,14 +640,15 @@ public sealed class PostgresTourStore(
             .Where(item => travelerIds.Contains(item.TravelerId))
             .ToList();
 
-        var requiredDocumentTypes = tour.RequiredDocumentTypes;
+        var requiredDocumentTypes =
+            tour.RequiredDocumentTypes;
 
-        var formalDocuments = db.DocumentVersions
+        var formalLinks = db.TourMemberDocuments
             .AsNoTracking()
             .Where(item =>
-                travelerIds.Contains(item.TravelerId) &&
-                item.IsCurrent &&
-                requiredDocumentTypes.Contains(item.DocumentType))
+                memberIds.Contains(item.TourMemberId) &&
+                requiredDocumentTypes.Contains(
+                    item.DocumentType))
             .ToList();
 
         var drafts = db.TourPersonDrafts
@@ -529,7 +662,8 @@ public sealed class PostgresTourStore(
 
         var stagedItems = db.ScanItems
             .AsNoTracking()
-            .Where(item => draftIds.Contains(item.DraftPersonId))
+            .Where(item =>
+                draftIds.Contains(item.DraftPersonId))
             .ToList();
 
         var personKeys = new HashSet<string>(
@@ -547,6 +681,10 @@ public sealed class PostgresTourStore(
         {
             personKeys.Add(key);
         }
+
+        var memberTravelerIds = memberships.ToDictionary(
+            item => item.TourMemberId,
+            item => item.TravelerId);
 
         var draftKeys = drafts.ToDictionary(
             item => item.DraftPersonId,
@@ -566,17 +704,21 @@ public sealed class PostgresTourStore(
         var receivedDocuments = new HashSet<string>(
             StringComparer.Ordinal);
 
-        foreach (var document in formalDocuments)
+        foreach (var link in formalLinks)
         {
-            if (!travelerKeys.TryGetValue(
-                document.TravelerId,
-                out var personKey))
+            if (
+                !memberTravelerIds.TryGetValue(
+                    link.TourMemberId,
+                    out var travelerId) ||
+                !travelerKeys.TryGetValue(
+                    travelerId,
+                    out var personKey))
             {
                 continue;
             }
 
             receivedDocuments.Add(
-                $"{personKey}|{document.DocumentType}");
+                $"{personKey}|{link.DocumentType}");
         }
 
         foreach (var item in stagedItems)
@@ -602,7 +744,7 @@ public sealed class PostgresTourStore(
             tour.ReturnDate,
             tour.RequiredDocumentTypes,
             memberships.Count,
-            formalDocuments.Count,
+            formalLinks.Count,
             personKeys.Count,
             receivedDocuments.Count,
             pendingReviewCount,
