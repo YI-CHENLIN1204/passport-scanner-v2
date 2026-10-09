@@ -156,6 +156,9 @@ jobs:
           grep -q '"status":"COMPLETED"' /tmp/passport-batch-complete.json
           grep -q '"status":"COMPLETED"' /tmp/permit-batch-complete.json
 
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/scan-batches?limit=5" > /tmp/recent-batches.json
+          python3 -c "import json; rows=json.load(open('/tmp/recent-batches.json')); assert len(rows) == 2, rows; assert all(row['status'] == 'COMPLETED' for row in rows), rows"
+
           APPEND_STATUS=$(curl --silent --output /tmp/rejected-completed-batch-item.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
             -H 'Content-Type: application/json' \
             -d "{\"originalFileName\":\"late.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小明\",\"nameEn\":\"WANG, HSIAO-MING\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"T99999999\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{}\"}")
