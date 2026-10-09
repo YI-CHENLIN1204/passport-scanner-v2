@@ -100,9 +100,24 @@ using (var scope = app.Services.CreateScope())
             document_type varchar(40) NOT NULL,
             status varchar(20) NOT NULL,
             item_count integer NOT NULL,
+            attempt_count integer NOT NULL DEFAULT 0,
+            failed_count integer NOT NULL DEFAULT 0,
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
         );
+
+        ALTER TABLE scan_batches
+            ADD COLUMN IF NOT EXISTS attempt_count integer NOT NULL DEFAULT 0;
+
+        ALTER TABLE scan_batches
+            ADD COLUMN IF NOT EXISTS failed_count integer NOT NULL DEFAULT 0;
+
+        UPDATE scan_batches
+            SET attempt_count = item_count
+            WHERE
+                status = 'COMPLETED'
+                AND attempt_count = 0
+                AND item_count > 0;
 
         CREATE TABLE IF NOT EXISTS tour_person_drafts (
             draft_person_id uuid PRIMARY KEY,
@@ -461,6 +476,7 @@ app.MapPost(
     "/api/scan-batches/{batchId:guid}/complete",
     (
         Guid batchId,
+        CompleteScanBatchRequest request,
         IScanQueueStore store) =>
     {
         try
@@ -468,11 +484,17 @@ app.MapPost(
             return Results.Ok(
                 store.CompleteBatch(
                     batchId,
+                    request,
                     DateTimeOffset.UtcNow));
         }
         catch (KeyNotFoundException ex)
         {
             return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(
                 new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
