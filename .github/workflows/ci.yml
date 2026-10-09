@@ -415,6 +415,43 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/travelers/$FOREIGN_TRAVELER_1" > /tmp/foreign-traveler.json
           python3 -c "import json; data=json.load(open('/tmp/foreign-traveler.json')); assert data['traveler']['nameZh'] == '', data; assert data['traveler']['nameEn'] == 'JOHN SMITH', data; assert len(data['documents']) == 2, data"
 
+      - name: Verify foreign passport through batch review
+        run: |
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Foreign Batch","departureDate":"2099-12-10","returnDate":"2099-12-12","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/foreign-batch-tour.json
+          FOREIGN_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/foreign-batch-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$FOREIGN_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/foreign-batch.json
+          FOREIGN_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/foreign-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$FOREIGN_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"foreign-passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"\",\"nameEn\":\"JANE DOE\",\"birthDate\":\"1988-08-08\",\"gender\":\"F\",\"nationality\":\"USA\",\"documentNumber\":\"X1234567\",\"issuingCountry\":\"USA\",\"expiryDate\":\"2038-08-07\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/foreign-batch-item.json
+          FOREIGN_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/foreign-batch-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$FOREIGN_BATCH_ID/complete" \
+            -H 'Content-Type: application/json' \
+            -d '{"attemptCount":1,"failedCount":0}' \
+            > /tmp/foreign-batch-complete.json
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$FOREIGN_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"","nameZhOnDocument":"","nameEn":"JANE DOE","birthDate":"1988-08-08","gender":"F","nationality":"USA","nationalIdNumber":null,"documentNumber":"X1234567","issuingCountry":"USA","expiryDate":"2038-08-07","useForTraining":false}' \
+            > /tmp/foreign-batch-reviewed.json
+
+          grep -q '"reviewStatus":"REVIEWED"' /tmp/foreign-batch-reviewed.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$FOREIGN_TOUR_ID" > /tmp/foreign-batch-tour-after.json
+          python3 -c "import json; data=json.load(open('/tmp/foreign-batch-tour-after.json')); assert len(data['members']) == 1, data; member=data['members'][0]; assert member['nameZh'] == '', member; assert member['nameEn'] == 'JANE DOE', member; assert len(member['documents']) == 1, member"
+
       - name: Verify large scan payload passes through frontend proxy
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
