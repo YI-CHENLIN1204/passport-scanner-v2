@@ -77,6 +77,12 @@ const failedCount = computed(() =>
   files.value.filter(item => item.status === 'error').length,
 )
 
+const runnableCount = computed(() =>
+  files.value.filter(
+    item => item.status !== 'done',
+  ).length,
+)
+
 const batchFinished = computed(
   () =>
     files.value.length > 0 &&
@@ -511,7 +517,6 @@ function fileKey(file: File) {
 function addFiles(chosen: File[]) {
   error.value = ''
   progressMessage.value = ''
-  completedCount.value = 0
 
   const valid = chosen.filter(
     file =>
@@ -542,6 +547,13 @@ function addFiles(chosen: File[]) {
 
     existing.add(key)
   }
+
+  completedCount.value =
+    files.value.filter(
+      item =>
+        item.status === 'done' ||
+        item.status === 'error',
+    ).length
 }
 
 function chooseFiles(event: Event) {
@@ -562,7 +574,12 @@ function removeFile(index: number) {
   if (running.value) return
 
   files.value.splice(index, 1)
-  completedCount.value = 0
+  completedCount.value =
+    files.value.filter(
+      item =>
+        item.status === 'done' ||
+        item.status === 'error',
+    ).length
   progressMessage.value = ''
 }
 
@@ -1064,6 +1081,15 @@ async function runBatch(
   }
 }
 
+function runPendingItems() {
+  const pendingItems =
+    files.value.filter(
+      item => item.status !== 'done',
+    )
+
+  void runBatch(pendingItems)
+}
+
 function retryFailedItems() {
   const failedItems =
     files.value.filter(
@@ -1501,15 +1527,15 @@ onBeforeUnmount(() => {
               running ||
               !selectedTourId ||
               !documentType ||
-              !files.length ||
+              !runnableCount ||
               batchFinished
             "
-            @click="runBatch()"
+            @click="runPendingItems"
           >
             {{
               running
                 ? `辨識中 ${progressPercent}%`
-                : `開始辨識 ${files.length || ''} 張`
+                : `開始辨識 ${runnableCount || ''} 張`
             }}
           </button>
         </footer>
