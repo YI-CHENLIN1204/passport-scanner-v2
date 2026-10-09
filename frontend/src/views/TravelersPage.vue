@@ -370,6 +370,7 @@ async function confirmMerge() {
       source.travelerId,
     )
 
+    mergeSaving.value = false
     closeMerge()
     await load(true)
   } catch (err) {
