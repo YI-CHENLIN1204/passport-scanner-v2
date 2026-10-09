@@ -807,3 +807,23 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 阻止合併時整個 merge transaction rollback，Traveler、DocumentVersion、TourMember 與 TourMemberDocument 都不可留下半套變更。
 
 目的：Traveler 主檔合併是在確認「兩筆是同一個人」，不代表系統有權順便決定某一團實際應使用哪一本不同證件。
+
+### D-060：團別統計不得用姓名碰撞合併兩位正式 Traveler
+
+團別 `memberCount`、收件進度與操作列必須和正式 Traveler 邊界一致。
+
+- 已建立的正式 TourMember / Traveler 一律以 TravelerId 視為獨立人物，不因中文姓名、英文姓名、出生日期、性別相同而互相去重。
+- 待審核 draft 若有 NationalIdNumber，只在唯一命中一位正式 Traveler 時與該 Traveler 視為同一人。
+- 沒有 NationalIdNumber 時，可用中文姓名或英文姓名 + 出生日期 + 性別比對，但只有唯一命中一位正式 Traveler 才去重。
+- 若命中 0 位或 2 位以上正式 Traveler，draft 保持獨立，不猜測、不隱藏任何正式 Traveler。
+- `receivedDocumentCount` 使用同一套人物映射，避免 reviewed scan item 與正式 TourMemberDocument 重複計數。
+
+這條規則與 D-053 的 ambiguous traveler 策略一致：寧可暫時多顯示一筆待確認資料，也不能把兩個真人因低強度 identity 欄位相同而壓成同一人。
+
+### D-061：「儲存並審核下一位」以 Traveler 為優先單位
+
+審核視窗同一位旅客可以切換多張證件，因此「下一位」不等於「下一張 scan item」。
+
+- 儲存目前待審核證件後，優先尋找另一位仍有 PENDING 證件的 draft person。
+- 若其他旅客都沒有待審核資料，但目前這位仍有另一張 PENDING 證件，才留在目前這位並切到下一張待審核證件。
+- 全部待審核資料都完成後才關閉審核視窗。
