@@ -312,6 +312,45 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")/review-queue" > /tmp/queue-after-invalid-id.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-invalid-id.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PASSPORT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['reviewStatus'] == 'PENDING', docs"
 
+      - name: Verify expired tours cannot accept new production scans
+        run: |
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Expired Intake","departureDate":"2020-01-01","returnDate":"2020-01-02","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/expired-intake-tour.json
+          EXPIRED_INTAKE_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/expired-intake-tour.json'))['tourId'])")
+
+          EXPIRED_BATCH_STATUS=$(curl --silent --output /tmp/expired-intake-batch.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/tours/$EXPIRED_INTAKE_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}')
+          test "$EXPIRED_BATCH_STATUS" = "400"
+          grep -q '保存期限' /tmp/expired-intake-batch.json
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Intake Race","departureDate":"2099-12-20","returnDate":"2099-12-22","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/intake-race-tour.json
+          INTAKE_RACE_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/intake-race-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$INTAKE_RACE_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/intake-race-batch.json
+          INTAKE_RACE_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/intake-race-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/tours/$INTAKE_RACE_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Intake Race","departureDate":"2020-01-01","returnDate":"2020-01-02","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/intake-race-tour-updated.json
+
+          RACE_ITEM_STATUS=$(curl --silent --output /tmp/intake-race-item.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/scan-batches/$INTAKE_RACE_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"race.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"期限測試\",\"nameEn\":\"RETENTION RACE\",\"birthDate\":\"1990-01-01\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"R12345678\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2035-01-01\",\"ocrPayloadJson\":\"{}\"}")
+          test "$RACE_ITEM_STATUS" = "400"
+          grep -q '保存期限' /tmp/intake-race-item.json
+
       - name: Verify tour date edit cannot immediately expire pending photos
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
