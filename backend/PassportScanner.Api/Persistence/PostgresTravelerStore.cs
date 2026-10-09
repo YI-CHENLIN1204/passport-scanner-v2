@@ -709,10 +709,12 @@ public sealed class PostgresTravelerStore(
             nationality,
             now);
 
-        var canonicalTourIds = db.TourMembers
-            .Where(item => item.TravelerId == canonical.TravelerId)
-            .Select(item => item.TourId)
-            .ToHashSet();
+        var canonicalMemberships = db.TourMembers
+            .Where(item =>
+                item.TravelerId ==
+                    canonical.TravelerId)
+            .ToDictionary(
+                item => item.TourId);
 
         foreach (var duplicate in matches.Where(
             item => item.TravelerId != canonical.TravelerId))
@@ -754,14 +756,25 @@ public sealed class PostgresTravelerStore(
 
             foreach (var membership in duplicateMemberships)
             {
-                if (canonicalTourIds.Contains(membership.TourId))
+                if (
+                    canonicalMemberships.TryGetValue(
+                        membership.TourId,
+                        out var targetMembership))
                 {
+                    MergeMemberDocuments(
+                        membership.TourMemberId,
+                        targetMembership.TourMemberId,
+                        now);
+
                     db.TourMembers.Remove(membership);
                     continue;
                 }
 
-                membership.TravelerId = canonical.TravelerId;
-                canonicalTourIds.Add(membership.TourId);
+                membership.TravelerId =
+                    canonical.TravelerId;
+                canonicalMemberships[
+                    membership.TourId] =
+                        membership;
             }
 
             db.Travelers.Remove(duplicate);
@@ -774,6 +787,54 @@ public sealed class PostgresTravelerStore(
         db.SaveChanges();
 
         return canonical;
+    }
+
+    private void MergeMemberDocuments(
+        Guid sourceTourMemberId,
+        Guid targetTourMemberId,
+        DateTimeOffset now)
+    {
+        var targetLinks = db.TourMemberDocuments
+            .Where(item =>
+                item.TourMemberId ==
+                    targetTourMemberId)
+            .ToDictionary(
+                item => item.DocumentType,
+                StringComparer.Ordinal);
+
+        var sourceLinks = db.TourMemberDocuments
+            .Where(item =>
+                item.TourMemberId ==
+                    sourceTourMemberId)
+            .ToList();
+
+        foreach (var sourceLink in sourceLinks)
+        {
+            if (
+                targetLinks.TryGetValue(
+                    sourceLink.DocumentType,
+                    out var targetLink))
+            {
+                if (
+                    sourceLink.UpdatedAt >
+                        targetLink.UpdatedAt)
+                {
+                    targetLink.DocumentVersionId =
+                        sourceLink.DocumentVersionId;
+                    targetLink.UpdatedAt = now;
+                }
+
+                db.TourMemberDocuments.Remove(
+                    sourceLink);
+                continue;
+            }
+
+            sourceLink.TourMemberId =
+                targetTourMemberId;
+            sourceLink.UpdatedAt = now;
+            targetLinks[sourceLink.DocumentType] =
+                sourceLink;
+        }
     }
 
     private void ReconcileCurrentDocuments(Guid travelerId)
