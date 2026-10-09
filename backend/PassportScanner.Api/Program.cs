@@ -429,6 +429,36 @@ app.MapPost(
             return Results.BadRequest(
                 new { message = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
+    });
+
+app.MapPost(
+    "/api/scan-batches/{batchId:guid}/complete",
+    (
+        Guid batchId,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.CompleteBatch(
+                    batchId,
+                    DateTimeOffset.UtcNow));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(
+                new { message = ex.Message });
+        }
     });
 
 app.MapGet(
