@@ -626,6 +626,14 @@ public sealed class PassportScannerDbContext(
             .HasDatabaseName(
                 "ux_training_samples_source_scan_item");
 
+        trainingSample.HasOne<ScanItemRecord>()
+            .WithMany()
+            .HasForeignKey(item =>
+                item.SourceScanItemId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName(
+                "fk_training_samples_source_scan_item");
+
         var evaluationBaseline =
             modelBuilder.Entity<OcrEvaluationBaselineRecord>();
 
