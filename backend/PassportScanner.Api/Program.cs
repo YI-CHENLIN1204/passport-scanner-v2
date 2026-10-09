@@ -57,6 +57,37 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS ix_travelers_national_id_number
             ON travelers (national_id_number);
 
+        WITH ranked_current_documents AS (
+            SELECT
+                document_version_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY
+                        traveler_id,
+                        document_type
+                    ORDER BY
+                        verified_at DESC,
+                        created_at DESC,
+                        document_version_id DESC
+                ) AS current_rank
+            FROM document_versions
+            WHERE is_current = TRUE
+        )
+        UPDATE document_versions AS document
+        SET is_current = FALSE
+        FROM ranked_current_documents AS ranked
+        WHERE
+            document.document_version_id =
+                ranked.document_version_id
+            AND ranked.current_rank > 1;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            ux_document_versions_one_current_per_type
+            ON document_versions (
+                traveler_id,
+                document_type
+            )
+            WHERE is_current = TRUE;
+
         CREATE TABLE IF NOT EXISTS tours (
             tour_id uuid PRIMARY KEY,
             tour_name varchar(160) NOT NULL,
