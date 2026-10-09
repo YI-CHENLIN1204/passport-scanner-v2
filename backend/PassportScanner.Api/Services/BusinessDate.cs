@@ -11,4 +11,21 @@ public static class BusinessDate
             instant
                 .ToOffset(TaiwanOffset)
                 .DateTime);
+
+    public static DateTimeOffset
+        ProductionPhotoDeleteAfter(
+            DateOnly returnDate)
+    {
+        var taiwanMidnight =
+            new DateTimeOffset(
+                returnDate
+                    .AddDays(8)
+                    .ToDateTime(
+                        TimeOnly.MinValue,
+                        DateTimeKind.Unspecified),
+                TaiwanOffset);
+
+        return taiwanMidnight
+            .ToUniversalTime();
+    }
 }
