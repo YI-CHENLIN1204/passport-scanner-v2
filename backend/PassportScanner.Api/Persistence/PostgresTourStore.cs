@@ -684,6 +684,26 @@ public sealed class PostgresTourStore(
                 draftIds.Contains(item.DraftPersonId))
             .ToList();
 
+        var savedDocumentIds = stagedItems
+            .Where(item =>
+                item.SavedDocumentVersionId.HasValue)
+            .Select(item =>
+                item.SavedDocumentVersionId!.Value)
+            .Distinct()
+            .ToList();
+
+        var savedDocumentOwners =
+            db.DocumentVersions
+                .AsNoTracking()
+                .Where(document =>
+                    savedDocumentIds.Contains(
+                        document.DocumentVersionId))
+                .ToDictionary(
+                    document =>
+                        document.DocumentVersionId,
+                    document =>
+                        document.TravelerId);
+
         var personKeys = new HashSet<string>(
             StringComparer.Ordinal);
 
@@ -744,7 +764,32 @@ public sealed class PostgresTourStore(
 
             TravelerRecord? matchedTraveler = null;
 
-            if (
+            var linkedTravelerIds = stagedItems
+                .Where(item =>
+                    item.DraftPersonId ==
+                        draft.DraftPersonId &&
+                    item.SavedDocumentVersionId.HasValue &&
+                    savedDocumentOwners.TryGetValue(
+                        item.SavedDocumentVersionId.Value,
+                        out _))
+                .Select(item =>
+                    savedDocumentOwners[
+                        item.SavedDocumentVersionId!.Value])
+                .Where(travelerId =>
+                    travelerKeys.ContainsKey(
+                        travelerId))
+                .Distinct()
+                .ToList();
+
+            if (linkedTravelerIds.Count == 1)
+            {
+                matchedTraveler = travelers
+                    .Single(item =>
+                        item.TravelerId ==
+                            linkedTravelerIds[0]);
+            }
+            else if (
+                linkedTravelerIds.Count == 0 &&
                 !string.IsNullOrWhiteSpace(
                     draftNationalId))
             {
@@ -761,6 +806,7 @@ public sealed class PostgresTourStore(
                 }
             }
             else if (
+                linkedTravelerIds.Count == 0 &&
                 draft.BirthDate.HasValue &&
                 !string.IsNullOrWhiteSpace(
                     draft.Gender))
