@@ -426,6 +426,44 @@ export async function updateTraveler(
   return response.json() as Promise<TravelerDetailResponse>
 }
 
+export async function mergeTravelers(
+  targetTravelerId: string,
+  sourceTravelerId: string,
+) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/travelers/${encodeURIComponent(targetTravelerId)}/merge`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sourceTravelerId,
+      }),
+    },
+  )
+
+  if (!response.ok) {
+    let message =
+      `Merge travelers failed: ${response.status}`
+
+    try {
+      const body = (await response.json()) as {
+        message?: string
+      }
+      message = body.message ?? message
+    } catch {
+      // Keep status-only message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response.json() as Promise<
+    TravelerDetailResponse
+  >
+}
+
 export interface TaiwanNationalIdReviewSaveResponse {
   accepted: boolean
   persistence: 'postgresql'
