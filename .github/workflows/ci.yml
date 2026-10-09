@@ -151,13 +151,23 @@ jobs:
             -d "{\"originalFileName\":\"permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"王小朋\",\"nameEn\":\"\",\"birthDate\":\"1990-01-15\",\"gender\":\"M\",\"nationality\":null,\"documentNumber\":\"12345678\",\"issuingCountry\":null,\"expiryDate\":\"2030-12-31\",\"ocrPayloadJson\":\"{\\\"totalMs\\\":1234,\\\"orientationAttempts\\\":2,\\\"fallbackUsed\\\":false,\\\"originalFields\\\":{\\\"nameZh\\\":\\\"王小朋\\\",\\\"nameZhTraditional\\\":\\\"王小朋\\\",\\\"nameEn\\\":\\\"\\\",\\\"birthDate\\\":\\\"1990-01-15\\\",\\\"gender\\\":\\\"M\\\",\\\"nationality\\\":null,\\\"documentNumber\\\":\\\"12345678\\\",\\\"issuingCountry\\\":null,\\\"expiryDate\\\":\\\"2030-12-31\\\"}}\"}" \
             > /tmp/permit-scan-item.json
 
-          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/complete" > /tmp/passport-batch-complete.json
-          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/complete" > /tmp/permit-batch-complete.json
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/complete" \
+            -H 'Content-Type: application/json' \
+            -d '{"attemptCount":1,"failedCount":0}' \
+            > /tmp/passport-batch-complete.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$PERMIT_BATCH_ID/complete" \
+            -H 'Content-Type: application/json' \
+            -d '{"attemptCount":2,"failedCount":1}' \
+            > /tmp/permit-batch-complete.json
+
           grep -q '"status":"COMPLETED"' /tmp/passport-batch-complete.json
           grep -q '"status":"COMPLETED"' /tmp/permit-batch-complete.json
+          grep -q '"attemptCount":2' /tmp/permit-batch-complete.json
+          grep -q '"failedCount":1' /tmp/permit-batch-complete.json
 
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/scan-batches?limit=5" > /tmp/recent-batches.json
-          python3 -c "import json; rows=json.load(open('/tmp/recent-batches.json')); assert len(rows) == 2, rows; assert all(row['status'] == 'COMPLETED' for row in rows), rows"
+          python3 -c "import json; rows=json.load(open('/tmp/recent-batches.json')); assert len(rows) == 2, rows; assert all(row['status'] == 'COMPLETED' for row in rows), rows; permit=next(row for row in rows if row['documentType'] == 'TAIWAN_COMPATRIOT_PERMIT'); assert permit['itemCount'] == 1 and permit['attemptCount'] == 2 and permit['failedCount'] == 1, permit"
 
           APPEND_STATUS=$(curl --silent --output /tmp/rejected-completed-batch-item.json --write-out "%{http_code}" -X POST "http://localhost:5080/api/scan-batches/$PASSPORT_BATCH_ID/items" \
             -H 'Content-Type: application/json' \
