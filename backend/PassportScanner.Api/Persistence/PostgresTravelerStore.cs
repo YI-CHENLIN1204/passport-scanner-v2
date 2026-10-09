@@ -1359,12 +1359,46 @@ public sealed class PostgresTravelerStore(
                     out var targetLink))
             {
                 if (
-                    sourceLink.UpdatedAt >
-                        targetLink.UpdatedAt)
+                    targetLink.DocumentVersionId !=
+                        sourceLink.DocumentVersionId)
                 {
-                    targetLink.DocumentVersionId =
-                        sourceLink.DocumentVersionId;
-                    targetLink.UpdatedAt = now;
+                    var targetDocument =
+                        db.DocumentVersions
+                            .Single(item =>
+                                item.DocumentVersionId ==
+                                    targetLink.DocumentVersionId);
+                    var sourceDocument =
+                        db.DocumentVersions
+                            .Single(item =>
+                                item.DocumentVersionId ==
+                                    sourceLink.DocumentVersionId);
+
+                    var sameDocumentIdentity =
+                        targetDocument.DocumentType ==
+                            sourceDocument.DocumentType &&
+                        targetDocument.DocumentNumber ==
+                            sourceDocument.DocumentNumber &&
+                        (
+                            targetDocument.DocumentType !=
+                                "PASSPORT" ||
+                            targetDocument.IssuingCountry ==
+                                sourceDocument.IssuingCountry
+                        );
+
+                    if (!sameDocumentIdentity)
+                    {
+                        throw new InvalidOperationException(
+                            "兩筆旅客在同一團的同一證件類型掛了不同證件，系統不會自動決定要保留哪一張；請先在團別移除不正確的證件，再進行旅客合併。");
+                    }
+
+                    if (
+                        sourceLink.UpdatedAt >
+                            targetLink.UpdatedAt)
+                    {
+                        targetLink.DocumentVersionId =
+                            sourceLink.DocumentVersionId;
+                        targetLink.UpdatedAt = now;
+                    }
                 }
 
                 db.TourMemberDocuments.Remove(
