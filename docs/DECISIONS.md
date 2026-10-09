@@ -962,3 +962,16 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 姓名不同本身不構成阻擋條件，因姓名可能有更名、OCR 修正或中英文表記差異；出生日期與性別則屬明顯 identity conflict。
 
 目的：強識別可降低重複資料，但不能把歷史誤填的身分證字號轉化成不可逆的錯誤合併。
+
+### D-074：Production photo retention cutoff 是存取截止，不等待 worker 才生效
+
+`delete_after` 是 production 證件照片的正式存取期限；hourly background worker 只是實體 bytes 清理機制，不應把保存期限延長到下一次 worker 執行。
+
+- `delete_after <= now` 後，production image endpoint 立即視為不存在，即使 bytes 尚未被 background worker 清除。
+- review queue 的 `imageAvailable` 同樣以 cutoff + bytes 共同判斷；超過 cutoff 立即為 false。
+- PENDING scan item 到 cutoff 後不得完成人工審核，即使 DB bytes 暫時仍存在。
+- 已超過 cutoff 且尚未建立 Training Sample 的 scan item，不得再把 production image 新複製進 Training Dataset。
+- 已經在 cutoff 前人工選入 Training Dataset 的獨立 training image 不受 production cutoff 影響，仍依 Training Dataset 規則保存。
+- background worker 持續約每小時執行，負責最終把 `image_bytes / ocr_input_image_bytes` 從 production scan row 清除。
+
+目的：保存政策的法律／隱私語意由 `delete_after` 決定，不因背景排程延遲而多出最多約一小時的可讀取窗口。
