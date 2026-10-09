@@ -677,12 +677,7 @@ public sealed class PostgresTourStore(
 
         var travelerKeys = travelers.ToDictionary(
             item => item.TravelerId,
-            item => IdentityKey(
-                item.NameZh,
-                item.NameEn,
-                item.BirthDate,
-                item.Gender,
-                item.TravelerId));
+            item => $"TRAVELER:{item.TravelerId:N}");
 
         foreach (var key in travelerKeys.Values)
         {
@@ -708,23 +703,106 @@ public sealed class PostgresTourStore(
                     .FirstOrDefault() ??
                     string.Empty);
 
-        var draftKeys = drafts.ToDictionary(
-            item => item.DraftPersonId,
-            item => item.BirthDate.HasValue
-                ? IdentityKey(
-                    item.NameZh,
-                    draftEnglishNames.TryGetValue(
-                        item.DraftPersonId,
-                        out var draftNameEn)
-                        ? draftNameEn
-                        : string.Empty,
-                    item.BirthDate.Value,
-                    item.Gender,
-                    item.DraftPersonId)
-                : $"DRAFT:{item.DraftPersonId:N}");
+        var draftNationalIds = stagedItems
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(
+                    item.NationalIdNumber))
+            .GroupBy(item =>
+                item.DraftPersonId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(item =>
+                        item.UpdatedAt)
+                    .Select(item =>
+                        item.NationalIdNumber)
+                    .FirstOrDefault());
 
-        foreach (var key in draftKeys.Values)
+        var draftKeys =
+            new Dictionary<Guid, string>();
+
+        foreach (var draft in drafts)
         {
+            draftEnglishNames.TryGetValue(
+                draft.DraftPersonId,
+                out var draftNameEn);
+            draftNationalIds.TryGetValue(
+                draft.DraftPersonId,
+                out var draftNationalId);
+
+            TravelerRecord? matchedTraveler = null;
+
+            if (
+                !string.IsNullOrWhiteSpace(
+                    draftNationalId))
+            {
+                var idMatches = travelers
+                    .Where(item =>
+                        item.NationalIdNumber ==
+                            draftNationalId)
+                    .ToList();
+
+                if (idMatches.Count == 1)
+                {
+                    matchedTraveler =
+                        idMatches[0];
+                }
+            }
+            else if (
+                draft.BirthDate.HasValue &&
+                !string.IsNullOrWhiteSpace(
+                    draft.Gender))
+            {
+                List<TravelerRecord> identityMatches;
+
+                if (!string.IsNullOrWhiteSpace(
+                    draft.NameZh))
+                {
+                    identityMatches = travelers
+                        .Where(item =>
+                            item.NameZh ==
+                                draft.NameZh &&
+                            item.BirthDate ==
+                                draft.BirthDate.Value &&
+                            item.Gender ==
+                                draft.Gender)
+                        .ToList();
+                }
+                else if (!string.IsNullOrWhiteSpace(
+                    draftNameEn))
+                {
+                    identityMatches = travelers
+                        .Where(item =>
+                            item.NameEn ==
+                                draftNameEn &&
+                            item.BirthDate ==
+                                draft.BirthDate.Value &&
+                            item.Gender ==
+                                draft.Gender)
+                        .ToList();
+                }
+                else
+                {
+                    identityMatches = [];
+                }
+
+                if (identityMatches.Count == 1)
+                {
+                    matchedTraveler =
+                        identityMatches[0];
+                }
+            }
+
+            var key =
+                matchedTraveler is not null &&
+                travelerKeys.TryGetValue(
+                    matchedTraveler.TravelerId,
+                    out var travelerKey)
+                    ? travelerKey
+                    : $"DRAFT:{draft.DraftPersonId:N}";
+
+            draftKeys[draft.DraftPersonId] =
+                key;
             personKeys.Add(key);
         }
 
@@ -776,43 +854,6 @@ public sealed class PostgresTourStore(
             receivedDocuments.Count,
             pendingReviewCount,
             tour.UpdatedAt);
-    }
-
-    private static string IdentityKey(
-        string nameZh,
-        string nameEn,
-        DateOnly birthDate,
-        string gender,
-        Guid fallbackId)
-    {
-        var preferredName =
-            !string.IsNullOrWhiteSpace(nameZh)
-                ? nameZh
-                : nameEn;
-
-        var normalizedName = string.Concat(
-            preferredName
-                .Trim()
-                .Where(character =>
-                    !char.IsWhiteSpace(character)))
-            .ToUpperInvariant();
-        var normalizedGender =
-            gender.Trim().ToUpperInvariant();
-
-        if (
-            string.IsNullOrWhiteSpace(normalizedName) ||
-            string.IsNullOrWhiteSpace(normalizedGender))
-        {
-            return $"ROW:{fallbackId:N}";
-        }
-
-        return string.Join(
-            "|",
-            normalizedName,
-            birthDate.ToString(
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture),
-            normalizedGender);
     }
 
 }
