@@ -424,6 +424,33 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify distinct same-name travelers stay separate
+        run: |
+          REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Same Identity","departureDate":"2099-11-15","returnDate":"2099-11-17","requiredDocumentTypes":["TAIWAN_NATIONAL_ID"]}' \
+            > /tmp/same-identity-tour.json
+          SAME_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/same-identity-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/taiwan-national-id-reviews?tourId=$SAME_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"tw-id\",\"chineseName\":\"同名旅客\",\"nationalId\":\"A100000001\",\"birthDate\":\"1990-01-01\",\"sex\":\"M\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":4,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/same-identity-1.json
+
+          curl --fail --silent -X POST "http://localhost:5080/api/taiwan-national-id-reviews?tourId=$SAME_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"tw-id\",\"chineseName\":\"同名旅客\",\"nationalId\":\"A100000010\",\"birthDate\":\"1990-01-01\",\"sex\":\"M\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":4,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}" \
+            > /tmp/same-identity-2.json
+
+          SAME_TRAVELER_1=$(python3 -c "import json; print(json.load(open('/tmp/same-identity-1.json'))['travelerId'])")
+          SAME_TRAVELER_2=$(python3 -c "import json; print(json.load(open('/tmp/same-identity-2.json'))['travelerId'])")
+          test "$SAME_TRAVELER_1" != "$SAME_TRAVELER_2"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID" > /tmp/same-identity-tour-after.json
+          python3 -c "import json; data=json.load(open('/tmp/same-identity-tour-after.json')); assert data['tour']['reviewedMemberCount'] == 2, data; assert data['tour']['memberCount'] == 2, data; assert len(data['members']) == 2, data; assert {m['nationalIdNumber'] for m in data['members']} == {'A100000001','A100000010'}, data"
+
       - name: Verify traveler merge does not overwrite conflicting tour document
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
