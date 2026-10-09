@@ -18,6 +18,7 @@ import {
   recognizeTaiwanNationalIdWithPaddle,
   validateTaiwanNationalId,
   warmupPaddleOcr,
+  OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
 
 const benchmark =
@@ -80,6 +81,7 @@ interface RetestSampleOutcome {
   currentFields: Record<string, string | null>
   groundTruth: Record<string, string | null>
   passportNameDiagnostics: PassportNameDiagnosticSnapshot[]
+  baselinePipelineVersion: string | null
   totalMs: number
   orientationAttempts: number
 }
@@ -104,6 +106,8 @@ interface RetestDocumentSummary {
   sampleCount: number
   exactInputCount: number
   legacyInputCount: number
+  baselinePipelineVersions: string[]
+  legacyBaselineCount: number
   baselineFullExactRate: number
   currentFullExactRate: number
   fields: RetestFieldSummary[]
@@ -115,6 +119,7 @@ interface RetestDocumentSummary {
 
 interface RetestRunSummary {
   generatedAt: string
+  pipelineVersion: string
   sampleCount: number
   failedCount: number
   baselineCreatedCount: number
@@ -289,6 +294,22 @@ function evaluationBaselineFieldsForSample(
         stringOrNull(fields[field]),
       ]),
   )
+}
+
+function evaluationBaselineVersionForSample(
+  sample: TrainingEvaluationSampleResponse,
+) {
+  if (!sample.evaluationBaselineJson) {
+    return null
+  }
+
+  const payload =
+    parseJsonRecord(sample.evaluationBaselineJson)
+  const version = stringOrNull(
+    payload.pipelineVersion,
+  )?.trim()
+
+  return version || null
 }
 
 function groundTruthForSample(
@@ -640,6 +661,23 @@ function summarizeRetest(
           samples.filter(sample =>
             !sample.hasExactOcrInput,
           ).length,
+        baselinePipelineVersions:
+          Array.from(
+            new Set(
+              samples
+                .map(sample =>
+                  sample.baselinePipelineVersion,
+                )
+                .filter(
+                  (version): version is string =>
+                    Boolean(version),
+                ),
+            ),
+          ).sort(),
+        legacyBaselineCount:
+          samples.filter(sample =>
+            !sample.baselinePipelineVersion,
+          ).length,
         baselineFullExactRate:
           baselineFull / samples.length,
         currentFullExactRate:
@@ -723,9 +761,12 @@ async function rerunTestSet() {
 
         let baselineFields =
           evaluationBaselineFieldsForSample(sample)
+        let baselinePipelineVersion =
+          evaluationBaselineVersionForSample(sample)
 
         if (!baselineFields) {
           const baselineJson = JSON.stringify({
+            pipelineVersion: OCR_PIPELINE_VERSION,
             fields: current.fields,
             totalMs: current.totalMs,
             orientationAttempts:
@@ -738,6 +779,8 @@ async function rerunTestSet() {
           )
 
           baselineFields = current.fields
+          baselinePipelineVersion =
+            OCR_PIPELINE_VERSION
           baselineCreated += 1
         }
 
@@ -751,6 +794,7 @@ async function rerunTestSet() {
             groundTruthForSample(sample),
           passportNameDiagnostics:
             current.passportNameDiagnostics,
+          baselinePipelineVersion,
           totalMs: current.totalMs,
           orientationAttempts:
             current.orientationAttempts,
@@ -765,6 +809,7 @@ async function rerunTestSet() {
 
     retestResult.value = {
       generatedAt: new Date().toISOString(),
+      pipelineVersion: OCR_PIPELINE_VERSION,
       sampleCount: outcomes.length,
       failedCount: failed,
       baselineCreatedCount: baselineCreated,
@@ -971,6 +1016,24 @@ function rate(value: number | null | undefined) {
   }
 
   return `${Math.round(value * 100)}%`
+}
+
+function baselineVersionLabel(
+  result: RetestDocumentSummary,
+) {
+  const versions =
+    result.baselinePipelineVersions
+
+  const versionLabel =
+    versions.length === 0
+      ? 'legacy / 未記錄'
+      : versions.length === 1
+        ? versions[0]
+        : `${versions.length} 種版本`
+
+  return result.legacyBaselineCount > 0
+    ? `${versionLabel} + legacy ${result.legacyBaselineCount} 張`
+    : versionLabel
 }
 
 function seconds(
@@ -1269,6 +1332,10 @@ onMounted(load)
                 <small>
                   精確輸入 {{ result.exactInputCount }} ·
                   舊版標準化 {{ result.legacyInputCount }}
+                </small>
+                <small>
+                  固定基準 {{ baselineVersionLabel(result) }} ·
+                  目前 {{ retestResult.pipelineVersion }}
                 </small>
               </div>
               <div class="retest-full-rate">
