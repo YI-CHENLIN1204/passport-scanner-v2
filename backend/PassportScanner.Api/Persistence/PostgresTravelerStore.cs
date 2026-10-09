@@ -927,6 +927,13 @@ public sealed class PostgresTravelerStore(
             targetDocuments,
             sourceDocuments);
 
+        // Persist current-document demotions before moving
+        // source rows onto the target traveler. The partial
+        // unique index is checked per SQL statement, so doing
+        // both changes in one SaveChanges could transiently
+        // create two current documents of the same type.
+        db.SaveChanges();
+
         foreach (var document in sourceDocuments)
         {
             document.TravelerId =
