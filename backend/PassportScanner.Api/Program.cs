@@ -406,6 +406,37 @@ using (var scope = app.Services.CreateScope())
             ux_training_samples_source_scan_item
             ON training_samples (source_scan_item_id);
 
+        DELETE FROM training_samples AS sample
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM scan_items AS scan
+            WHERE
+                scan.scan_item_id =
+                    sample.source_scan_item_id
+        );
+
+        DO $migration$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname =
+                    'fk_training_samples_source_scan_item'
+            ) THEN
+                ALTER TABLE training_samples
+                    ADD CONSTRAINT
+                        fk_training_samples_source_scan_item
+                    FOREIGN KEY (
+                        source_scan_item_id
+                    )
+                    REFERENCES scan_items(
+                        scan_item_id
+                    )
+                    ON DELETE CASCADE;
+            END IF;
+        END
+        $migration$;
+
         CREATE TABLE IF NOT EXISTS ocr_evaluation_baselines (
             training_sample_id uuid PRIMARY KEY
                 REFERENCES training_samples(training_sample_id)
