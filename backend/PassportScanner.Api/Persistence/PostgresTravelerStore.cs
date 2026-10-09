@@ -83,7 +83,13 @@ public sealed class PostgresTravelerStore(
                 sex);
         }
 
-        using var transaction = db.Database.BeginTransaction();
+        var ownsTransaction =
+            db.Database.CurrentTransaction is null;
+
+        using var transaction =
+            ownsTransaction
+                ? db.Database.BeginTransaction()
+                : null;
 
         var existingDocument = FindExistingDocument(
             documentType,
@@ -164,7 +170,10 @@ public sealed class PostgresTravelerStore(
             }
 
             db.SaveChanges();
-            transaction.Commit();
+            if (ownsTransaction)
+            {
+                transaction!.Commit();
+            }
 
             return BuildResult(
                 DocumentSaveAction.UpdatedExistingDocument,
@@ -262,7 +271,10 @@ public sealed class PostgresTravelerStore(
 
         db.DocumentVersions.Add(documentVersion);
         db.SaveChanges();
-        transaction.Commit();
+        if (ownsTransaction)
+            {
+                transaction!.Commit();
+            }
 
         return BuildResult(
             action,
