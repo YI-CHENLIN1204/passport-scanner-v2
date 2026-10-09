@@ -39,6 +39,19 @@ public sealed class PostgresTrainingDatasetStore(
         {
             if (existing is not null)
             {
+                var hasFixedBaseline =
+                    db.OcrEvaluationBaselines
+                        .AsNoTracking()
+                        .Any(item =>
+                            item.TrainingSampleId ==
+                                existing.TrainingSampleId);
+
+                if (hasFixedBaseline)
+                {
+                    throw new InvalidOperationException(
+                        "這張樣本已建立固定 Test baseline，不能透過一般「取消用於訓練」或證件刪除流程移除；固定基準必須保持不變。");
+                }
+
                 db.TrainingSamples.Remove(existing);
                 db.SaveChanges();
             }
