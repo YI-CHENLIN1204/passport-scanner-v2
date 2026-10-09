@@ -908,3 +908,15 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - Training Dataset 自己保存的 image / OCR input image 仍是獨立訓練副本，不受 production image retention 影響。
 
 目的：訓練資料可以獨立保存影像，但仍要能追溯到哪一筆人工覆核 scan 產生，且資料庫不能留下無來源樣本。
+
+### D-069：Traveler 人工編輯不可繞過正式證件 Identity 規則
+
+「旅客資料」允許修正已審核資料，但修正後仍必須符合目前 current DocumentVersion 所代表的正式身份限制。
+
+- 若 current documents 包含台灣身分證、台胞證，或國籍／簽發國為 TWN 的護照，Traveler 中文姓名不可清空。
+- 若存在 current 台灣身分證，Traveler `NationalIdNumber` 必須等於該 current 身分證號；前端即使送 null，也不得把主檔字號清掉而留下正式身分證版本。
+- 只要 Traveler 有合法台灣身分證字號，性別必須為 M 或 F，並與字號第 2 碼一致。
+- 外國護照且沒有台灣身分證字號時仍可使用 X，不因這條規則限制。
+- API 必須從資料庫實際 current documents 重新判斷，不假設前端一定把所有 current document 都送回。
+
+目的：人工編輯是修正可信資料，不是繞過掃描人工覆核 validation 的另一條入口。
