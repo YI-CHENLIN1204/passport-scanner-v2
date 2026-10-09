@@ -243,6 +243,30 @@ public sealed class PostgresScanQueueStore(
         return ToBatchResponse(batch);
     }
 
+    public IReadOnlyList<ScanBatchResponse> ListBatches(
+        Guid tourId,
+        int limit)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 20);
+
+        if (!db.Tours.AsNoTracking().Any(
+            item => item.TourId == tourId))
+        {
+            throw new KeyNotFoundException(
+                "找不到指定團別。");
+        }
+
+        return db.ScanBatches
+            .AsNoTracking()
+            .Where(item => item.TourId == tourId)
+            .OrderByDescending(item => item.UpdatedAt)
+            .ThenByDescending(item => item.CreatedAt)
+            .Take(safeLimit)
+            .ToList()
+            .Select(ToBatchResponse)
+            .ToList();
+    }
+
     public IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
         Guid tourId)
     {
