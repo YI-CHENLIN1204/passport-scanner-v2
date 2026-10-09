@@ -30,9 +30,9 @@ public sealed class ScanItemRecord
     public required string DocumentType { get; init; }
     public required string OriginalFileName { get; init; }
     public required string ImageContentType { get; init; }
-    public required byte[] ImageBytes { get; init; }
+    public required byte[] ImageBytes { get; set; }
     public string? OcrInputImageContentType { get; init; }
-    public byte[]? OcrInputImageBytes { get; init; }
+    public byte[]? OcrInputImageBytes { get; set; }
     public required string NameZh { get; set; }
     public required string NameZhOnDocument { get; set; }
     public required string NameEn { get; set; }
