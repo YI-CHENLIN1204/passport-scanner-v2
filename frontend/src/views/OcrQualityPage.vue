@@ -28,6 +28,14 @@ const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
 const training =
   ref<TrainingDatasetSummaryResponse | null>(null)
+const fixedTestSamples =
+  ref<TrainingEvaluationSampleResponse[]>([])
+const fixedBenchmarkCount = computed(
+  () =>
+    fixedTestSamples.value.length ||
+    training.value?.testCount ||
+    0,
+)
 const loading = ref(true)
 const exporting = ref(false)
 const retesting = ref(false)
@@ -712,7 +720,7 @@ function summarizeRetest(
 async function rerunTestSet() {
   if (
     retesting.value ||
-    !training.value?.testCount
+    !fixedBenchmarkCount.value
   ) {
     return
   }
@@ -722,7 +730,7 @@ async function rerunTestSet() {
   retestResult.value = null
   retestProgress.value = {
     completed: 0,
-    total: training.value.testCount,
+    total: fixedBenchmarkCount.value,
     message: '正在載入固定 Test set…',
   }
 
@@ -731,8 +739,17 @@ async function rerunTestSet() {
   let baselineCreated = 0
 
   try {
+    const existingFixedSamples =
+      await getTrainingEvaluationSamples(
+        'fixed-test',
+      )
+
     const samples =
-      await getTrainingEvaluationSamples('test')
+      existingFixedSamples.length
+        ? existingFixedSamples
+        : await getTrainingEvaluationSamples(
+            'test',
+          )
 
     retestProgress.value.total = samples.length
 
@@ -850,6 +867,11 @@ async function rerunTestSet() {
           ? historyErr.message
           : 'Benchmark 歷史紀錄儲存失敗。'
     }
+
+    fixedTestSamples.value =
+      await getTrainingEvaluationSamples(
+        'fixed-test',
+      )
 
     if (baselineCreated > 0) {
       retestProgress.value.message =
@@ -1127,15 +1149,20 @@ async function load() {
     const [
       benchmarkData,
       trainingData,
+      fixedTestData,
       historyData,
     ] = await Promise.all([
       getOcrBenchmarkSummary(),
       getTrainingDatasetSummary(),
+      getTrainingEvaluationSamples(
+        'fixed-test',
+      ).catch(() => []),
       listOcrBenchmarkRuns(8).catch(() => []),
     ])
 
     benchmark.value = benchmarkData
     training.value = trainingData
+    fixedTestSamples.value = fixedTestData
     benchmarkHistory.value = historyData
   } catch (err) {
     error.value =
@@ -1306,8 +1333,9 @@ onMounted(load)
           <h2>用最新版 OCR 重跑固定 Test set</h2>
           <p>
             不建立旅客、不修改人工答案，也不把 Test 資料拿去訓練。
-            每張樣本第一次重測會建立不可覆寫的固定基準，
-            後續都用同一份輸入影像比較「固定基準 → 最新版」。
+            第一次建立基準時使用當下 Test split；
+            一旦固定基準存在，後續只重跑原本的固定 cohort，
+            新加入 Test 的樣本不會自動擴張固定比較集合。
           </p>
           <small>
             舊樣本當時沒有保存 OCR 工作圖片，只能用人工審核影像做
@@ -1322,14 +1350,14 @@ onMounted(load)
             class="primary-action"
             :disabled="
               retesting ||
-              !training?.testCount
+              !fixedBenchmarkCount
             "
             @click="rerunTestSet"
           >
             {{
               retesting
                 ? '重測中…'
-                : `重跑 Test ${training?.testCount ?? 0} 張`
+                : `重跑 Test ${fixedBenchmarkCount} 張`
             }}
           </button>
 
