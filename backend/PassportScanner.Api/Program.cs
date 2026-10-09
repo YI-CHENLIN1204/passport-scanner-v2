@@ -639,6 +639,15 @@ app.MapPut(
             return Results.BadRequest(
                 new { message = ex.Message });
         }
+        catch (AmbiguousTravelerMatchException ex)
+        {
+            return Results.Conflict(
+                new
+                {
+                    code = "ambiguousTravelerMatch",
+                    message = ex.Message
+                });
+        }
     });
 
 app.MapDelete(
