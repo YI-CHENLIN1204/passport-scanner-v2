@@ -727,6 +727,8 @@ export interface ScanBatchResponse {
   documentType: string
   status: string
   itemCount: number
+  attemptCount: number
+  failedCount: number
   createdAt: string
   updatedAt: string
 }
@@ -862,11 +864,19 @@ export async function listScanBatches(
 
 export async function completeScanBatch(
   batchId: string,
+  outcome: {
+    attemptCount: number
+    failedCount: number
+  },
 ) {
   const response = await fetch(
     `${apiBaseUrl}/api/scan-batches/${encodeURIComponent(batchId)}/complete`,
     {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(outcome),
     },
   )
 
