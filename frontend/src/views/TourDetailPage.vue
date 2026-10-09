@@ -1271,6 +1271,15 @@ const reviewFormErrors = computed(() => {
   const form = reviewForm.value
   const errors: string[] = []
 
+  if (
+    document?.reviewStatus === 'PENDING' &&
+    !document.imageAvailable
+  ) {
+    errors.push(
+      '覆核照片已依保存期限刪除，無法完成人工審核。',
+    )
+  }
+
   if (!form.nameZh.trim()) {
     errors.push('中文姓名不可空白。')
   }
