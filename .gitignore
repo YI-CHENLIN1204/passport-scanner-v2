@@ -447,3 +447,9 @@ training/benchmarks/private/
 
 # Frontend build output
 frontend/dist/
+
+# Local database backups
+# Contains private traveler and identity-document data.
+backups/
+*.dump
+*.dump.sha256.txt
