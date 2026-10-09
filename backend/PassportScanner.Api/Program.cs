@@ -403,6 +403,27 @@ app.MapPost(
         }
     });
 
+app.MapGet(
+    "/api/tours/{tourId:guid}/scan-batches",
+    (
+        Guid tourId,
+        int? limit,
+        IScanQueueStore store) =>
+    {
+        try
+        {
+            return Results.Ok(
+                store.ListBatches(
+                    tourId,
+                    limit ?? 5));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(
+                new { message = ex.Message });
+        }
+    });
+
 app.MapPost(
     "/api/scan-batches/{batchId:guid}/items",
     (
