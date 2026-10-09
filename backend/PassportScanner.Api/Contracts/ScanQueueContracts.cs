@@ -3,12 +3,18 @@ namespace PassportScanner.Api.Contracts;
 public sealed record CreateScanBatchRequest(
     string DocumentType);
 
+public sealed record CompleteScanBatchRequest(
+    int AttemptCount,
+    int FailedCount);
+
 public sealed record ScanBatchResponse(
     Guid ScanBatchId,
     Guid TourId,
     string DocumentType,
     string Status,
     int ItemCount,
+    int AttemptCount,
+    int FailedCount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
