@@ -837,3 +837,15 @@ Traveler / ScanItem / DocumentVersion 相關流程的性別 canonical value 繼�
 - 操作人員必須先完成審核或刪除這些待審核資料，再把回國日改到會立即過期的日期。
 - 已審核資料不阻止日期修改；其 production 圖片仍依正式 retention 政策清除，Training Dataset 為獨立副本。
 - 被拒絕的團別修改不可改變 tour 日期或既有 scan item 的 `delete_after`。
+
+### D-063：待審核 draft grouping 與正式 Traveler 採相同保守原則
+
+`tour_person_drafts` 只是人工審核前的暫存人物分組，不能因為它不是正式主檔就採更冒險的人物合併。
+
+- 合法 NationalIdNumber 相同屬強識別；同一團可將多個相同身分證字號 draft 整理成同一 draft。
+- 沒有強識別時，中文姓名或英文姓名 + 出生日期 + 性別只在唯一命中一個既有 draft 時自動掛上。
+- 弱條件同時命中 2 個以上 draft 時，不做 consolidation；新 scan item 保持獨立 draft。
+- 新 scan item 有合法身分證字號時，若某弱匹配 draft 內已有另一個不同的合法身分證字號，該 draft 不得列入候選。
+- 人工審核修正出合法身分證字號後，如果發現目前 draft 的其他 scan item 有不同合法身分證字號，這張證件必須拆出，不可因姓名／生日相同繼續黏在一起。
+
+目的：待審核人物卡的自動分組只負責降低操作量，不能先於人工審核把兩位真人不可逆地揉成同一人。
