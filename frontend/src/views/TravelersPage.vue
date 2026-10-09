@@ -91,6 +91,15 @@ function documentLabel(type: string) {
   return type
 }
 
+function displayGender(
+  value: string | null | undefined,
+) {
+  if (value === 'M') return '男'
+  if (value === 'F') return '女'
+  if (value === 'X') return 'X'
+  return value || '—'
+}
+
 function formatDateTime(value: string) {
   const date = new Date(value)
 
@@ -585,7 +594,7 @@ onMounted(() => load())
               </div>
             </td>
             <td>{{ traveler.birthDate }}</td>
-            <td>{{ traveler.gender || '—' }}</td>
+            <td>{{ displayGender(traveler.gender) }}</td>
             <td>
               <div class="document-tags">
                 <span
@@ -698,7 +707,7 @@ onMounted(() => load())
             </div>
             <div>
               <dt>性別</dt>
-              <dd>{{ mergeTarget.traveler.gender }}</dd>
+              <dd>{{ displayGender(mergeTarget.traveler.gender) }}</dd>
             </div>
             <div>
               <dt>身分證字號</dt>
@@ -813,7 +822,7 @@ onMounted(() => load())
             </div>
             <div>
               <dt>性別</dt>
-              <dd>{{ mergeSource.traveler.gender }}</dd>
+              <dd>{{ displayGender(mergeSource.traveler.gender) }}</dd>
             </div>
             <div>
               <dt>身分證字號</dt>
