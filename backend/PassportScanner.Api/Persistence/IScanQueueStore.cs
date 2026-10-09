@@ -29,9 +29,12 @@ public interface IScanQueueStore
         int limit);
 
     IReadOnlyList<ReviewQueuePersonResponse> ListReviewQueue(
-        Guid tourId);
+        Guid tourId,
+        DateTimeOffset now);
 
-    ScanItemImage? GetItemImage(Guid scanItemId);
+    ScanItemImage? GetItemImage(
+        Guid scanItemId,
+        DateTimeOffset now);
 
     ScanItemResponse? ReviewItem(
         Guid scanItemId,
