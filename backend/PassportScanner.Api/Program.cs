@@ -472,20 +472,36 @@ using (var scope = app.Services.CreateScope())
                     scan.national_id_number,
                     traveler.national_id_number
                 ) AS snapshot_national_id_number,
-                document.name_zh_on_document
-                    AS snapshot_name_zh_on_document,
-                document.name_en_on_document
-                    AS snapshot_name_en_on_document,
-                document.document_number
-                    AS snapshot_document_number,
-                document.issuing_country
-                    AS snapshot_issuing_country,
-                document.nationality
-                    AS snapshot_document_nationality,
-                document.expiry_date
-                    AS snapshot_expiry_date,
-                document.verified_at
-                    AS snapshot_verified_at,
+                COALESCE(
+                    NULLIF(scan.name_zh_on_document, ''),
+                    document.name_zh_on_document,
+                    ''
+                ) AS snapshot_name_zh_on_document,
+                COALESCE(
+                    NULLIF(scan.name_en, ''),
+                    document.name_en_on_document,
+                    ''
+                ) AS snapshot_name_en_on_document,
+                COALESCE(
+                    NULLIF(scan.document_number, ''),
+                    document.document_number
+                ) AS snapshot_document_number,
+                COALESCE(
+                    scan.issuing_country,
+                    document.issuing_country
+                ) AS snapshot_issuing_country,
+                COALESCE(
+                    scan.nationality,
+                    document.nationality
+                ) AS snapshot_document_nationality,
+                COALESCE(
+                    scan.expiry_date,
+                    document.expiry_date
+                ) AS snapshot_expiry_date,
+                COALESCE(
+                    scan.reviewed_at,
+                    document.verified_at
+                ) AS snapshot_verified_at,
                 COALESCE(
                     scan.reviewed_at,
                     scan.updated_at,
@@ -551,20 +567,36 @@ using (var scope = app.Services.CreateScope())
                     scan.national_id_number,
                     traveler.national_id_number
                 ) AS snapshot_national_id_number,
-                document.name_zh_on_document
-                    AS snapshot_name_zh_on_document,
-                document.name_en_on_document
-                    AS snapshot_name_en_on_document,
-                document.document_number
-                    AS snapshot_document_number,
-                document.issuing_country
-                    AS snapshot_issuing_country,
-                document.nationality
-                    AS snapshot_document_nationality,
-                document.expiry_date
-                    AS snapshot_expiry_date,
-                document.verified_at
-                    AS snapshot_verified_at
+                COALESCE(
+                    NULLIF(scan.name_zh_on_document, ''),
+                    document.name_zh_on_document,
+                    ''
+                ) AS snapshot_name_zh_on_document,
+                COALESCE(
+                    NULLIF(scan.name_en, ''),
+                    document.name_en_on_document,
+                    ''
+                ) AS snapshot_name_en_on_document,
+                COALESCE(
+                    NULLIF(scan.document_number, ''),
+                    document.document_number
+                ) AS snapshot_document_number,
+                COALESCE(
+                    scan.issuing_country,
+                    document.issuing_country
+                ) AS snapshot_issuing_country,
+                COALESCE(
+                    scan.nationality,
+                    document.nationality
+                ) AS snapshot_document_nationality,
+                COALESCE(
+                    scan.expiry_date,
+                    document.expiry_date
+                ) AS snapshot_expiry_date,
+                COALESCE(
+                    scan.reviewed_at,
+                    document.verified_at
+                ) AS snapshot_verified_at
             FROM tour_member_documents AS link
             INNER JOIN tour_members AS member
                 ON member.tour_member_id =
