@@ -1784,18 +1784,14 @@ async function deleteCurrentReviewItem() {
   if (
     !document ||
     !person ||
-    reviewSaving.value
+    reviewSaving.value ||
+    document.reviewStatus !== 'PENDING'
   ) {
     return
   }
 
-  const reviewed =
-    document.reviewStatus === 'REVIEWED'
-
   const confirmed = window.confirm(
-    reviewed
-      ? `確定從目前團別移除這張${documentLabel(document.documentType)}嗎？全域旅客主檔與證件版本不會刪除；如果這張曾選入 OCR Training Dataset，對應訓練樣本也會同步移除。`
-      : `確定刪除這張${documentLabel(document.documentType)}嗎？這筆待審核資料與覆核圖片會從目前團別移除。`,
+    `確定刪除這張${documentLabel(document.documentType)}嗎？這筆待審核資料與覆核圖片會從目前團別移除。`,
   )
 
   if (!confirmed) return
@@ -3208,17 +3204,13 @@ onBeforeUnmount(() => {
 
           <div>
             <button
+              v-if="currentDocument.reviewStatus === 'PENDING'"
               type="button"
               class="danger-action"
               :disabled="reviewSaving"
               @click="deleteCurrentReviewItem"
             >
-              {{
-                currentDocument.reviewStatus ===
-                  'REVIEWED'
-                  ? '從本團移除'
-                  : '刪除'
-              }}
+              刪除待審核資料
             </button>
 
             <button
