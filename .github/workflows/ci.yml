@@ -51,10 +51,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify versioned local WASM files
+      - name: Verify version-matched ORT WASM binaries and dynamic MJS loaders
         run: |
           test -d dist/ort-wasm
           test "$(find dist/ort-wasm -name '*.wasm' | wc -l)" -gt 0
+          test "$(find dist/ort-wasm -name '*.mjs' | wc -l)" -gt 0
+          test -s dist/ort-wasm/ort-wasm-simd-threaded.jsep.mjs
+          test -s node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs
+          cmp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs dist/ort-wasm/ort-wasm-simd-threaded.jsep.mjs
           node - <<'NODE'
           const fs = require('node:fs')
           const text = fs.readFileSync('src/services/paddleOcr.ts', 'utf8')
@@ -68,6 +72,23 @@ jobs:
             }
           }
           NODE
+
+      - name: Verify local Vite serves ORT MJS with JavaScript MIME
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/ort-vite-dev.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill "$VITE_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent -D /tmp/ort-vite-headers \
+              http://127.0.0.1:5173/ort-wasm/ort-wasm-simd-threaded.jsep.mjs \
+              -o /tmp/ort-vite-loader.mjs; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/ort-vite-loader.mjs
+          grep -Ei '^content-type: (application|text)/javascript' /tmp/ort-vite-headers
+          cmp dist/ort-wasm/ort-wasm-simd-threaded.jsep.mjs /tmp/ort-vite-loader.mjs
 
       - name: Guard Validation OCR profiler scope
         run: |
@@ -128,7 +149,7 @@ jobs:
           docker compose logs frontend backend database
           exit 1
 
-      - name: Verify same-origin Worker WASM endpoint
+      - name: Verify same-origin Worker WASM and MJS endpoints
         run: |
           WASM_PATH=$(docker compose exec -T frontend sh -c 'find /usr/share/nginx/html/ort-wasm -name "*.wasm" | head -n 1' | tr -d '\r')
           test -n "$WASM_PATH"
@@ -136,8 +157,21 @@ jobs:
           curl --fail --silent "http://localhost:5173/ort-wasm/$WASM_NAME" -o /tmp/worker-ort-wasm
           test -s /tmp/worker-ort-wasm
           curl --fail --silent --head "http://localhost:5173/ort-wasm/$WASM_NAME" | grep -i 'content-type: application/wasm'
-          NOT_FOUND_STATUS=$(curl --silent --output /tmp/worker-wasm-missing --write-out "%{http_code}" "http://localhost:5173/ort-wasm/not-an-ort-file.wasm")
-          test "$NOT_FOUND_STATUS" = "404"
+
+          MJS_NAME=ort-wasm-simd-threaded.jsep.mjs
+          curl --fail --silent -D /tmp/worker-ort-mjs-headers \
+            "http://localhost:5173/ort-wasm/$MJS_NAME" \
+            -o /tmp/worker-ort-loader.mjs
+          test -s /tmp/worker-ort-loader.mjs
+          grep -Ei '^content-type: (application|text)/javascript' /tmp/worker-ort-mjs-headers
+          CONTAINER_SHA=$(docker compose exec -T frontend sha256sum "/usr/share/nginx/html/ort-wasm/$MJS_NAME" | awk '{print $1}')
+          DOWNLOAD_SHA=$(sha256sum /tmp/worker-ort-loader.mjs | awk '{print $1}')
+          test "$CONTAINER_SHA" = "$DOWNLOAD_SHA"
+
+          for MISSING in not-an-ort-file.wasm not-an-ort-file.mjs; do
+            STATUS=$(curl --silent --output /tmp/worker-ort-missing --write-out "%{http_code}" "http://localhost:5173/ort-wasm/$MISSING")
+            test "$STATUS" = "404"
+          done
 
       - name: Verify persistence and schema
         run: |

@@ -100,3 +100,20 @@
 - 在內存統計各必要欄位 exact-match 率，幫助辨識是姓名或其他欄位造成整張失敗；不存任何逐張值。
 
 接下來須補 **WASM direct** 實測，確認是否仍有 Worker 初始化失敗或 WASM 延遲差異；真正 OCR 精準度優化應先蒐集保有確切 OCR 輸入影像的 Validation 樣本，不使用 fixed Test 反覆調參。
+
+## 2026-10-10：Worker 初始化 0/32 — 遺漏 ORT 動態載入模組
+
+在本機 `localhost:5173`（Vite dev）實測 Worker 時，SDK 在 OCR 預熱階段回報：
+`no available backend found [wasm]`，
+`Failed to fetch dynamically imported module: /ort-wasm/ort-wasm-simd-threaded.jsep.mjs`。
+
+**根因：** `frontend/scripts/copy-ort-wasm.mjs` 只複製 `node_modules/onnxruntime-web/dist` 中的 `.wasm`，但 ONNX Runtime Web 版本的 WASM backend 需要先動態載入與版本匹配的 `.mjs` JavaScript loader。沒有該 loader 時，即使 `.wasm` 檔案正常，瀏覽器仍無法初始化 WASM backend。過去 CI 只檢查 `.wasm` 是否存在，漏測了這個部署需求。
+
+**修正：**
+- 由已安裝的 `onnxruntime-web/dist` 同時複製 `ort-wasm-*.wasm` 與 `ort-wasm-*.mjs`，並在安裝時檢查必須存在 `ort-wasm-simd-threaded.jsep.mjs`；不使用其他版本 CDN。
+- Docker 的 nginx 為 `.mjs` 明確設定 JavaScript MIME，避免被瀏覽器因 `application/octet-stream` 拒絕；不含 hash 的模型 runtime 檔案使用 `no-cache, must-revalidate`，避免新舊版本共用快取。
+- CI 增加 Vite 開發模式以及 Docker nginx 的 `.mjs` HTTP 200 / MIME / bytes 檢驗，及動態 loader 在 dist 中存在的檢驗。
+
+**本機更新注意：** `git pull` 只更新複製腳本，不會再次觸發舊的 `npm ci` postinstall。若沿用既有安裝，須在 `frontend` 目錄執行 `node scripts/copy-ort-wasm.mjs` 一次，並重新整理網頁。新環境執行 `npm ci` 時會自動複製。
+
+CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完整初始化實測，亦不代表 Worker 比正式 auto 更快。此修正不變更辨識模型、parser、threshold、fixed Test baseline 或任何個資。
