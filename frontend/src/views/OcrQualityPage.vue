@@ -935,6 +935,7 @@ interface ValidationProfileSample {
   documentType: string
   hasExactOcrInput: boolean
   fullExact: boolean
+  fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
   pipelineMs: number
@@ -946,6 +947,11 @@ interface ValidationProfileDocument {
   sampleCount: number
   exactInputCount: number
   fullExactRate: number
+  fields: Array<{
+    field: string
+    comparedCount: number
+    exactMatchRate: number
+  }>
   medianPipelineMs: number | null
   p90PipelineMs: number | null
   medianWallMs: number | null
@@ -1113,19 +1119,25 @@ async function profileValidationOnly() {
           ),
         )
 
+        const fieldExact = Object.fromEntries(
+          fields.map(field => [
+            field,
+            evalFieldEquals(
+              field,
+              prediction.fields[field],
+              truth[field],
+            ),
+          ]),
+        ) as Record<string, boolean>
+
         outcomes.push({
           documentType: sample.documentType,
           hasExactOcrInput:
             sample.hasExactOcrInput,
+          fieldExact,
           fullExact:
             fields.length > 0 &&
-            fields.every(field =>
-              evalFieldEquals(
-                field,
-                prediction.fields[field],
-                truth[field],
-              ),
-            ),
+            Object.values(fieldExact).every(Boolean),
           fetchMs,
           wallMs,
           pipelineMs: prediction.totalMs,
@@ -1164,6 +1176,24 @@ async function profileValidationOnly() {
             ? rows.filter(row => row.fullExact).length /
               rows.length
             : 0,
+          fields: (
+            fieldsByDocumentType[documentType] ?? []
+          ).map(field => {
+            const evaluated = rows.filter(row =>
+              Object.prototype.hasOwnProperty.call(
+                row.fieldExact, field,
+              ),
+            )
+            return {
+              field,
+              comparedCount: evaluated.length,
+              exactMatchRate: evaluated.length
+                ? evaluated.filter(row =>
+                    row.fieldExact[field],
+                  ).length / evaluated.length
+                : 0,
+            }
+          }).filter(field => field.comparedCount > 0),
           medianPipelineMs: percentile(
             rows.map(row => row.pipelineMs), 0.5,
           ),
@@ -1825,6 +1855,16 @@ onMounted(load)
               這些結果只能用於回歸比較，
               不能當作完整上傳流程的準確率。
             </p>
+            <div class="retest-field-list">
+              <div
+                v-for="field in result.fields"
+                :key="field.field"
+              >
+                <span>{{ fieldLabel(field.field) }}</span>
+                <strong>{{ rate(field.exactMatchRate) }}</strong>
+                <small>n={{ field.comparedCount }}</small>
+              </div>
+            </div>
             <footer>
               <span>
                 OCR 中位數
