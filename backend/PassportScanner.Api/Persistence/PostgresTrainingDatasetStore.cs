@@ -35,18 +35,19 @@ public sealed class PostgresTrainingDatasetStore(
             .SingleOrDefault(item =>
                 item.SourceScanItemId == scanItemId);
 
+        var isFixedBenchmarkSample =
+            existing is not null &&
+            db.OcrEvaluationBaselines
+                .AsNoTracking()
+                .Any(item =>
+                    item.TrainingSampleId ==
+                        existing.TrainingSampleId);
+
         if (!selected)
         {
             if (existing is not null)
             {
-                var hasFixedBaseline =
-                    db.OcrEvaluationBaselines
-                        .AsNoTracking()
-                        .Any(item =>
-                            item.TrainingSampleId ==
-                                existing.TrainingSampleId);
-
-                if (hasFixedBaseline)
+                if (isFixedBenchmarkSample)
                 {
                     throw new InvalidOperationException(
                         "這張樣本已建立固定 Test baseline，不能透過一般「取消用於訓練」或證件刪除流程移除；固定基準必須保持不變。");
@@ -102,7 +103,7 @@ public sealed class PostgresTrainingDatasetStore(
 
             db.TrainingSamples.Add(existing);
         }
-        else
+        else if (!isFixedBenchmarkSample)
         {
             existing.GroundTruthJson =
                 groundTruthJson;
@@ -127,6 +128,18 @@ public sealed class PostgresTrainingDatasetStore(
                 item.SourceScanItemId == scanItemId);
 
         if (sample is null)
+        {
+            return;
+        }
+
+        var isFixedBenchmarkSample =
+            db.OcrEvaluationBaselines
+                .AsNoTracking()
+                .Any(item =>
+                    item.TrainingSampleId ==
+                        sample.TrainingSampleId);
+
+        if (isFixedBenchmarkSample)
         {
             return;
         }
