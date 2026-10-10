@@ -731,6 +731,122 @@ jobs:
           HISTORICAL_NUMBER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document_number FROM document_versions WHERE document_version_id = '$HISTORICAL_PASSPORT_ID';" | tr -d '\r')
           test "$HISTORICAL_NUMBER" = "M33333333"
 
+      - name: Verify traveler merge keeps newer per-tour snapshot intact
+        run: |
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -v ON_ERROR_STOP=1 -c "
+            INSERT INTO tours (
+              tour_id, tour_name, departure_date, return_date,
+              required_document_types, created_at, updated_at
+            ) VALUES (
+              '00000000-0000-0000-0000-00000000a901',
+              'CI Snapshot Merge', '2099-12-10', '2099-12-12',
+              ARRAY['PASSPORT']::text[], NOW(), NOW()
+            );
+
+            INSERT INTO travelers (
+              traveler_id, name_zh, name_en, birth_date, gender,
+              nationality, national_id_number,
+              personal_id_type, personal_id_number, created_at, updated_at
+            ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000a902',
+              '快照舊人', 'SNAPSHOT OLD', '1990-01-01', 'M',
+              'TWN', NULL, 'PASSPORT', 'Z1234567',
+              NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000a903',
+              '快照新人', 'SNAPSHOT NEW', '1990-01-01', 'M',
+              'TWN', NULL, 'PASSPORT', 'Z1234567',
+              NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour'
+            );
+
+            INSERT INTO document_versions (
+              document_version_id, traveler_id, document_type,
+              name_zh_on_document, name_en_on_document,
+              document_number, issuing_country, nationality,
+              expiry_date, is_current, verified_at, created_at
+            ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000a904',
+              '00000000-0000-0000-0000-00000000a902',
+              'PASSPORT', '證件舊值', 'DOCUMENT OLD',
+              'Z1234567', 'TWN', 'TWN', '2035-01-01',
+              TRUE, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000a905',
+              '00000000-0000-0000-0000-00000000a903',
+              'PASSPORT', '證件新值', 'DOCUMENT NEW',
+              'Z1234567', 'TWN', 'TWN', '2035-01-01',
+              TRUE, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour'
+            );
+
+            INSERT INTO tour_members (
+              tour_member_id, tour_id, traveler_id, created_at
+            ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000a906',
+              '00000000-0000-0000-0000-00000000a901',
+              '00000000-0000-0000-0000-00000000a902',
+              NOW() - INTERVAL '2 hours'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000a907',
+              '00000000-0000-0000-0000-00000000a901',
+              '00000000-0000-0000-0000-00000000a903',
+              NOW() - INTERVAL '1 hour'
+            );
+
+            INSERT INTO tour_member_documents (
+              tour_member_document_id, tour_member_id,
+              document_version_id, document_type,
+              snapshot_name_zh, snapshot_name_en,
+              snapshot_birth_date, snapshot_gender,
+              snapshot_nationality, snapshot_national_id_number,
+              snapshot_name_zh_on_document,
+              snapshot_name_en_on_document,
+              snapshot_document_number, snapshot_issuing_country,
+              snapshot_document_nationality, snapshot_expiry_date,
+              snapshot_verified_at, created_at, updated_at
+            ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000a908',
+              '00000000-0000-0000-0000-00000000a906',
+              '00000000-0000-0000-0000-00000000a904',
+              'PASSPORT',
+              '快照舊值', 'SNAPSHOT OLD', '1990-01-01', 'M',
+              'TWN', NULL, '證件舊值', 'DOCUMENT OLD',
+              'Z1234567', 'TWN', 'TWN', '2035-01-01',
+              NOW() - INTERVAL '2 hours',
+              NOW() - INTERVAL '2 hours',
+              NOW() - INTERVAL '2 hours'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000a909',
+              '00000000-0000-0000-0000-00000000a907',
+              '00000000-0000-0000-0000-00000000a905',
+              'PASSPORT',
+              '快照新值', 'SNAPSHOT NEW', '1990-01-01', 'M',
+              'TWN', NULL, '證件新值', 'DOCUMENT NEW',
+              'Z1234567', 'TWN', 'TWN', '2035-01-01',
+              NOW() - INTERVAL '1 hour',
+              NOW() - INTERVAL '1 hour',
+              NOW() - INTERVAL '1 hour'
+            );
+          "
+
+          curl --fail --silent -X POST "http://localhost:5080/api/travelers/00000000-0000-0000-0000-00000000a902/merge" \
+            -H 'Content-Type: application/json' \
+            -d '{"sourceTravelerId":"00000000-0000-0000-0000-00000000a903"}' \
+            > /tmp/snapshot-merge-result.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/00000000-0000-0000-0000-00000000a901" > /tmp/snapshot-merge-tour.json
+          python3 -c "import json; data=json.load(open('/tmp/snapshot-merge-tour.json')); assert len(data['members']) == 1, data; m=data['members'][0]; assert m['travelerId'] == '00000000-0000-0000-0000-00000000a902', m; assert m['nameZh'] == '快照新值', m; d=m['documents'][0]; assert d['documentVersionId'] == '00000000-0000-0000-0000-00000000a905', d; assert d['nameZhOnDocument'] == '證件新值', d; assert d['nameEnOnDocument'] == 'DOCUMENT NEW', d; assert d['documentNumber'] == 'Z1234567', d"
+
+          MERGED_SNAPSHOT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT snapshot_name_zh || '|' || snapshot_name_zh_on_document || '|' || document_version_id::text FROM tour_member_documents WHERE tour_member_id = '00000000-0000-0000-0000-00000000a906';" | tr -d '\r')
+          test "$MERGED_SNAPSHOT" = "快照新值|證件新值|00000000-0000-0000-0000-00000000a905"
+
       - name: Verify traveler merge does not overwrite conflicting tour document
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
