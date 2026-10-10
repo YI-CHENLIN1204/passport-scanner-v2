@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PassportScanner.Api.Contracts;
 using PassportScanner.Api.Domain;
@@ -16,6 +17,20 @@ public sealed class PostgresScanQueueStore(
 {
     private const string Pending = "PENDING";
     private const string Reviewed = "REVIEWED";
+
+    private sealed class ReviewedScanSnapshot
+    {
+        public string NameZh { get; set; } = string.Empty;
+        public string NameZhOnDocument { get; set; } = string.Empty;
+        public string NameEn { get; set; } = string.Empty;
+        public DateOnly? BirthDate { get; set; }
+        public string Gender { get; set; } = string.Empty;
+        public string? Nationality { get; set; }
+        public string? NationalIdNumber { get; set; }
+        public string DocumentNumber { get; set; } = string.Empty;
+        public string? IssuingCountry { get; set; }
+        public DateOnly? ExpiryDate { get; set; }
+    }
 
     public ScanBatchResponse CreateBatch(
         Guid tourId,
@@ -216,6 +231,7 @@ public sealed class PostgresScanQueueStore(
             ReviewStatus = Pending,
             SavedDocumentVersionId = null,
             ReviewedAt = null,
+            ReviewSnapshotJson = null,
             DeleteAfter =
                 BusinessDate
                     .ProductionPhotoDeleteAfter(
@@ -454,6 +470,8 @@ public sealed class PostgresScanQueueStore(
             NormalizeNullable(request.IssuingCountry);
         item.ExpiryDate = ParseDate(request.ExpiryDate);
         item.UpdatedAt = now;
+        item.ReviewSnapshotJson =
+            BuildReviewSnapshotJson(item);
 
         ReassignReviewedItem(
             item,
@@ -710,26 +728,92 @@ public sealed class PostgresScanQueueStore(
             ScanItemRecord item,
             DateTimeOffset verifiedAt)
     {
-        if (!item.BirthDate.HasValue)
+        var reviewSnapshot =
+            ReadReviewSnapshot(item);
+        var birthDate = reviewSnapshot is null
+            ? item.BirthDate
+            : reviewSnapshot.BirthDate;
+
+        if (!birthDate.HasValue)
         {
             throw new InvalidOperationException(
                 "已審核證件缺少出生日期，無法建立團別快照。");
         }
 
         return new TourMemberDocumentSnapshotInput(
-            item.NameZh,
-            item.NameEn,
-            item.BirthDate.Value,
-            item.Gender,
-            item.Nationality,
-            item.NationalIdNumber,
-            item.NameZhOnDocument,
-            item.NameEn,
-            item.DocumentNumber,
-            item.IssuingCountry,
-            item.Nationality,
-            item.ExpiryDate,
+            reviewSnapshot is null
+                ? item.NameZh
+                : reviewSnapshot.NameZh,
+            reviewSnapshot is null
+                ? item.NameEn
+                : reviewSnapshot.NameEn,
+            birthDate.Value,
+            reviewSnapshot is null
+                ? item.Gender
+                : reviewSnapshot.Gender,
+            reviewSnapshot is null
+                ? item.Nationality
+                : reviewSnapshot.Nationality,
+            reviewSnapshot is null
+                ? item.NationalIdNumber
+                : reviewSnapshot.NationalIdNumber,
+            reviewSnapshot is null
+                ? item.NameZhOnDocument
+                : reviewSnapshot.NameZhOnDocument,
+            reviewSnapshot is null
+                ? item.NameEn
+                : reviewSnapshot.NameEn,
+            reviewSnapshot is null
+                ? item.DocumentNumber
+                : reviewSnapshot.DocumentNumber,
+            reviewSnapshot is null
+                ? item.IssuingCountry
+                : reviewSnapshot.IssuingCountry,
+            reviewSnapshot is null
+                ? item.Nationality
+                : reviewSnapshot.Nationality,
+            reviewSnapshot is null
+                ? item.ExpiryDate
+                : reviewSnapshot.ExpiryDate,
             verifiedAt);
+    }
+
+    private static string BuildReviewSnapshotJson(
+        ScanItemRecord item) =>
+        JsonSerializer.Serialize(
+            new ReviewedScanSnapshot
+            {
+                NameZh = item.NameZh,
+                NameZhOnDocument = item.NameZhOnDocument,
+                NameEn = item.NameEn,
+                BirthDate = item.BirthDate,
+                Gender = item.Gender,
+                Nationality = item.Nationality,
+                NationalIdNumber = item.NationalIdNumber,
+                DocumentNumber = item.DocumentNumber,
+                IssuingCountry = item.IssuingCountry,
+                ExpiryDate = item.ExpiryDate
+            });
+
+    private static ReviewedScanSnapshot? ReadReviewSnapshot(
+        ScanItemRecord item)
+    {
+        if (string.IsNullOrWhiteSpace(
+            item.ReviewSnapshotJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<
+                ReviewedScanSnapshot>(
+                item.ReviewSnapshotJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static ReviewedDocumentInput BuildReviewedDocumentInput(

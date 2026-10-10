@@ -370,6 +370,7 @@ using (var scope = app.Services.CreateScope())
             review_status varchar(20) NOT NULL,
             saved_document_version_id uuid NULL,
             reviewed_at timestamptz NULL,
+            review_snapshot_json text NULL,
             delete_after timestamptz NOT NULL,
             created_at timestamptz NOT NULL,
             updated_at timestamptz NOT NULL
@@ -396,6 +397,26 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE scan_items
             ADD COLUMN IF NOT EXISTS saved_document_version_id uuid NULL;
+
+        ALTER TABLE scan_items
+            ADD COLUMN IF NOT EXISTS review_snapshot_json text NULL;
+
+        UPDATE scan_items
+        SET review_snapshot_json = jsonb_build_object(
+            'NameZh', name_zh,
+            'NameZhOnDocument', name_zh_on_document,
+            'NameEn', name_en,
+            'BirthDate', birth_date,
+            'Gender', gender,
+            'Nationality', nationality,
+            'NationalIdNumber', national_id_number,
+            'DocumentNumber', document_number,
+            'IssuingCountry', issuing_country,
+            'ExpiryDate', expiry_date
+        )::text
+        WHERE
+            review_status = 'REVIEWED'
+            AND review_snapshot_json IS NULL;
 
         UPDATE scan_items AS scan
         SET saved_document_version_id = (

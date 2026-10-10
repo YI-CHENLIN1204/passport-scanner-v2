@@ -49,6 +49,7 @@ public sealed class ScanItemRecord
     public required string ReviewStatus { get; set; }
     public Guid? SavedDocumentVersionId { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
+    public string? ReviewSnapshotJson { get; set; }
     public required DateTimeOffset DeleteAfter { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; set; }

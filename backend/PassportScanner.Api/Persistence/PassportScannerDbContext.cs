@@ -590,6 +590,10 @@ public sealed class PassportScannerDbContext(
         scanItem.Property(item => item.ReviewedAt)
             .HasColumnName("reviewed_at");
 
+        scanItem.Property(item => item.ReviewSnapshotJson)
+            .HasColumnName("review_snapshot_json")
+            .HasColumnType("text");
+
         scanItem.Property(item => item.DeleteAfter)
             .HasColumnName("delete_after")
             .IsRequired();
