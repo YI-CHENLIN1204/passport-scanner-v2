@@ -58,3 +58,24 @@
 - 不測 Worker / WebGPU 或新透視算法；這是用於後續可重現 A/B 的**既有流程參考值**，不是已完成效能優化的證據。
 
 驗收：前端 type-check/build、read-only static guard、既有 PostgreSQL CI 全過。實際效能數值必須由本機操作者用有權使用的 Validation 樣本跑出，**不能用 CI 合成圖片推定真實準確率**。
+
+## Validation 第二階段：SDK Worker 執行環境 A/B（實驗）
+
+只增加可選的獨立 SDK 執行環境。**正式掃描仍呼叫原有 `getPaddle()`，版本仍為 `2026.10.09.1`。**
+
+在「OCR 品質 / Validation OCR 效能實驗」可選三種模式：
+
+1. 正式 auto：原本的 `getPaddle()` pipeline，使用 `backend: auto`，與 production 一致。
+2. 獨立 WASM 直接模式：同一 PP-OCRv5 模型，`backend: wasm`、`numThreads: 1`，只供對照。
+3. 獨立 WASM Worker 模式：相同模型和 `backend: wasm`、`numThreads: 1`，額外設定 `worker: true`。Worker 用完即呼叫 `dispose()`。
+
+**因果對照只能比較第 2 與第 3 種。** 正式 auto 可能選用不同 runtime，不能把與 Worker 的速度差全歸因於 Worker。三種模式都沿用既有 parser、orientation、必要欄位擷取、輸入樣本及 exact-match 邏輯。
+
+依官方 PaddleOCR.js SDK 文件，Worker 模式需要明確的 ONNX Runtime Web WASM 資源位置。前端 `npm ci` 時 `postinstall` 將**已安裝版本** `onnxruntime-web/dist` 的 WASM 複製到 `frontend/public/ort-wasm`（gitignore），經 Vite build 與 Docker nginx 託管在本機 `/ort-wasm/`。這只是載入執行程式，圖片仍在 V2 的自家後端與瀏覽器範圍內。不可改為向 CDN 傳送證件影像。
+
+限制：
+- CI 可驗證編譯、WASM 資產與 endpoint，但**不能代替**真實瀏覽器 Worker 啟動及各張 Validation 文件實測。
+- 主模式與 Worker 可能同時佔記憶體；大型資料批次宜先以少量樣本試跑，必要時停止並重新整理。
+- 每個模式的聚合結果暫存在頁面，重新整理即清除。中途停止的結果不能當完整 A/B。
+- 如瀏覽器不支援該 SDK Worker bundle、Worker 無法載入，保留正式流程不變，並回報錯誤；不靜默把 Worker 結果當成直接模式。
+- 若 A/B 效能沒有改善，或三種證件任一必要欄位出現回歸，則不推進到正式掃描。
