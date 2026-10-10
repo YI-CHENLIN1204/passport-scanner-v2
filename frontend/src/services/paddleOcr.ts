@@ -13,6 +13,7 @@ import {
 } from './ocr'
 import {
   compareChineseNameToMrzRomanization,
+  classifyRomanizationConflict,
   type RomanizationCompatibility,
 } from './nameRomanization'
 import {
@@ -53,6 +54,11 @@ export type PassportNameDecisionReason =
 export interface PassportNameDecision {
   text: string
   reason: PassportNameDecisionReason
+  conflictSubtype?:
+    | 'token-count-mismatch'
+    | 'one-syllable-mismatch'
+    | 'other-mismatch'
+    | 'unclassified'
 }
 
 export interface PassportChineseNameDiagnostic {
@@ -415,7 +421,18 @@ function chooseTaiwanChineseName(
                   : matches.every(candidate => candidate.score < 0.65)
                     ? 'below-confidence'
                     : 'lower-rank'
-          return { text: item.normalized, reason }
+          return {
+            text: item.normalized,
+            reason,
+            conflictSubtype:
+              reason === 'romanization-conflict' && parsedMrz
+                ? classifyRomanizationConflict(
+                    item.normalized,
+                    parsedMrz.surname,
+                    parsedMrz.givenNames,
+                  )
+                : undefined,
+          }
         }))
     }
 
@@ -569,7 +586,18 @@ function chooseTaiwanChineseName(
                   : valid.every(candidate => candidate.score < 0.65)
                     ? 'below-confidence'
                     : 'lower-rank'
-      return { text, reason }
+      return {
+        text,
+        reason,
+        conflictSubtype:
+          reason === 'romanization-conflict' && parsedMrz
+            ? classifyRomanizationConflict(
+                text,
+                parsedMrz.surname,
+                parsedMrz.givenNames,
+              )
+            : undefined,
+      }
     }))
   }
 
