@@ -57,6 +57,6 @@
 ### 2026-10-11 最新交接指標（覆蓋舊的待驗證敘述）
 
 - PR #18 `2026.10.11.1` **已由使用者本機實測正式 OCR**：護照 13/19（68%），從舊版 7/19（37%）增加 6 張；其他欄位 100%。之前提到的「68% 尚未證實」已由本次 legacy Validation 證實，但不代表新照片端到端效能。
-- 台胞證仍為 5/13 整張全對、6/13 中文姓名、10/13 性別；新分支 `feat/permit-conservative-name-sex-evidence` 修復保守姓名／性別 evidence precedence，需 CI 和本機測試後才確認效果。
+- 台胞證仍為 5/13 整張全對、6/13 中文姓名、10/13 性別；新分支 `feat/permit-conservative-name-sex-evidence` 修復保守姓名／性別 evidence precedence，擬更新 OCR pipeline 至 `2026.10.11.2`；需 CI 和本機測試後才確認效果。
 - 所有 32 張皆無原始 OCR 工作輸入圖；Test baseline `2026.10.09.1` 不做調參，新正式 pipeline 目前 `2026.10.11.1`，不得混淆。
 - 下一步：確認台胞證修正 CI，集中跑一次 Validation，比對是否有淨改善；避免每個小變動重新要求用戶測試。
