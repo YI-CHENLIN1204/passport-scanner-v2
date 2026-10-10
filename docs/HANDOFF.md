@@ -34,7 +34,7 @@
 
 ## 接下來真正要做的事情
 
-1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。PR #12 shadow selector 已本機實測：護照 7 張完整正確候選全部分類 romanization-conflict。PR #14 拼音子類診斷已合併且使用者本機實測：完整候選遭拒的 7 張全屬 one-syllable-mismatch。PR #16 的匿名單音節 shadow 已合併；新分支 feat/ocr-official-romanization-candidate 正在整合同一輪 Validation 比較官方音節別名與單音節放寬，並加入自動合成回歸測試。正式拼音 gate 不得直接放寬。
+1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。PR #12 shadow selector 已本機實測：護照 7 張完整正確候選全部分類 romanization-conflict。PR #14 拼音子類診斷已合併且使用者本機實測：完整候選遭拒的 7 張全屬 one-syllable-mismatch。PR #16 的匿名單音節 shadow 已合併；PR #17 官方拼音 shadow 已合併：護照相對舊正式版潛在改善 6/19、退步 0，單音節放寬則 7/19、退步 0，皆為裁切近似比較。新分支 feat/guarded-boca-name-suggestion-v2 將唯一且高信心的官方拼音候選作為待人工審核建議，正式 pipeline 版本擬升至 2026.10.11.1；需要真正 Validation 證實，不能直接宣稱 68% 正確率。
 2. 針對分類結果，必要時設計**不影響正式輸出**的 shadow selector A/B。不可只看到正確字串就自動採用；須保留位置、羅馬拼音與人工覆核規則。
 3. 陸續累積合法、人工確認且保存當次 OCR 工作影像的 Validation，按 Traveler 分組避免資料洩漏。身分證 Validation 目前沒有代表性。
 4. V2 尚待獨立設計正式已審核資料的撤銷／更正審計流程；不要把 fallback 或「刪除」當成更正。
