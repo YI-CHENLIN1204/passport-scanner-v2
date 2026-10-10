@@ -639,7 +639,9 @@ function createPaddleFromSource(
 
 // Opt-in Validation experiment. Never used by production scan flow.
 // Reuse exact PP-OCRv5 model assets, but keep runtime and lifecycle separate.
-export function createValidationPaddleWorker(): Promise<ValidationPaddleInstance> {
+export function createValidationPaddleInstance(
+  worker: boolean,
+): Promise<ValidationPaddleInstance> {
   const source = paddleModelSources[0]
 
   return PaddleOCR.create({
@@ -653,7 +655,7 @@ export function createValidationPaddleWorker(): Promise<ValidationPaddleInstance
     textRecognitionModelAsset: {
       url: source.recognitionUrl,
     },
-    worker: true,
+    worker,
     ortOptions: {
       backend: 'wasm',
       wasmPaths: '/ort-wasm/',
