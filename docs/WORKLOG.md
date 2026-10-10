@@ -76,3 +76,12 @@
 - `paddleOcr.ts` 只在已存在的 shadow decision observer 回傳匿名 subtype；`OcrQualityPage.vue` 聚合數量，**不記錄任何姓名、MRZ token 或每張 OCR 結果**。
 - 舊 7/7 皆為 romanization-conflict，細分類仍待本機實測。多 crop 下同張採一個排序後代表原因，並不等於該原因唯一發生。
 - 固定 Test baseline `2026.10.09.1` 不動；不改正式候選核准規則。
+
+## 2026-10-11 — 實測：七張完整姓名候選皆為單音節衝突
+
+- 狀態：使用者本機 Validation 截圖確認。PR #14 已合併，程式版本 `2026.10.09.1` 未變。
+- 正式 auto（WebGPU det/rec），Validation 完成 32/32、失敗 0：護照 19 張、台胞證 13 張、身分證 0 張。護照整張與中文姓名 exact 均 37%；台胞證整張 38%，中文姓名 46%。
+- 護照 12 張中文姓名錯誤中 7 張存在完整正確 OCR 候選、5 張為錯誤候選；7 張都在 shadow trace 顯示 `romanization:one-syllable-mismatch`，而非 token 數不符。這只是 OCR 候選／拼音驗證追蹤，不是修好 7 張的證據。
+- 缺陷限制：32/32 缺少保存當時 OCR 工作輸入圖，使用審核影像回歸；7 張可能包含同一 Traveler 的不同照片，不可推為七個獨立人名。
+- 直接可疑的判斷規則：`nameRomanization.ts` 對中文字與 MRZ token 數相同，若剛好一字音節不符合現有拼音別名，認定 `conflict`。實測尚未說明是未涵蓋台式慣用譯音、異體字／多音字還是正確的阻擋。
+- 下一步：先做 Validation-only、匿名的 shadow「一音節差異候選」的保守反事實評估，衡量有機會救回的案例與原本正確姓名會被誤選的風險；先不放寬 production romanization gate，亦不靠 Test 調參。
