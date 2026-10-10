@@ -188,3 +188,11 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 為追查 7 張中文姓名完整候選未輸出的原因，在 `chooseTaiwanChineseName()` 增加可選 observer，記錄候選是否缺少 spatial/name anchor、MRZ romanization conflict、confidence 門檻、unknown 門檻或排名較低。原 selector 排名／返回值不變；Validation 用人工 truth 在瀏覽器當次比對，僅將**匿名原因張數**留在本頁聚合結果。候選文字不寫進資料庫或 GitHub。
 
 注意：同張照片可能有不同 crop 或方向的診斷；此階段分類不等於可以直接救回的數量。需先本機測試並核對分布。固定 Test baseline 保持 `2026.10.09.1`。
+
+## 2026-10-11：Shadow selector 找到拼音衝突集中點
+
+新一輪正式 auto Validation 截圖顯示護照 n=19 的中文姓名錯誤 12 張，其中「完整正確候選 7 張」在影子決策追蹤全被分類為 `romanization-conflict`。不是 7 張都沒有 OCR 辨識出正確文字；也**不代表 7 張都是拼音算法誤判**。
+
+程式根因候選：`frontend/src/services/nameRomanization.ts` 以 `pinyin-pro` 加上一部分台灣常見譯音別名，逐字對照 MRZ token。如果字數／音節數不符會直接 `conflict`；字數相同但只有少數音節不符，也可能 `conflict`。在 `frontend/src/services/paddleOcr.ts`，中文姓名候選若為 `conflict` 會被排除。沒有足夠資料確認這七張分別是哪一類。
+
+**下一次最小實驗：** 僅在 Validation trace 計數造成 conflict 的分類（token count mismatch、1 syllable mismatch、其他），不要把中文姓名、MRZ token、證件號碼、每張 OCR 文本記錄在報告或 GitHub。新的判斷規則只能 shadow 比較，不改正式結果；即使修正候選命中，仍要確認對既有正確樣本的誤選風險。固定 Test `2026.10.09.1` 不拿來調參。

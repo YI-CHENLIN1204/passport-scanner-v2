@@ -59,3 +59,12 @@
 - 變更：在既有 `chooseTaiwanChineseName()` 增加可選的匿名候選決策回報；Validation 比對人工答案後，僅儲存原因分類並顯示聚合張數。未觸發的預設流程不改回傳值。
 - 限制：OCR 可能執行多次 crop／orientation；候選出現於一輪不代表該輪是正式最終來源。分類為近似診斷，不能當成已修復張數。原工作圖仍 0/32，不能外推端到端準確率。
 - 下一步：跑正式 auto Validation 觀察各分類；確認是否值得另做 shadow selector 候選 A/B，不直接修改正式輸出。
+
+## 2026-10-11 — Shadow selector 首次實測：7/7 romanization-conflict
+
+- 狀態：使用者本機實測；已核對程式；尚未改正式 OCR。
+- 實測：正式 auto，WebGPU detection/recognition；護照 n=19、台胞證 n=13，32/32 完成，0 失敗。護照整張正確率 37%；中文姓名錯誤 12，完整正確候選 7，其 shadow trace 皆歸入 `romanization-conflict`；另 5 張候選不符合，未提供更詳細 trace。
+- 現行程式：`frontend/src/services/nameRomanization.ts` 用 `pinyin-pro` 多音字與部分台灣拼音別名比對 MRZ 音節；漢字數與 MRZ token 數不符直接 `conflict`；音節數相等且除一字外幾乎相符也判 `conflict`；其餘可能 `unknown`。在 `chooseTaiwanChineseName()` 中 `conflict` 候選會被排除。
+- 未證實：7 張是否因未涵蓋慣用譯名／舊拼法、多音字、OCR 誤字、MRZ token 化或候選幾何造成衝突。不能將 7/7 解讀為放寬拼音後必然修好 7 張。
+- 下一步：Validation-only 匿名 trace 區分音節數不符／單一音節不符／其他；影子比較保留原決策，衡量可能增益及既有正確樣本回歸，不直接修改 production selector。
+- 限制：32/32 缺少當次 OCR 工作圖，只適合 legacy regression；Test baseline `2026.10.09.1` 不動。
