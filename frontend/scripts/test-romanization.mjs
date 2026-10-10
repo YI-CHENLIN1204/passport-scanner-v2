@@ -1,19 +1,38 @@
 import assert from 'node:assert/strict'
-import { build } from 'esbuild'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
+import ts from 'typescript'
 
-// Bundle the real TypeScript module: no duplicated mock of OCR rules.
-const { outputFiles } = await build({
-  entryPoints: ['src/services/nameRomanization.ts'],
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  write: false,
-  logLevel: 'silent',
-})
-const code = outputFiles[0].text
-const imported = await import(
-  'data:text/javascript;base64,' + Buffer.from(code).toString('base64')
-)
+// Compile actual TypeScript with the project's existing TypeScript dependency.
+const temp = mkdtempSync(resolve('node_modules', '.romanization-test-'))
+function compile(inputPath, outputPath) {
+  const source = readFileSync(inputPath, 'utf8')
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+    fileName: inputPath,
+  }).outputText
+  writeFileSync(outputPath, output.replace(
+    "from './officialRomanizationVariants'",
+    "from './officialRomanizationVariants.mjs'",
+  ))
+}
+
+let imported
+try {
+  compile('src/services/officialRomanizationVariants.ts',
+    resolve(temp, 'officialRomanizationVariants.mjs'))
+  compile('src/services/nameRomanization.ts',
+    resolve(temp, 'nameRomanization.mjs'))
+  imported = await import(pathToFileURL(
+    resolve(temp, 'nameRomanization.mjs')).href)
+} finally {
+  rmSync(temp, { recursive: true, force: true })
+}
 const production = imported.compareChineseNameToMrzRomanization
 const official = imported.compareChineseNameToMrzWithOfficialVariants
 const cases = [
