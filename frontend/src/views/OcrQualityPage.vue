@@ -95,6 +95,7 @@ interface PassportNameDiagnosticSnapshot {
     reason: string
     conflictSubtype?: string
   }>
+  shadowOneMismatchName?: string | null
 }
 
 interface RetestSampleOutcome {
@@ -408,6 +409,7 @@ async function currentFieldsForSample(
           rawTexts: item.rawTexts,
           candidateTexts: item.candidateTexts,
           decisionTrace: item.decisionTrace,
+          shadowOneMismatchName: item.shadowOneMismatchName,
         })),
       totalMs: result.totalMs,
       orientationAttempts:
@@ -960,6 +962,7 @@ interface ValidationProfileSample {
   fullExact: boolean
   passportNameFailure: ValidationPassportNameFailure | null
   passportExactDecision: string | null
+  passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -989,6 +992,7 @@ interface ValidationProfileDocument {
     reason: string
     count: number
   }>
+  passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   failedCount: number
 }
 
@@ -1269,12 +1273,28 @@ async function profileValidationOnly() {
             ? 'not-in-selector-trace'
             : null
 
+        // Compare outcomes only; never retain the raw name.
+        // This uses attempted crops, not a full second OCR pipeline.
+        const shadowNames = prediction.passportNameDiagnostics
+          .map(item => item.shadowOneMismatchName)
+          .filter((name): name is string => Boolean(name))
+        const baselineNameCorrect = Boolean(fieldExact.nameZh)
+        const shadowNameCorrect = shadowNames.length
+          ? evalFieldEquals('nameZh', shadowNames[0], truth.nameZh)
+          : baselineNameCorrect
+        const passportShadow = sample.documentType !== 'PASSPORT'
+          ? null
+          : baselineNameCorrect
+            ? shadowNameCorrect ? 'unchanged-correct' : 'regressed'
+            : shadowNameCorrect ? 'rescued' : 'unchanged-wrong'
+
         outcomes.push({
           documentType: sample.documentType,
           hasExactOcrInput:
             sample.hasExactOcrInput,
           passportNameFailure,
           passportExactDecision,
+          passportShadow,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1355,6 +1375,15 @@ async function profileValidationOnly() {
                 row => row.orientationAttempts > 1,
               ).length / rows.length
             : 0,
+          passportShadowCounts:
+            documentType === 'PASSPORT'
+              ? {
+                  rescued: rows.filter(row => row.passportShadow === 'rescued').length,
+                  regressed: rows.filter(row => row.passportShadow === 'regressed').length,
+                  'unchanged-correct': rows.filter(row => row.passportShadow === 'unchanged-correct').length,
+                  'unchanged-wrong': rows.filter(row => row.passportShadow === 'unchanged-wrong').length,
+                }
+              : null,
           passportDecisionReasons:
             documentType === 'PASSPORT'
               ? [
@@ -2109,6 +2138,15 @@ onMounted(load)
                 {{ item.reason }} {{ item.count }} 張；
               </span>
               這是候選狀態的近似分類，尚未代表自動修復效果。
+            </p>
+            <p v-if="result.passportShadowCounts" class="validation-legacy-note">
+              單音節衝突 shadow 對照（只讀，非正式輸出）：
+              潛在改善 {{ result.passportShadowCounts.rescued }} 張；
+              潛在退步 {{ result.passportShadowCounts.regressed }} 張；
+              維持正確 {{ result.passportShadowCounts['unchanged-correct'] }} 張；
+              維持錯誤 {{ result.passportShadowCounts['unchanged-wrong'] }} 張。
+              這是已執行 crop 的近似反事實比較，不代表完整上傳流程，
+              不能直接當作修改正式規則的依據。
             </p>
             <footer>
               <span>
