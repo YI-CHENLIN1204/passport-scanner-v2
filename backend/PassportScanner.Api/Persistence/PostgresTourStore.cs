@@ -206,12 +206,49 @@ public sealed class PostgresTourStore(
                             link.DocumentVersionId))
                     .ToList();
 
-                var identitySnapshot = memberLinks
-                    .OrderByDescending(link =>
-                        link.UpdatedAt)
-                    .ThenByDescending(link =>
-                        link.CreatedAt)
-                    .FirstOrDefault();
+                var orderedIdentitySnapshots =
+                    memberLinks
+                        .OrderByDescending(link =>
+                            link.UpdatedAt)
+                        .ThenByDescending(link =>
+                            link.CreatedAt)
+                        .ToList();
+
+                var identitySnapshot =
+                    orderedIdentitySnapshots
+                        .FirstOrDefault();
+
+                var snapshotNameZh =
+                    orderedIdentitySnapshots
+                        .Select(link =>
+                            link.SnapshotNameZh)
+                        .FirstOrDefault(value =>
+                            !string.IsNullOrWhiteSpace(
+                                value));
+
+                var snapshotNameEn =
+                    orderedIdentitySnapshots
+                        .Select(link =>
+                            link.SnapshotNameEn)
+                        .FirstOrDefault(value =>
+                            !string.IsNullOrWhiteSpace(
+                                value));
+
+                var snapshotNationality =
+                    orderedIdentitySnapshots
+                        .Select(link =>
+                            link.SnapshotNationality)
+                        .FirstOrDefault(value =>
+                            !string.IsNullOrWhiteSpace(
+                                value));
+
+                var snapshotNationalId =
+                    orderedIdentitySnapshots
+                        .Select(link =>
+                            link.SnapshotNationalIdNumber)
+                        .FirstOrDefault(value =>
+                            !string.IsNullOrWhiteSpace(
+                                value));
 
                 var memberDocuments = memberLinks
                     .Select(link =>
@@ -233,21 +270,32 @@ public sealed class PostgresTourStore(
                     })
                     .ToList();
 
+                var hasSnapshot =
+                    identitySnapshot is not null;
+
                 return new TourMemberResponse(
                     item.TourMemberId,
                     traveler.TravelerId,
-                    identitySnapshot?.SnapshotNameZh ??
-                        traveler.NameZh,
-                    identitySnapshot?.SnapshotNameEn ??
-                        traveler.NameEn,
+                    snapshotNameZh ??
+                        (hasSnapshot
+                            ? string.Empty
+                            : traveler.NameZh),
+                    snapshotNameEn ??
+                        (hasSnapshot
+                            ? string.Empty
+                            : traveler.NameEn),
                     identitySnapshot?.SnapshotBirthDate ??
                         traveler.BirthDate,
                     identitySnapshot?.SnapshotGender ??
                         traveler.Gender,
-                    identitySnapshot?.SnapshotNationality ??
-                        traveler.Nationality,
-                    identitySnapshot?.SnapshotNationalIdNumber ??
-                        traveler.NationalIdNumber,
+                    snapshotNationality ??
+                        (hasSnapshot
+                            ? null
+                            : traveler.Nationality),
+                    snapshotNationalId ??
+                        (hasSnapshot
+                            ? null
+                            : traveler.NationalIdNumber),
                     memberDocuments);
             })
             .ToList();
