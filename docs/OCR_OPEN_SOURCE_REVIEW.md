@@ -117,3 +117,29 @@
 **本機更新注意：** `git pull` 只更新複製腳本，不會再次觸發舊的 `npm ci` postinstall。若沿用既有安裝，須在 `frontend` 目錄執行 `node scripts/copy-ort-wasm.mjs` 一次，並重新整理網頁。新環境執行 `npm ci` 時會自動複製。
 
 CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完整初始化實測，亦不代表 Worker 比正式 auto 更快。此修正不變更辨識模型、parser、threshold、fixed Test baseline 或任何個資。
+
+## 2026-10-10：三模式 Validation 完整實測後的優先順序
+
+操作人員在同一個環境跑完 32 張（護照 19 張、台胞證 13 張），所有模式均完成 32/32、失敗 0。這次三種模式的完整比較如下：
+
+| 指標 | 正式 auto | WASM 直接（單執行緒） | WASM Worker（單執行緒） |
+| --- | --- | --- | --- |
+| 護照整張全對 | 37% | 37% | 37% |
+| 台胞證整張全對 | 38% | 31% | 31% |
+| 護照 Median | 1.4 秒 | 7.9 秒 | 8.9 秒 |
+| 台胞證 Median | 1.0 秒 | 5.9 秒 | 5.8 秒 |
+| 護照中文姓名 exact | 37% | 37% | 37% |
+| 台胞證中文姓名 exact | 46% | 38% | 38% |
+
+這些是單次截圖觀測值，不做顯著性宣稱；**三模式保存的當時 OCR 實際工作影像均為 0/32**，用現存審核影像代替，故不可宣稱為正式完整上傳準確率。
+
+初步結論：
+
+- Worker 沒有比相同 WASM backend 的主執行緒更快；不推進正式掃描。
+- 正式 auto 比兩個強制 WASM 實驗快很多；不能僅根據耗時推論一定採用 WebGPU，需在 Validation 顯示 SDK `getInitializationSummary()` 的偵測／辨識 provider。
+- 這批護照除了中文姓名（37%），其餘已評估必要欄位均 100%；優先釐清中文姓名取不到、讀錯或被候選選擇器忽略的比例。
+- 台胞證的中文姓名與性別也有失敗，不能用調高或降低一個共用 threshold 盲目修正。
+- 透過既有 `chineseNameDiagnostics`，在 Validation 過程只留**分類計數**（未選中、候選錯誤、沒有候選），不保留辨識文字、正確姓名、檔名或影像。分類僅代表特徵層推測，無法證明圖像偵測還是模型認字問題。
+- 先追加「有完整 OCR 輸入工作影像」的 Validation，再基於匿名分類進行最小幅度候選策略實驗；固定 Test baseline `2026.10.09.1` 持續凍結。
+
+**此 PR 僅補充 read-only provider / Validation 診斷，不更動正式 OCR、parser、runtime backend 與模型。**

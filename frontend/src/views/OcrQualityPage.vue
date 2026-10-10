@@ -23,6 +23,7 @@ import {
   validateTaiwanNationalId,
   warmupPaddleOcr,
   createValidationPaddleInstance,
+  getValidationPaddleRuntimeSummary,
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
@@ -931,10 +932,16 @@ async function rerunTestSet() {
 }
 
 
+type ValidationPassportNameFailure =
+  | 'selector-miss'
+  | 'wrong-candidate'
+  | 'no-candidate'
+
 interface ValidationProfileSample {
   documentType: string
   hasExactOcrInput: boolean
   fullExact: boolean
+  passportNameFailure: ValidationPassportNameFailure | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -958,6 +965,7 @@ interface ValidationProfileDocument {
   p90WallMs: number | null
   medianFetchMs: number | null
   orientationRetryRate: number
+  passportNameFailures: PassportNameFailureSummary | null
   failedCount: number
 }
 
@@ -966,6 +974,7 @@ interface ValidationProfileResult {
   completedAt: string
   pipelineVersion: string
   warmupMs: number
+  runtime: ReturnType<typeof getValidationPaddleRuntimeSummary>
   sampleCount: number
   failedCount: number
   cancelled: boolean
@@ -1021,6 +1030,40 @@ function describeValidationInitializationError(
   return `${kind}: ${safeMessage || '沒有提供錯誤細節'}`
 }
 
+// Only store an anonymous category; the candidate text and ground
+// truth remain local to the current recognition iteration.
+function categorizeValidationPassportNameFailure(
+  selected: string | null | undefined,
+  expectedName: string | null | undefined,
+  diagnostics: PassportNameDiagnosticSnapshot[],
+): ValidationPassportNameFailure | null {
+  if (evalFieldEquals('nameZh', selected, expectedName)) {
+    return null
+  }
+  const expected = normalizeEvalValue('nameZh', expectedName)
+  const candidateTexts = diagnostics.flatMap(item =>
+    item.candidateTexts,
+  )
+  const rawTexts = diagnostics.flatMap(item => item.rawTexts)
+  const normalizedCandidates = candidateTexts.map(value =>
+    normalizeEvalValue('nameZh', value),
+  )
+  const seen = Boolean(expected) && (
+    normalizedCandidates.includes(expected) ||
+    rawTexts.some(value => {
+      const normalized = value
+        .replace(/\s+/g, '')
+        .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
+      return normalized === expected ||
+        normalized.includes(expected)
+    })
+  )
+  if (seen) return 'selector-miss'
+  return normalizedCandidates.length > 0
+    ? 'wrong-candidate'
+    : 'no-candidate'
+}
+
 function requestStopValidation() {
   stopValidationRequested.value = true
   validationProfileProgress.value.message =
@@ -1051,6 +1094,8 @@ async function profileValidationOnly() {
   const outcomes: ValidationProfileSample[] = []
   const failures: Record<string, number> = {}
   let warmupMs = 0
+  let runtimeSummary:
+    ReturnType<typeof getValidationPaddleRuntimeSummary> = null
   let stage: '讀取 Validation' | 'OCR 預熱' | '辨識 Validation' =
     '讀取 Validation'
   let experimentalInstance:
@@ -1089,6 +1134,9 @@ async function profileValidationOnly() {
         )
     }
     warmupMs = performance.now() - warmupStart
+    runtimeSummary = getValidationPaddleRuntimeSummary(
+      experimentalInstance,
+    )
 
     stage = '辨識 Validation'
     for (const [index, sample] of samples.entries()) {
@@ -1154,10 +1202,20 @@ async function profileValidationOnly() {
           ]),
         ) as Record<string, boolean>
 
+        const passportNameFailure =
+          sample.documentType === 'PASSPORT'
+            ? categorizeValidationPassportNameFailure(
+                prediction.fields.nameZh,
+                truth.nameZh,
+                prediction.passportNameDiagnostics,
+              )
+            : null
+
         outcomes.push({
           documentType: sample.documentType,
           hasExactOcrInput:
             sample.hasExactOcrInput,
+          passportNameFailure,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1238,6 +1296,23 @@ async function profileValidationOnly() {
                 row => row.orientationAttempts > 1,
               ).length / rows.length
             : 0,
+          passportNameFailures:
+            documentType === 'PASSPORT'
+              ? {
+                  incorrectCount: rows.filter(
+                    row => row.passportNameFailure !== null,
+                  ).length,
+                  selectorMissCount: rows.filter(
+                    row => row.passportNameFailure === 'selector-miss',
+                  ).length,
+                  recognitionWrongCount: rows.filter(
+                    row => row.passportNameFailure === 'wrong-candidate',
+                  ).length,
+                  notDetectedCount: rows.filter(
+                    row => row.passportNameFailure === 'no-candidate',
+                  ).length,
+                }
+              : null,
           failedCount,
         }
       })
@@ -1254,6 +1329,7 @@ async function profileValidationOnly() {
       completedAt: new Date().toISOString(),
       pipelineVersion: OCR_PIPELINE_VERSION,
       warmupMs,
+      runtime: runtimeSummary,
       sampleCount: outcomes.length,
       failedCount,
       cancelled: stopValidationRequested.value,
@@ -1861,6 +1937,18 @@ onMounted(load)
               formatBenchmarkRunTime(validationProfileResult.completedAt)
             }} · 頁面暫存的歷史結果，非當前執行中的結果。
           </p>
+          <p class="validation-history-note">
+            實際執行 provider：
+            偵測 {{
+              validationProfileResult.runtime?.detProvider ?? '未知'
+            }}，文字辨識 {{
+              validationProfileResult.runtime?.recProvider ?? '未知'
+            }}，SDK backend {{
+              validationProfileResult.runtime?.backend ?? '未知'
+            }}。
+            正式 auto 不一定固定使用 WebGPU；
+            請以此處本次初始化的 provider 為準。
+          </p>
           <article
             v-for="result in validationProfileResult.documents"
             :key="result.documentType"
@@ -1905,6 +1993,19 @@ onMounted(load)
                 <small>n={{ field.comparedCount }}</small>
               </div>
             </div>
+            <p
+              v-if="result.passportNameFailures"
+              class="validation-legacy-note"
+            >
+              中文姓名錯誤 {{ result.passportNameFailures.incorrectCount }} 張：
+              曾辨識正確但未選中
+              {{ result.passportNameFailures.selectorMissCount }} 張；
+              有候選但不符
+              {{ result.passportNameFailures.recognitionWrongCount }} 張；
+              未取得可用候選
+              {{ result.passportNameFailures.notDetectedCount }} 張。
+              這是候選字串的近似分類，並非已證明的模型錯誤原因。
+            </p>
             <footer>
               <span>
                 OCR 中位數
