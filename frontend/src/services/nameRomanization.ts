@@ -223,3 +223,35 @@ export function compareChineseNameToMrzRomanization(
   // withhold phonetic approval and require manual entry/confirmation.
   return 'unknown'
 }
+
+/** Read-only diagnostic for a conflict already reported by the production comparator.
+ * Never returns names, MRZ tokens or any other personally identifying content.
+ */
+export function classifyRomanizationConflict(
+  chineseName: string,
+  surname: string,
+  givenNames: string,
+): 'token-count-mismatch' | 'one-syllable-mismatch' | 'other-mismatch' | 'unclassified' {
+  if (
+    compareChineseNameToMrzRomanization(
+      chineseName, surname, givenNames,
+    ) !== 'conflict'
+  ) return 'unclassified'
+
+  const compact = chineseName.replace(/[\s·‧]/g, '').trim()
+  const characters = Array.from(compact)
+  const tokens = splitMrzNameTokens(surname, givenNames)
+  if (characters.length !== tokens.length) {
+    return 'token-count-mismatch'
+  }
+  let mismatches = 0
+  for (let index = 0; index < characters.length; index += 1) {
+    const aliases = pinyinAliasesForCharacter(characters[index])
+    if (![...aliases].some(alias =>
+      romanizationTokenMatchesAlias(tokens[index] ?? '', alias),
+    )) mismatches += 1
+  }
+  return mismatches === 1
+    ? 'one-syllable-mismatch'
+    : 'other-mismatch'
+}
