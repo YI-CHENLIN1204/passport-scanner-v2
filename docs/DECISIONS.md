@@ -1041,3 +1041,15 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 舊資料 migration 若能找到該團 reviewed scan，優先由 scan 回填 snapshot；只有缺 scan 欄位時才 fallback 到全域 Traveler / DocumentVersion。
 
 目的：全域主檔可以持續修正與換證，但歷史／既有團不能因日後主檔變更而悄悄改變當時已確認的出團資料。
+
+### D-080：Fixed Test 的 Ground Truth 自 cohort reserve 起即凍結
+
+固定 Benchmark 要比較不同 OCR 版本，除了樣本 membership 與 baseline OCR result 不能漂移，評分用的 ground truth 也必須保持同一把尺。
+
+- 一旦 Training Sample 已存在 `ocr_evaluation_baselines` row，不論該 row 仍是 `state = pending` 或已完成第一版 baseline，該 sample 即視為 fixed benchmark artifact。
+- fixed sample 的 `ground_truth_json` 不再因 Traveler edit、DocumentVersion edit、Traveler merge、reviewed scan 同步或再次 `selected: true` 而自動刷新。
+- 一般沒有進 fixed cohort 的 Train / Validation / Test 樣本仍會隨人工可信資料修正更新 ground truth。
+- source ScanItem 與正式 Traveler / DocumentVersion 仍可依法正常修正；fixed Training Sample 是已獨立保存的 benchmark 副本，不必回寫成最新主檔內容。
+- 若未來發現 fixed Test 的 ground truth 本身錯誤，不能用一般主檔編輯偷偷修正；應建立明確的 benchmark correction / reset / rebaseline 流程，並讓不同版本比較的基準變更可被辨識。
+
+目的：避免完全沒有修改 OCR pipeline，卻因日後主檔修正而讓 baseline accuracy、current accuracy 或 benchmark history 使用不同答案，造成版本進步／退步失真。
