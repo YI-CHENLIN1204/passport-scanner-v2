@@ -196,3 +196,7 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 程式根因候選：`frontend/src/services/nameRomanization.ts` 以 `pinyin-pro` 加上一部分台灣常見譯音別名，逐字對照 MRZ token。如果字數／音節數不符會直接 `conflict`；字數相同但只有少數音節不符，也可能 `conflict`。在 `frontend/src/services/paddleOcr.ts`，中文姓名候選若為 `conflict` 會被排除。沒有足夠資料確認這七張分別是哪一類。
 
 **下一次最小實驗：** 僅在 Validation trace 計數造成 conflict 的分類（token count mismatch、1 syllable mismatch、其他），不要把中文姓名、MRZ token、證件號碼、每張 OCR 文本記錄在報告或 GitHub。新的判斷規則只能 shadow 比較，不改正式結果；即使修正候選命中，仍要確認對既有正確樣本的誤選風險。固定 Test `2026.10.09.1` 不拿來調參。
+
+## 2026-10-11：讀取 romanization 衝突子分類（未驗證假說）
+
+僅對 shadow trace 中原本 `romanization-conflict` 的候選，額外比對中文字數與 MRZ token 數、逐字拼音別名匹配結果，分為 token-count-mismatch、one-syllable-mismatch、other-mismatch、unclassified。診斷沿用正式 comparator 的判定，但**不會改寫相容性回傳、候選排名、閾值或 OCR 輸出**。畫面只保留聚合張數，不保存人名／護照資料。需要本機 Validation 重新量測才可判斷 7 張的實際分布；CI 綠燈不等於具體原因已證實。
