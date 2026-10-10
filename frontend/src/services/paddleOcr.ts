@@ -782,7 +782,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.1'
+  '2026.10.11.2'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
