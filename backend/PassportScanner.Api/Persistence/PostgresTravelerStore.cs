@@ -1520,15 +1520,18 @@ public sealed class PostgresTravelerStore(
                         throw new InvalidOperationException(
                             "兩筆旅客在同一團的同一證件類型掛了不同證件，系統不會自動決定要保留哪一張；請先在團別移除不正確的證件，再進行旅客合併。");
                     }
+                }
 
-                    if (
-                        sourceLink.UpdatedAt >
-                            targetLink.UpdatedAt)
-                    {
-                        targetLink.DocumentVersionId =
-                            sourceLink.DocumentVersionId;
-                        targetLink.UpdatedAt = now;
-                    }
+                if (
+                    sourceLink.UpdatedAt >
+                        targetLink.UpdatedAt)
+                {
+                    targetLink.DocumentVersionId =
+                        sourceLink.DocumentVersionId;
+                    CopyTourMemberDocumentSnapshot(
+                        sourceLink,
+                        targetLink);
+                    targetLink.UpdatedAt = now;
                 }
 
                 db.TourMemberDocuments.Remove(
@@ -1542,6 +1545,38 @@ public sealed class PostgresTravelerStore(
             targetLinks[sourceLink.DocumentType] =
                 sourceLink;
         }
+    }
+
+    private static void CopyTourMemberDocumentSnapshot(
+        TourMemberDocumentRecord source,
+        TourMemberDocumentRecord target)
+    {
+        target.SnapshotNameZh =
+            source.SnapshotNameZh;
+        target.SnapshotNameEn =
+            source.SnapshotNameEn;
+        target.SnapshotBirthDate =
+            source.SnapshotBirthDate;
+        target.SnapshotGender =
+            source.SnapshotGender;
+        target.SnapshotNationality =
+            source.SnapshotNationality;
+        target.SnapshotNationalIdNumber =
+            source.SnapshotNationalIdNumber;
+        target.SnapshotNameZhOnDocument =
+            source.SnapshotNameZhOnDocument;
+        target.SnapshotNameEnOnDocument =
+            source.SnapshotNameEnOnDocument;
+        target.SnapshotDocumentNumber =
+            source.SnapshotDocumentNumber;
+        target.SnapshotIssuingCountry =
+            source.SnapshotIssuingCountry;
+        target.SnapshotDocumentNationality =
+            source.SnapshotDocumentNationality;
+        target.SnapshotExpiryDate =
+            source.SnapshotExpiryDate;
+        target.SnapshotVerifiedAt =
+            source.SnapshotVerifiedAt;
     }
 
     private static void ReconcileMergedCurrentDocuments(
