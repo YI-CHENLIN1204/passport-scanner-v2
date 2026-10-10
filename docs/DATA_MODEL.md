@@ -201,14 +201,27 @@ tour_id + traveler_id
 
 ## tour_member_documents
 
-用途：表示「這一團實際收到／採用哪個 DocumentVersion」。
+用途：表示「這一團實際收到／採用哪個 DocumentVersion」，並固定保存**該團當時人工確認的旅客／證件快照**。
 
-欄位：
+主要欄位：
 
 - `tour_member_document_id`
 - `tour_member_id`
 - `document_version_id`
 - `document_type`
+- `snapshot_name_zh`
+- `snapshot_name_en`
+- `snapshot_birth_date`
+- `snapshot_gender`
+- `snapshot_nationality`
+- `snapshot_national_id_number`
+- `snapshot_name_zh_on_document`
+- `snapshot_name_en_on_document`
+- `snapshot_document_number`
+- `snapshot_issuing_country`
+- `snapshot_document_nationality`
+- `snapshot_expiry_date`
+- `snapshot_verified_at`
 - `created_at`
 - `updated_at`
 
@@ -221,9 +234,13 @@ tour_member_id + document_type
 規則：
 
 - link 必須指向該 TourMember 所屬 Traveler 的 DocumentVersion。
-- 重掃／重新審核可把本團 link 更新到新的 DocumentVersion。
+- Traveler / current DocumentVersion 是全域目前資料；團別畫面與 CSV 使用 per-tour snapshot，不因日後主檔編輯而回寫歷史團資料。
+- 正式 batch review 建立／更新 link 時，snapshot 採用該 ScanItem 人工覆核後的值；legacy direct review 沒有 scan item 時，使用當下 Traveler + DocumentVersion。
+- 重掃／重新審核是明確的團別操作，可把本團 link 更新到新的 DocumentVersion，並刷新這個 link 的 snapshot。
+- 同一旅客有多種證件時，團員層級 identity 使用該團最近一次 link / re-review 的 snapshot；每張證件欄位使用各自 link 的 snapshot。
 - 從團別移除已審核證件，不刪全域 Traveler / DocumentVersion。
-- 若同團同人同類型仍有其他 reviewed scan item，link 回退到最近的剩餘版本。
+- 若同團同人同類型仍有其他 reviewed scan item，link 回退到最近的剩餘版本，snapshot 也一起回退到該次 reviewed scan。
+- Traveler merge 若兩邊其實是同一本證件，較新的 link 必須連同 DocumentVersionId 與整組 snapshot 一起保留，不可混搭。
 - 沒有任何正式證件 link 後，空的 TourMember 會移除。
 
 ## scan_batches
