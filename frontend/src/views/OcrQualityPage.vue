@@ -27,6 +27,7 @@ import {
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
+import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -966,6 +967,7 @@ interface ValidationProfileSample {
   passportExactDecision: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
+  permitScriptEquivalentOnly: boolean
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -997,6 +999,7 @@ interface ValidationProfileDocument {
   }>
   passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
+  permitScriptEquivalentCount: number | null
   failedCount: number
 }
 
@@ -1303,6 +1306,17 @@ async function profileValidationOnly() {
             ? officialCorrect ? 'unchanged-correct' : 'regressed'
             : officialCorrect ? 'rescued' : 'unchanged-wrong'
 
+        const actualName = normalizeEvalValue('nameZh', prediction.fields.nameZh)
+        const truthName = normalizeEvalValue('nameZh', truth.nameZh)
+        // Script equivalence is not proof of identity; distinct traditional
+        // characters can share the same simplified glyph.
+        const permitScriptEquivalentOnly =
+          sample.documentType === 'TAIWAN_COMPATRIOT_PERMIT' &&
+          !fieldExact.nameZh &&
+          Boolean(actualName && truthName) &&
+          convertTraditionalNameToSimplified(actualName) ===
+            convertTraditionalNameToSimplified(truthName)
+
         outcomes.push({
           documentType: sample.documentType,
           hasExactOcrInput:
@@ -1311,6 +1325,7 @@ async function profileValidationOnly() {
           passportExactDecision,
           passportShadow,
           passportOfficialShadow,
+          permitScriptEquivalentOnly,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1399,6 +1414,10 @@ async function profileValidationOnly() {
                   'unchanged-correct': rows.filter(row => row.passportOfficialShadow === 'unchanged-correct').length,
                   'unchanged-wrong': rows.filter(row => row.passportOfficialShadow === 'unchanged-wrong').length,
                 }
+              : null,
+          permitScriptEquivalentCount:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? rows.filter(row => row.permitScriptEquivalentOnly).length
               : null,
           passportShadowCounts:
             documentType === 'PASSPORT'
@@ -2133,6 +2152,15 @@ onMounted(load)
                 <small>n={{ field.comparedCount }}</small>
               </div>
             </div>
+            <p
+              v-if="result.permitScriptEquivalentCount !== null"
+              class="validation-legacy-note"
+            >
+              中文姓名未完全相同、但簡繁字形可能相當：
+              {{ result.permitScriptEquivalentCount }} 張。
+              僅供分析；簡繁對照可能合併不同字義，
+              不計入正確率，也不會自動修改姓名。
+            </p>
             <p
               v-if="result.passportNameFailures"
               class="validation-legacy-note"

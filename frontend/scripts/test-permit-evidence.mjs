@@ -7,6 +7,7 @@ import ts from 'typescript'
 // Execute the real TS implementation without copying its selection rules.
 const directory = mkdtempSync(resolve('node_modules', '.permit-evidence-test-'))
 let helpers
+let retryPolicy
 try {
   const source = readFileSync('src/services/permitFieldEvidence.ts', 'utf8')
   const output = ts.transpileModule(source, {
@@ -18,6 +19,16 @@ try {
   const built = resolve(directory, 'permitFieldEvidence.mjs')
   writeFileSync(built, output)
   helpers = await import(pathToFileURL(built).href)
+  const retrySource = readFileSync('src/services/permitNameRetryPolicy.ts', 'utf8')
+  const retryCode = ts.transpileModule(retrySource, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  }).outputText
+  const retryBuilt = resolve(directory, 'permitNameRetryPolicy.mjs')
+  writeFileSync(retryBuilt, retryCode)
+  retryPolicy = await import(pathToFileURL(retryBuilt).href)
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }
@@ -42,4 +53,18 @@ assert.equal(selectPermitSexCandidate('', false, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('', false, '', null, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('', false, '', null, ''), '')
 
-console.log('Passed 13 synthetic permit name/sex evidence guards.')
+const { shouldRetryUncertainPermitName, shouldUseRetriedPermitName } = retryPolicy
+assert.equal(shouldRetryUncertainPermitName('', null, false), true)
+assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, false), true)
+assert.equal(shouldRetryUncertainPermitName('甲乙', 0.96, false), false)
+assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, true), false)
+const consensus = { value: '丙丁', score: 0.94, confidence: 0.96, consensus: 2 }
+assert.equal(shouldUseRetriedPermitName('', null, consensus), true)
+assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, consensus), true)
+assert.equal(shouldUseRetriedPermitName('甲乙', 0.94, consensus), false)
+assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, consensus: 1 }), false)
+assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0.75 }), false)
+assert.equal(shouldUseRetriedPermitName('丙丁', 0.81, consensus), false)
+assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, null), false)
+
+console.log('Passed 24 synthetic permit field and name retry guards.')

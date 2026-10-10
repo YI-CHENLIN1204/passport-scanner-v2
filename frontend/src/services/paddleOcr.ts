@@ -19,6 +19,10 @@ import {
 } from './nameRomanization'
 import { guardedOfficialNameSuggestion } from './officialNameSuggestion'
 import {
+  shouldRetryUncertainPermitName,
+  shouldUseRetriedPermitName,
+} from './permitNameRetryPolicy'
+import {
   selectPermitNameCandidate,
   selectPermitSexCandidate,
 } from './permitFieldEvidence'
@@ -782,7 +786,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.2'
+  '2026.10.11.3'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -5277,11 +5281,17 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     }
   }
 
-  // MRZ can be usable for permit number / birth date / sex while
-  // its encoded Chinese-name segment is still unreadable. In that case
-  // mrzUsed is true, but we must still retry the visual name area.
+  // A nonempty but uncertain name can be wrong. Retry the name region
+  // only under the existing time budget, and never override validated MRZ.
+  const validatedMrzName =
+    best.result.parsedMrz?.validation.requiredValid === true &&
+    Boolean(best.result.parsedMrz?.chineseName)
   if (
-    !best.result.chineseName &&
+    shouldRetryUncertainPermitName(
+      best.result.chineseName,
+      best.result.chineseNameConfidence,
+      validatedMrzName,
+    ) &&
     withinBudget()
   ) {
     onProgress?.({
@@ -5300,7 +5310,14 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       best.prediction,
     )
 
-    if (retriedName) {
+    if (
+      shouldUseRetriedPermitName(
+        best.result.chineseName,
+        best.result.chineseNameConfidence,
+        retriedName ?? null,
+      ) &&
+      retriedName
+    ) {
       best.result.chineseName = retriedName.value
       best.result.fieldScores.chineseName =
         retriedName.score
