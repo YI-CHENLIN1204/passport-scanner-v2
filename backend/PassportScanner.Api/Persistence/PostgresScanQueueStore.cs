@@ -425,6 +425,11 @@ public sealed class PostgresScanQueueStore(
             db.Database.BeginTransaction();
 
         var oldDraftId = item.DraftPersonId;
+        var previousDocumentVersionId =
+            item.ReviewStatus == Reviewed
+                ? item.SavedDocumentVersionId
+                : null;
+        var previousReviewedAt = item.ReviewedAt;
         Guid? previousReviewedTravelerId = null;
 
         if (
@@ -527,11 +532,12 @@ public sealed class PostgresScanQueueStore(
             previousReviewedTravelerId.Value !=
                 saved.TravelerId)
         {
-            ReconcileTourDocumentLink(
+            RemovePreviousTourDocumentLinkIfUnchanged(
                 batch.TourId,
                 previousReviewedTravelerId.Value,
                 item.DocumentType,
-                item.ScanItemId,
+                previousDocumentVersionId,
+                previousReviewedAt,
                 now);
         }
 
@@ -601,14 +607,42 @@ public sealed class PostgresScanQueueStore(
         return true;
     }
 
-    private void ReconcileTourDocumentLink(
+    private void RemovePreviousTourDocumentLinkIfUnchanged(
         Guid tourId,
         Guid travelerId,
         string documentType,
-        Guid? excludingScanItemId,
+        Guid? previousDocumentVersionId,
+        DateTimeOffset? previousReviewedAt,
         DateTimeOffset now)
     {
-        // Never choose older scan as implicit replacement.
+        // Do not touch a separate scan's more recent tour link.
+        if (!previousDocumentVersionId.HasValue ||
+            !previousReviewedAt.HasValue)
+        {
+            return;
+        }
+
+        var currentLink = (
+            from member in db.TourMembers.AsNoTracking()
+            join link in db.TourMemberDocuments.AsNoTracking()
+                on member.TourMemberId equals link.TourMemberId
+            where member.TourId == tourId &&
+                member.TravelerId == travelerId &&
+                link.DocumentType == documentType
+            select link
+        ).SingleOrDefault();
+
+        if (currentLink is null ||
+            currentLink.DocumentVersionId !=
+                previousDocumentVersionId.Value ||
+            currentLink.SnapshotVerifiedAt !=
+                previousReviewedAt.Value)
+        {
+            return;
+        }
+
+        // Explicit correction of this reviewed scan may unlink it.
+        // Never select an older scan as a replacement.
         tourStore.RemoveMemberDocument(
             tourId,
             travelerId,
@@ -616,7 +650,7 @@ public sealed class PostgresScanQueueStore(
             now);
     }
 
-        public int PurgeExpiredImages(
+    public int PurgeExpiredImages(
         DateTimeOffset now)
     {
         return db.Database.ExecuteSqlInterpolated(
