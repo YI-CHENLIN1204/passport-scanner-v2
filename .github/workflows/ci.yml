@@ -927,6 +927,33 @@ jobs:
           RESERVE_AGAIN=$(curl --fail --silent -X POST "http://localhost:5080/api/ocr-training/fixed-test/reserve")
           python3 -c "import json; data=json.loads('''$RESERVE_AGAIN'''); assert data['newlyReservedCount'] == 0, data"
 
+          FIXED_GT_HASH_BEFORE=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT md5(ground_truth_json) FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          FIXED_TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document.traveler_id FROM scan_items AS scan INNER JOIN document_versions AS document ON document.document_version_id = scan.saved_document_version_id WHERE scan.scan_item_id = '$FIXED_SCAN_ITEM_ID';" | tr -d '\r')
+          test -n "$FIXED_TRAVELER_ID"
+
+          curl --fail --silent "http://localhost:5080/api/travelers/$FIXED_TRAVELER_ID" > /tmp/fixed-traveler-before-edit.json
+          python3 -c "import json,datetime; data=json.load(open('/tmp/fixed-traveler-before-edit.json')); t=data['traveler']; new_birth=(datetime.date.fromisoformat(t['birthDate'])+datetime.timedelta(days=1)).isoformat(); payload={'nameZh':t['nameZh'],'nameEn':t['nameEn'],'birthDate':new_birth,'gender':t['gender'],'nationality':t['nationality'],'nationalIdNumber':t['nationalIdNumber'],'documents':[]}; json.dump(payload,open('/tmp/fixed-traveler-edit.json','w'),ensure_ascii=False); open('/tmp/fixed-birth-after.txt','w').write(new_birth)"
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$FIXED_TRAVELER_ID" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/fixed-traveler-edit.json \
+            > /tmp/fixed-traveler-after-edit.json
+
+          EXPECTED_FIXED_BIRTH=$(cat /tmp/fixed-birth-after.txt)
+          FIXED_SCAN_BIRTH=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT birth_date FROM scan_items WHERE scan_item_id = '$FIXED_SCAN_ITEM_ID';" | tr -d '\r')
+          test "$FIXED_SCAN_BIRTH" = "$EXPECTED_FIXED_BIRTH"
+
+          FIXED_GT_HASH_AFTER_TRAVELER_EDIT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT md5(ground_truth_json) FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          test "$FIXED_GT_HASH_AFTER_TRAVELER_EDIT" = "$FIXED_GT_HASH_BEFORE"
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
+            -H 'Content-Type: application/json' \
+            -d '{"selected":true}' \
+            > /tmp/fixed-baseline-reselect.json
+
+          FIXED_GT_HASH_AFTER_RESELECT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT md5(ground_truth_json) FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
+          test "$FIXED_GT_HASH_AFTER_RESELECT" = "$FIXED_GT_HASH_BEFORE"
+
           DESELECT_STATUS=$(curl --silent --output /tmp/fixed-baseline-deselect.json --write-out "%{http_code}" -X PUT "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID/training-selection" \
             -H 'Content-Type: application/json' \
             -d '{"selected":false}')
