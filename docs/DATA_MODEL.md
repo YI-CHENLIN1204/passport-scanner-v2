@@ -361,6 +361,9 @@ Draft grouping 同樣採保守策略：
 - 只有人工明確選入且完成審核的資料可進 Dataset。
 - Train / Validation / Test 必須以 Traveler group 分離，避免同一真人跨 split。
 - 固定 Test 不用於反覆調參；OCR 重新開啟條件見 D-072。
+- 一旦 sample 被 reserve 進 fixed benchmark cohort（已有 `ocr_evaluation_baselines` row，包含 pending），其 `ground_truth_json` 即凍結，不再隨 Traveler / reviewed scan 的一般同步更新。
+- 非 fixed cohort 樣本的 ground truth 仍可隨人工可信資料修正更新。
+- fixed ground truth 若確認有誤，必須走未來明確的 benchmark correction / rebaseline 流程，不以一般主檔編輯靜默改寫。
 
 ## ocr_evaluation_baselines
 
