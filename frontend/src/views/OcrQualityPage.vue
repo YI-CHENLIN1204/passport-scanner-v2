@@ -96,6 +96,7 @@ interface PassportNameDiagnosticSnapshot {
     conflictSubtype?: string
   }>
   shadowOneMismatchName?: string | null
+  shadowOfficialName?: string | null
 }
 
 interface RetestSampleOutcome {
@@ -410,6 +411,7 @@ async function currentFieldsForSample(
           candidateTexts: item.candidateTexts,
           decisionTrace: item.decisionTrace,
           shadowOneMismatchName: item.shadowOneMismatchName,
+          shadowOfficialName: item.shadowOfficialName,
         })),
       totalMs: result.totalMs,
       orientationAttempts:
@@ -963,6 +965,7 @@ interface ValidationProfileSample {
   passportNameFailure: ValidationPassportNameFailure | null
   passportExactDecision: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
+  passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -993,6 +996,7 @@ interface ValidationProfileDocument {
     count: number
   }>
   passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
+  passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   failedCount: number
 }
 
@@ -1287,6 +1291,17 @@ async function profileValidationOnly() {
           : baselineNameCorrect
             ? shadowNameCorrect ? 'unchanged-correct' : 'regressed'
             : shadowNameCorrect ? 'rescued' : 'unchanged-wrong'
+        const officialNames = prediction.passportNameDiagnostics
+          .map(item => item.shadowOfficialName)
+          .filter((name): name is string => Boolean(name))
+        const officialCorrect = officialNames.length
+          ? evalFieldEquals('nameZh', officialNames[0], truth.nameZh)
+          : baselineNameCorrect
+        const passportOfficialShadow = sample.documentType !== 'PASSPORT'
+          ? null
+          : baselineNameCorrect
+            ? officialCorrect ? 'unchanged-correct' : 'regressed'
+            : officialCorrect ? 'rescued' : 'unchanged-wrong'
 
         outcomes.push({
           documentType: sample.documentType,
@@ -1295,6 +1310,7 @@ async function profileValidationOnly() {
           passportNameFailure,
           passportExactDecision,
           passportShadow,
+          passportOfficialShadow,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1375,6 +1391,15 @@ async function profileValidationOnly() {
                 row => row.orientationAttempts > 1,
               ).length / rows.length
             : 0,
+          passportOfficialCounts:
+            documentType === 'PASSPORT'
+              ? {
+                  rescued: rows.filter(row => row.passportOfficialShadow === 'rescued').length,
+                  regressed: rows.filter(row => row.passportOfficialShadow === 'regressed').length,
+                  'unchanged-correct': rows.filter(row => row.passportOfficialShadow === 'unchanged-correct').length,
+                  'unchanged-wrong': rows.filter(row => row.passportOfficialShadow === 'unchanged-wrong').length,
+                }
+              : null,
           passportShadowCounts:
             documentType === 'PASSPORT'
               ? {
@@ -2138,6 +2163,16 @@ onMounted(load)
                 {{ item.reason }} {{ item.count }} 張；
               </span>
               這是候選狀態的近似分類，尚未代表自動修復效果。
+            </p>
+            <p v-if="result.passportOfficialCounts" class="validation-legacy-note">
+              外交部護照拼音對照表候選（只讀，非正式輸出）：
+              潛在改善 {{ result.passportOfficialCounts.rescued }} 張；
+              潛在退步 {{ result.passportOfficialCounts.regressed }} 張；
+              維持正確 {{ result.passportOfficialCounts['unchanged-correct'] }} 張；
+              維持錯誤 {{ result.passportOfficialCounts['unchanged-wrong'] }} 張。
+              與單音節放寬模式使用同批 Validation 影像比較。
+              只比較目前已執行的裁切候選，結果仍需人工確認，
+              不會寫入正式旅客與證件資料。
             </p>
             <p v-if="result.passportShadowCounts" class="validation-legacy-note">
               單音節衝突 shadow 對照（只讀，非正式輸出）：
