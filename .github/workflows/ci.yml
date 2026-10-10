@@ -542,6 +542,15 @@ jobs:
           SNAPSHOT_DB=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT snapshot_name_zh || '|' || snapshot_document_number FROM tour_member_documents WHERE document_version_id = '$SNAPSHOT_DOC_ID';" | tr -d '\r')
           test "$SNAPSHOT_DB" = "快照旅客|S1234567"
 
+          REREVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          curl --fail --silent -X POST "http://localhost:5080/api/passport-reviews?tourId=$SNAPSHOT_TOUR_ID" \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":2,\"documentType\":\"passport\",\"chineseName\":\"快照修正\",\"englishName\":\"SNAPSHOT UPDATED\",\"passportNumber\":\"S7654321\",\"nationality\":\"TWN\",\"issuingState\":\"TWN\",\"birthDate\":\"1990-08-08\",\"sex\":\"M\",\"expiryDate\":\"2036-08-08\",\"verification\":{\"passportNumberCheckDigit\":true,\"birthDateCheckDigit\":true,\"expiryDateCheckDigit\":true,\"compositeCheckDigit\":true},\"reviewAssertions\":{\"chineseNameVisuallyConfirmed\":true,\"englishNameVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"line2Validated\":true,\"chineseNameSource\":\"name-field\",\"chineseNameScore\":0.9,\"chineseNameRomanizationStatus\":\"compatible\",\"fallbackUsed\":false,\"averageScore\":0.9},\"reviewedAt\":\"$REREVIEWED_AT\"}" \
+            > /tmp/snapshot-rereview.json
+
+          curl --fail --silent "http://localhost:5080/api/tours/$SNAPSHOT_TOUR_ID" > /tmp/snapshot-tour-after-rereview.json
+          python3 -c "import json; data=json.load(open('/tmp/snapshot-tour-after-rereview.json')); m=data['members'][0]; assert m['nameZh']=='快照修正', m; assert m['nameEn']=='SNAPSHOT UPDATED', m; d=m['documents'][0]; assert d['documentNumber']=='S7654321', d; assert d['nameZhOnDocument']=='快照修正', d; assert d['expiryDate']=='2036-08-08', d"
+
       - name: Verify traveler edits preserve current document identity rules
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
