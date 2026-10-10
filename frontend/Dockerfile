@@ -3,6 +3,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts/copy-ort-wasm.mjs ./scripts/copy-ort-wasm.mjs
 RUN npm ci
 
 COPY . .

@@ -22,6 +22,8 @@ import {
   recognizeTaiwanNationalIdWithPaddle,
   validateTaiwanNationalId,
   warmupPaddleOcr,
+  createValidationPaddleInstance,
+  type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
 
@@ -356,10 +358,15 @@ function groundTruthForSample(
 async function currentFieldsForSample(
   sample: TrainingEvaluationSampleResponse,
   file: File,
+  experimentalInstance?: ValidationPaddleInstance,
 ) {
   if (sample.documentType === 'PASSPORT') {
     const result =
-      await recognizePassportWithPaddle(file)
+      await recognizePassportWithPaddle(
+        file,
+        undefined,
+        experimentalInstance,
+      )
     const parsed = result.parsedMrz
 
     return {
@@ -408,6 +415,8 @@ async function currentFieldsForSample(
     const result =
       await recognizeTaiwanCompatriotPermitWithPaddle(
         file,
+        undefined,
+        experimentalInstance,
       )
 
     return {
@@ -433,6 +442,8 @@ async function currentFieldsForSample(
     const result =
       await recognizeTaiwanNationalIdWithPaddle(
         file,
+        undefined,
+        experimentalInstance,
       )
 
     return {
@@ -945,6 +956,7 @@ interface ValidationProfileDocument {
 }
 
 interface ValidationProfileResult {
+  mode: 'production' | 'wasm-direct' | 'wasm-worker'
   pipelineVersion: string
   warmupMs: number
   sampleCount: number
@@ -953,6 +965,8 @@ interface ValidationProfileResult {
   documents: ValidationProfileDocument[]
 }
 
+const validationProfileMode =
+  ref<'production' | 'wasm-direct' | 'wasm-worker'>('production')
 const profilingValidation = ref(false)
 const stopValidationRequested = ref(false)
 const validationProfileError = ref('')
@@ -961,8 +975,8 @@ const validationProfileProgress = ref({
   total: 0,
   message: '',
 })
-const validationProfileResult =
-  ref<ValidationProfileResult | null>(null)
+const validationProfileHistory =
+  ref<ValidationProfileResult[]>([])
 
 function requestStopValidation() {
   stopValidationRequested.value = true
@@ -980,7 +994,7 @@ async function profileValidationOnly() {
   profilingValidation.value = true
   stopValidationRequested.value = false
   validationProfileError.value = ''
-  validationProfileResult.value = null
+  const selectedMode = validationProfileMode.value
   validationProfileProgress.value = {
     completed: 0,
     total: 0,
@@ -990,6 +1004,8 @@ async function profileValidationOnly() {
   const outcomes: ValidationProfileSample[] = []
   const failures: Record<string, number> = {}
   let warmupMs = 0
+  let experimentalInstance:
+    ValidationPaddleInstance | undefined
 
   try {
     const samples =
@@ -1004,7 +1020,20 @@ async function profileValidationOnly() {
     }
 
     const warmupStart = performance.now()
-    await warmupPaddleOcr()
+    if (selectedMode === 'production') {
+      await warmupPaddleOcr()
+    } else {
+      validationProfileProgress.value.message =
+        '初始化獨立 ' +
+        (selectedMode === 'wasm-worker'
+          ? 'Worker'
+          : '直接') +
+        ' WASM OCR 模型…'
+      experimentalInstance =
+        await createValidationPaddleInstance(
+          selectedMode === 'wasm-worker',
+        )
+    }
     warmupMs = performance.now() - warmupStart
 
     for (const [index, sample] of samples.entries()) {
@@ -1041,7 +1070,9 @@ async function profileValidationOnly() {
 
         const ocrStart = performance.now()
         const prediction =
-          await currentFieldsForSample(sample, image)
+          await currentFieldsForSample(
+            sample, image, experimentalInstance,
+          )
         const wallMs =
           performance.now() - ocrStart
 
@@ -1139,7 +1170,8 @@ async function profileValidationOnly() {
     const failedCount = Object.values(failures)
       .reduce((total, count) => total + count, 0)
 
-    validationProfileResult.value = {
+    const completedProfile: ValidationProfileResult = {
+      mode: selectedMode,
       pipelineVersion: OCR_PIPELINE_VERSION,
       warmupMs,
       sampleCount: outcomes.length,
@@ -1147,6 +1179,12 @@ async function profileValidationOnly() {
       cancelled: stopValidationRequested.value,
       documents,
     }
+    validationProfileHistory.value = [
+      completedProfile,
+      ...validationProfileHistory.value.filter(
+        result => result.mode !== selectedMode,
+      ),
+    ].slice(0, 3)
 
     validationProfileProgress.value.message =
       stopValidationRequested.value
@@ -1156,6 +1194,14 @@ async function profileValidationOnly() {
     validationProfileError.value =
       'Validation 讀取或 OCR 預熱失敗。未修改任何樣本、人工答案或 Test baseline。'
   } finally {
+    if (experimentalInstance) {
+      try {
+        await experimentalInstance.dispose()
+      } catch {
+        validationProfileError.value =
+          'Worker 已完成推論，但釋放 Worker 資源失敗。請重新整理頁面。'
+      }
+    }
     profilingValidation.value = false
   }
 }
@@ -1607,11 +1653,27 @@ onMounted(load)
             在瀏覽器執行，結果僅顯示聚合統計。
             不寫入資料庫、不修改固定 Test baseline，
             不保存姓名、證件號碼、圖片或單張辨識結果。
+            可比較原本正式 auto 模式、獨立 WASM 直接模式與
+            獨立 WASM Worker。請只用兩個 WASM 模式比較
+            Worker 的效能影響；auto 模式可能選用不同後端。
+            實驗使用同源 WASM，需額外記憶體。
+            比較須使用同一台電腦及 Validation 分組。
             預熱時間若模型已初始化，不能視為冷啟動時間。
           </small>
         </div>
 
         <div class="retest-action">
+          <label>
+            <span>執行模式</span>
+            <select
+              v-model="validationProfileMode"
+              :disabled="profilingValidation || retesting"
+            >
+              <option value="production">原本正式流程（auto backend）</option>
+              <option value="wasm-direct">獨立 WASM 直接模式（對照）</option>
+              <option value="wasm-worker">獨立 WASM Worker（實驗）</option>
+            </select>
+          </label>
           <button
             type="button"
             class="primary-action"
@@ -1667,9 +1729,19 @@ onMounted(load)
         </p>
 
         <div
-          v-if="validationProfileResult"
+          v-for="validationProfileResult in validationProfileHistory"
+          :key="validationProfileResult.mode"
           class="retest-results"
         >
+          <p class="retest-failed">
+            {{
+              validationProfileResult.mode === 'production'
+                ? '原本正式模式（auto backend）'
+                : validationProfileResult.mode === 'wasm-direct'
+                  ? '獨立 WASM 直接模式'
+                  : '獨立 WASM Worker 模式'
+            }}：此頁面暫存聚合結果，不寫入資料庫。
+          </p>
           <article
             v-for="result in validationProfileResult.documents"
             :key="result.documentType"

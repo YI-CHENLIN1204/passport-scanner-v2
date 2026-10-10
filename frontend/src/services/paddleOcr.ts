@@ -21,6 +21,7 @@ import {
 } from './taiwanPermitMrz'
 
 type PaddleInstance = Awaited<ReturnType<typeof PaddleOCR.create>>
+export type ValidationPaddleInstance = PaddleInstance
 
 interface PaddleItemLike {
   text?: string
@@ -632,6 +633,33 @@ function createPaddleFromSource(
     },
     ortOptions: {
       backend: 'auto',
+    },
+  })
+}
+
+// Opt-in Validation experiment. Never used by production scan flow.
+// Reuse exact PP-OCRv5 model assets, but keep runtime and lifecycle separate.
+export function createValidationPaddleInstance(
+  worker: boolean,
+): Promise<ValidationPaddleInstance> {
+  const source = paddleModelSources[0]
+
+  return PaddleOCR.create({
+    lang: 'chinese_cht',
+    ocrVersion: 'PP-OCRv5',
+    textDetectionModelName: 'PP-OCRv5_mobile_det',
+    textDetectionModelAsset: {
+      url: source.detectionUrl,
+    },
+    textRecognitionModelName: 'PP-OCRv5_mobile_rec',
+    textRecognitionModelAsset: {
+      url: source.recognitionUrl,
+    },
+    worker,
+    ortOptions: {
+      backend: 'wasm',
+      numThreads: 1,
+      wasmPaths: '/ort-wasm/',
     },
   })
 }
@@ -3276,8 +3304,11 @@ export async function recognizePassportWithPaddle(
   onProgress?: (
     progress: PassportOcrProgress,
   ) => void,
+  experimentalInstance?: ValidationPaddleInstance,
 ): Promise<PaddleBaselineResult> {
-  const { instance, initializationMs } = await getPaddle()
+  const { instance, initializationMs } = experimentalInstance
+    ? { instance: experimentalInstance, initializationMs: 0 }
+    : await getPaddle()
 
   return recognizePassportOrientedWithInstance(
     instance,
@@ -4873,6 +4904,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   onProgress?: (
     progress: TaiwanCompatriotPermitOcrProgress,
   ) => void,
+  experimentalInstance?: ValidationPaddleInstance,
 ): Promise<TaiwanCompatriotPermitOcrResult> {
   const totalStartedAt = performance.now()
   const softBudgetMs = 9_000
@@ -4884,7 +4916,9 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     message: '正在準備 PaddleOCR…',
   })
 
-  const { instance, initializationMs } = await getPaddle()
+  const { instance, initializationMs } = experimentalInstance
+    ? { instance: experimentalInstance, initializationMs: 0 }
+    : await getPaddle()
 
   const attempts: Array<{
     rotation: number
@@ -5845,6 +5879,7 @@ export async function recognizeTaiwanNationalIdWithPaddle(
   onProgress?: (
     progress: TaiwanNationalIdOcrProgress,
   ) => void,
+  experimentalInstance?: ValidationPaddleInstance,
 ): Promise<TaiwanNationalIdOcrResult> {
   const totalStartedAt = performance.now()
   const softBudgetMs = 9_000
@@ -5857,8 +5892,9 @@ export async function recognizeTaiwanNationalIdWithPaddle(
     message: '正在準備身分證 OCR…',
   })
 
-  const { instance, initializationMs } =
-    await getPaddle()
+  const { instance, initializationMs } = experimentalInstance
+    ? { instance: experimentalInstance, initializationMs: 0 }
+    : await getPaddle()
 
   const attempts: Array<{
     rotation: number
