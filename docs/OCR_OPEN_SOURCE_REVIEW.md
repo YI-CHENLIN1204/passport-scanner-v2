@@ -200,3 +200,11 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 ## 2026-10-11：讀取 romanization 衝突子分類（未驗證假說）
 
 僅對 shadow trace 中原本 `romanization-conflict` 的候選，額外比對中文字數與 MRZ token 數、逐字拼音別名匹配結果，分為 token-count-mismatch、one-syllable-mismatch、other-mismatch、unclassified。診斷沿用正式 comparator 的判定，但**不會改寫相容性回傳、候選排名、閾值或 OCR 輸出**。畫面只保留聚合張數，不保存人名／護照資料。需要本機 Validation 重新量測才可判斷 7 張的實際分布；CI 綠燈不等於具體原因已證實。
+
+## 2026-10-11：單音節拼音衝突 7/7 的本機實測
+
+使用者於正式 auto/WebGPU 模式重跑 32 張 Validation（護照 19、台胞證 13），32 張完成、0 失敗。護照中文姓名錯誤 12 張中，7 張有 OCR 完整正確姓名候選；這 7 張的 shadow trace 全部顯示 `romanization:one-syllable-mismatch`，無 token-count-mismatch 或其他子類。其餘 5 張候選內容不符。
+
+已知程式行為：`compareChineseNameToMrzRomanization()` 在中文字與 MRZ token 數相同、恰一音節不相容時回傳 `conflict`；selector 拒絕 conflict。這是證據指向的一個**具體 gate**，但不保證放寬它能救回全部 7 張，因為影像樣本不一定代表七個獨立人名，亦可能有其他 eligibility／排名條件。
+
+**下一個安全驗證關卡：** 不輸出姓名與 token，只做 Validation-only shadow comparison：觀察若允許一音節衝突（但保留幾何位置、score 與其他條件），能修正多少張原本錯誤樣本，又會使多少張原本正確樣本退步。必要時候再研究具體台灣常見譯音別名，但不得基於 Test baseline 反覆調參。此次樣本的 exact OCR 工作輸入圖仍為 0/32，只能作 legacy regression。
