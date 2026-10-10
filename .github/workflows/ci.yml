@@ -283,26 +283,23 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/review-queue-retention.json
           python3 -c "import json; rows=json.load(open('/tmp/review-queue-retention.json')); docs=[d for row in rows for d in row['documents'] if d['scanItemId'] == '$PERMIT_ITEM_ID']; assert len(docs) == 1, rows; assert docs[0]['imageAvailable'] is False, docs[0]"
 
-      - name: Verify reviewed document can be removed from only this tour
+      - name: Verify reviewed record cannot be deleted
         run: |
           TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/tour.json'))['tourId'])")
           PERMIT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/permit-scan-item.json'))['scanItemId'])")
           DOCUMENT_VERSION_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT saved_document_version_id FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID';" | tr -d '\r')
-          TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT traveler_id FROM document_versions WHERE document_version_id = '$DOCUMENT_VERSION_ID';" | tr -d '\r')
 
           STATUS=$(curl --silent --output /tmp/delete-reviewed.txt --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$PERMIT_ITEM_ID")
-          test "$STATUS" = "204"
+          test "$STATUS" = "400"
+          grep -q '不可直接刪除' /tmp/delete-reviewed.txt
 
-          COUNTS=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT (SELECT COUNT(*) FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM training_samples WHERE source_scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM tour_member_documents), (SELECT COUNT(*) FROM document_versions WHERE document_version_id = '$DOCUMENT_VERSION_ID'), (SELECT COUNT(*) FROM travelers WHERE traveler_id = '$TRAVELER_ID');" | tr -d '\r')
-          test "$COUNTS" = "0|0|0|1|1"
+          COUNTS=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT (SELECT COUNT(*) FROM scan_items WHERE scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM training_samples WHERE source_scan_item_id = '$PERMIT_ITEM_ID'), (SELECT COUNT(*) FROM tour_member_documents WHERE document_version_id = '$DOCUMENT_VERSION_ID'), (SELECT COUNT(*) FROM document_versions WHERE document_version_id = '$DOCUMENT_VERSION_ID');" | tr -d '\r')
+          test "$COUNTS" = "1|1|1|1"
 
-          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-after-reviewed-delete.json
-          python3 -c "import json; data=json.load(open('/tmp/tour-after-reviewed-delete.json')); assert data['members'] == [], data; assert data['tour']['pendingReviewCount'] == 1, data"
+          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID" > /tmp/tour-after-rejected-delete.json
+          python3 -c "import json; data=json.load(open('/tmp/tour-after-rejected-delete.json')); assert len(data['members'])==1, data; assert len(data['members'][0]['documents'])==1, data"
 
-          curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/queue-after-reviewed-delete.json
-          python3 -c "import json; rows=json.load(open('/tmp/queue-after-reviewed-delete.json')); assert len(rows) == 1, rows; assert len(rows[0]['documents']) == 1, rows; assert rows[0]['documents'][0]['documentType'] == 'PASSPORT', rows"
-
-      - name: Verify reviewed fallback preserves original tour snapshot after traveler edit
+      - name: Verify reviewed scans cannot trigger document fallback
         run: |
           IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
@@ -367,10 +364,18 @@ jobs:
           test "$OLD_SNAPSHOT_AFTER" = "回退旅客|F1234567"
 
           DELETE_NEW_STATUS=$(curl --silent --output /tmp/review-snapshot-delete-new.txt --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$REVIEW_SNAPSHOT_NEW_ITEM_ID")
-          test "$DELETE_NEW_STATUS" = "204"
+          test "$DELETE_NEW_STATUS" = "400"
+          grep -q '不可直接刪除' /tmp/review-snapshot-delete-new.txt
 
-          curl --fail --silent "http://localhost:5080/api/tours/$REVIEW_SNAPSHOT_TOUR_ID" > /tmp/review-snapshot-tour-after-fallback.json
-          python3 -c "import json; data=json.load(open('/tmp/review-snapshot-tour-after-fallback.json')); assert len(data['members'])==1, data; member=data['members'][0]; assert member['nameZh']=='回退旅客', member; assert member['nameEn']=='FALLBACK TRAVELER', member; assert len(member['documents'])==1, member; doc=member['documents'][0]; assert doc['documentNumber']=='F1234567', doc; assert doc['nameZhOnDocument']=='回退旅客', doc; assert doc['expiryDate']=='2034-09-09', doc"
+          curl --fail --silent "http://localhost:5080/api/tours/$REVIEW_SNAPSHOT_TOUR_ID" > /tmp/review-snapshot-tour-after-blocked-delete.json
+          python3 -c "import json; data=json.load(open('/tmp/review-snapshot-tour-after-blocked-delete.json')); assert len(data['members'])==1, data; member=data['members'][0]; assert member['nameZh']=='回退旅客', member; assert len(member['documents'])==1, member; doc=member['documents'][0]; assert doc['documentNumber']=='F7654321', doc; assert doc['expiryDate']=='2039-09-09', doc"
+
+          HISTORY_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM scan_items WHERE scan_item_id IN ('$REVIEW_SNAPSHOT_OLD_ITEM_ID', '$REVIEW_SNAPSHOT_NEW_ITEM_ID');" | tr -d '\r')
+          test "$HISTORY_COUNT" = "2"
+
+          OLD_DOC_CURRENT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT is_current FROM document_versions WHERE document_number = 'F1234567';" | tr -d '\r')
+          test "$OLD_DOC_CURRENT" = "f"
+
       - name: Verify invalid national ID cannot enter formal review data
         run: |
           PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
@@ -1280,7 +1285,7 @@ jobs:
 
           DELETE_STATUS=$(curl --silent --output /tmp/fixed-baseline-delete.json --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$FIXED_SCAN_ITEM_ID")
           test "$DELETE_STATUS" = "400"
-          grep -q '固定 Test baseline' /tmp/fixed-baseline-delete.json
+          grep -q '不可直接刪除' /tmp/fixed-baseline-delete.json
 
           SAMPLE_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM training_samples WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
           BASELINE_COUNT_AFTER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM ocr_evaluation_baselines WHERE training_sample_id = '$FIXED_TRAINING_SAMPLE_ID';" | tr -d '\r')
