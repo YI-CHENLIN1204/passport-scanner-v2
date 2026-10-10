@@ -51,6 +51,24 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify versioned local WASM files
+        run: |
+          test -d dist/ort-wasm
+          test "$(find dist/ort-wasm -name '*.wasm' | wc -l)" -gt 0
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const text = fs.readFileSync('src/services/paddleOcr.ts', 'utf8')
+          const start = text.indexOf('export function createValidationPaddleInstance(')
+          const end = text.indexOf('function isInvalidModelArchive(', start)
+          if (start < 0 || end < 0) throw Error('Worker experiment missing')
+          const experimental = text.slice(start, end)
+          for (const expected of ['worker,', "backend: 'wasm'", 'numThreads: 1', "wasmPaths: '/ort-wasm/'"]) {
+            if (!experimental.includes(expected)) {
+              throw Error('Worker experiment not pinned to local WASM: ' + expected)
+            }
+          }
+          NODE
+
       - name: Guard Validation OCR profiler scope
         run: |
           node - <<'NODE'
@@ -109,6 +127,17 @@ jobs:
 
           docker compose logs frontend backend database
           exit 1
+
+      - name: Verify same-origin Worker WASM endpoint
+        run: |
+          WASM_PATH=$(docker compose exec -T frontend sh -c 'find /usr/share/nginx/html/ort-wasm -name "*.wasm" | head -n 1' | tr -d '\r')
+          test -n "$WASM_PATH"
+          WASM_NAME=$(basename "$WASM_PATH")
+          curl --fail --silent "http://localhost:5173/ort-wasm/$WASM_NAME" -o /tmp/worker-ort-wasm
+          test -s /tmp/worker-ort-wasm
+          curl --fail --silent --head "http://localhost:5173/ort-wasm/$WASM_NAME" | grep -i 'content-type: application/wasm'
+          NOT_FOUND_STATUS=$(curl --silent --output /tmp/worker-wasm-missing --write-out "%{http_code}" "http://localhost:5173/ort-wasm/not-an-ort-file.wasm")
+          test "$NOT_FOUND_STATUS" = "404"
 
       - name: Verify persistence and schema
         run: |
