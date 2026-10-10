@@ -48,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Romanization accuracy guard (synthetic only)
+        run: npm run test:romanization
+
       - name: Build
         run: npm run build
 

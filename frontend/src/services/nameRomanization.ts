@@ -1,4 +1,5 @@
 import { pinyin } from 'pinyin-pro'
+import { officialTaiwanSyllableAliases } from './officialRomanizationVariants'
 
 export type RomanizationCompatibility =
   | 'compatible'
@@ -133,7 +134,10 @@ function romanizationTokenMatchesAlias(
   return mismatches === 1
 }
 
-function pinyinAliasesForCharacter(character: string) {
+function pinyinAliasesForCharacter(
+  character: string,
+  includeOfficialVariants = false,
+) {
   const readings = pinyin(character, {
     type: 'array',
     toneType: 'none',
@@ -149,15 +153,21 @@ function pinyinAliasesForCharacter(character: string) {
 
     aliases.add(normalized)
     addCommonTaiwanAliases(normalized, aliases)
+    if (includeOfficialVariants) {
+      for (const variant of officialTaiwanSyllableAliases(normalized)) {
+        aliases.add(variant)
+      }
+    }
   }
 
   return aliases
 }
 
-export function compareChineseNameToMrzRomanization(
+function compareWithVariantMode(
   chineseName: string,
   surname: string,
   givenNames: string,
+  useOfficialVariants: boolean,
 ): RomanizationCompatibility {
   const compactChinese = chineseName
     .replace(/[\s·‧]/g, '')
@@ -189,7 +199,7 @@ export function compareChineseNameToMrzRomanization(
 
   for (let index = 0; index < characters.length; index += 1) {
     const aliases = pinyinAliasesForCharacter(
-      characters[index],
+      characters[index], useOfficialVariants,
     )
     const token = mrzTokens[index]
 
@@ -222,6 +232,30 @@ export function compareChineseNameToMrzRomanization(
   // the name can be aligned, do not claim the Chinese OCR is wrong; just
   // withhold phonetic approval and require manual entry/confirmation.
   return 'unknown'
+}
+
+// Production comparator intentionally retains its original behavior.
+export function compareChineseNameToMrzRomanization(
+  chineseName: string,
+  surname: string,
+  givenNames: string,
+): RomanizationCompatibility {
+  return compareWithVariantMode(
+    chineseName, surname, givenNames, false,
+  )
+}
+
+/** Shadow-only candidate: accept exact BOCA alternative spellings.
+ * Does not relax the one-mismatch conflict rule or auto-write identity data.
+ */
+export function compareChineseNameToMrzWithOfficialVariants(
+  chineseName: string,
+  surname: string,
+  givenNames: string,
+): RomanizationCompatibility {
+  return compareWithVariantMode(
+    chineseName, surname, givenNames, true,
+  )
 }
 
 /** Read-only diagnostic for a conflict already reported by the production comparator.
