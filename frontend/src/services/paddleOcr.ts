@@ -658,6 +658,7 @@ export function createValidationPaddleInstance(
     worker,
     ortOptions: {
       backend: 'wasm',
+      numThreads: 1,
       wasmPaths: '/ort-wasm/',
     },
   })
