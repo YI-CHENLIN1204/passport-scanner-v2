@@ -104,6 +104,12 @@ jobs:
           SAVED_DOC_FK=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_scan_items_saved_document_version';" | tr -d '\r')
           test "$SAVED_DOC_FK" = "1"
 
+          TOUR_MEMBER_TRAVELER_DELETE=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_tour_members_traveler';" | tr -d '\r')
+          test "$TOUR_MEMBER_TRAVELER_DELETE" = "r"
+
+          TOUR_MEMBER_DOCUMENT_DELETE=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_tour_member_documents_document_version';" | tr -d '\r')
+          test "$TOUR_MEMBER_DOCUMENT_DELETE" = "r"
+
           CURRENT_DOC_INDEX=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ux_document_versions_one_current_per_type' AND indexdef ILIKE '%WHERE%is_current%';" | tr -d '\r')
           test "$CURRENT_DOC_INDEX" = "1"
 
