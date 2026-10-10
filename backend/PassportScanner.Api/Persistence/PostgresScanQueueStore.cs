@@ -567,37 +567,13 @@ public sealed class PostgresScanQueueStore(
         var batch = db.ScanBatches.Single(
             value => value.ScanBatchId == item.ScanBatchId);
 
-        Guid? reviewedTravelerId = null;
-
         if (item.ReviewStatus == Reviewed)
         {
-            if (!item.SavedDocumentVersionId.HasValue)
-            {
-                throw new InvalidOperationException(
-                    "這筆已審核資料缺少正式證件版本連結，無法安全移除。");
-            }
-
-            var savedDocument = db.DocumentVersions
-                .AsNoTracking()
-                .SingleOrDefault(value =>
-                    value.DocumentVersionId ==
-                        item.SavedDocumentVersionId.Value);
-
-            if (savedDocument is null)
-            {
-                throw new InvalidOperationException(
-                    "找不到這筆已審核資料對應的正式證件版本。");
-            }
-
-            reviewedTravelerId =
-                savedDocument.TravelerId;
-
-            trainingDatasetStore.SetSelection(
-                item.ScanItemId,
-                false,
-                now);
+            throw new InvalidOperationException(
+                "已審核的正式收件紀錄不可直接刪除；請使用明確更正流程。");
         }
-        else if (item.ReviewStatus != Pending)
+
+        if (item.ReviewStatus != Pending)
         {
             throw new InvalidOperationException(
                 "目前狀態不允許刪除這筆證件。");
@@ -620,16 +596,6 @@ public sealed class PostgresScanQueueStore(
         CleanupEmptyDraft(draftId);
         db.SaveChanges();
 
-        if (reviewedTravelerId.HasValue)
-        {
-            ReconcileTourDocumentLink(
-                batch.TourId,
-                reviewedTravelerId.Value,
-                item.DocumentType,
-                null,
-                now);
-        }
-
         transaction.Commit();
 
         return true;
@@ -642,65 +608,7 @@ public sealed class PostgresScanQueueStore(
         Guid? excludingScanItemId,
         DateTimeOffset now)
     {
-        var candidates = (
-            from candidate in db.ScanItems.AsNoTracking()
-            join candidateBatch in db.ScanBatches.AsNoTracking()
-                on candidate.ScanBatchId
-                equals candidateBatch.ScanBatchId
-            where
-                candidateBatch.TourId == tourId &&
-                candidate.ReviewStatus == Reviewed &&
-                candidate.DocumentType == documentType &&
-                candidate.SavedDocumentVersionId.HasValue &&
-                (
-                    !excludingScanItemId.HasValue ||
-                    candidate.ScanItemId !=
-                        excludingScanItemId.Value
-                )
-            orderby
-                candidate.ReviewedAt descending,
-                candidate.UpdatedAt descending,
-                candidate.CreatedAt descending
-            select candidate
-        ).ToList();
-
-        var candidateIds = candidates
-            .Select(candidate =>
-                candidate.SavedDocumentVersionId!.Value)
-            .Distinct()
-            .ToList();
-
-        var travelerDocumentIds = db.DocumentVersions
-            .AsNoTracking()
-            .Where(document =>
-                candidateIds.Contains(
-                    document.DocumentVersionId) &&
-                document.TravelerId == travelerId)
-            .Select(document =>
-                document.DocumentVersionId)
-            .ToHashSet();
-
-        var fallbackItem = candidates
-            .FirstOrDefault(candidate =>
-                candidate.SavedDocumentVersionId.HasValue &&
-                travelerDocumentIds.Contains(
-                    candidate.SavedDocumentVersionId.Value));
-
-        if (fallbackItem is not null)
-        {
-            tourStore.EnsureMemberDocument(
-                tourId,
-                travelerId,
-                fallbackItem.SavedDocumentVersionId!.Value,
-                documentType,
-                now,
-                BuildTourMemberSnapshot(
-                    fallbackItem,
-                    fallbackItem.ReviewedAt ??
-                        fallbackItem.UpdatedAt));
-            return;
-        }
-
+        // Never choose older scan as implicit replacement.
         tourStore.RemoveMemberDocument(
             tourId,
             travelerId,
@@ -708,7 +616,7 @@ public sealed class PostgresScanQueueStore(
             now);
     }
 
-    public int PurgeExpiredImages(
+        public int PurgeExpiredImages(
         DateTimeOffset now)
     {
         return db.Database.ExecuteSqlInterpolated(
