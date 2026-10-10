@@ -43,3 +43,18 @@
 - `mrz`：https://github.com/cheminfo/mrz
 - OpenCC.js：https://github.com/nk2028/opencc-js
 - ONNX Runtime Web：https://onnxruntime.ai/docs/tutorials/web/ep-webgpu.html
+
+## Validation 對照實驗：第一階段效能量測
+
+功能位置：`OCR 品質` 頁面 **Validation OCR 效能實驗**。按鈕需操作人員手動點擊，且只在 Validation 樣本數大於零時可執行。
+
+- 只呼叫 `getTrainingEvaluationSamples('validation')`。不 reserve fixed Test、不寫入 evaluation baseline、不寫 benchmark runs、不執行 training selection。
+- 逐張調用**既有**正式 `currentFieldsForSample()` 與 OCR pipeline，不裝其他 SDK、不修改模型或辨識參數。
+- 評估項目：整張必要欄位完全正確率、模型預熱 elapsed time、pipeline Median/P90、呼叫總耗時 Median/P90、影像 fetch Median、方向重試率、成功/失敗張數；三種證件各自計算。
+- 若已經在同一瀏覽器頁面跑過 OCR，預熱會短很多。**預熱數字不等同冷啟動時間**；冷啟動需使用全新瀏覽器 session / 新載入的隔離環境再測。
+- Validation API 預設回傳「曾保存的實際 OCR 工作影像」，舊樣本缺少時才回傳審核原圖。畫面會列出各類有 exact OCR input 的張數；不能混淆兩群結果。
+- 可點「停止後續樣本」。停止時只在**目前執行中的這張**完成後中止；畫面顯示部分樣本結果，不視作完整 run。
+- 顯示**聚合資訊**，不呈現也不寫出任何姓名、證件號碼、照片、sample ID 或逐張文字。重新整理頁面即清除這次結果。
+- 不測 Worker / WebGPU 或新透視算法；這是用於後續可重現 A/B 的**既有流程參考值**，不是已完成效能優化的證據。
+
+驗收：前端 type-check/build、read-only static guard、既有 PostgreSQL CI 全過。實際效能數值必須由本機操作者用有權使用的 Validation 樣本跑出，**不能用 CI 合成圖片推定真實準確率**。

@@ -920,6 +920,246 @@ async function rerunTestSet() {
 }
 
 
+interface ValidationProfileSample {
+  documentType: string
+  hasExactOcrInput: boolean
+  fullExact: boolean
+  fetchMs: number
+  wallMs: number
+  pipelineMs: number
+  orientationAttempts: number
+}
+
+interface ValidationProfileDocument {
+  documentType: string
+  sampleCount: number
+  exactInputCount: number
+  fullExactRate: number
+  medianPipelineMs: number | null
+  p90PipelineMs: number | null
+  medianWallMs: number | null
+  p90WallMs: number | null
+  medianFetchMs: number | null
+  orientationRetryRate: number
+  failedCount: number
+}
+
+interface ValidationProfileResult {
+  pipelineVersion: string
+  warmupMs: number
+  sampleCount: number
+  failedCount: number
+  cancelled: boolean
+  documents: ValidationProfileDocument[]
+}
+
+const profilingValidation = ref(false)
+const stopValidationRequested = ref(false)
+const validationProfileError = ref('')
+const validationProfileProgress = ref({
+  completed: 0,
+  total: 0,
+  message: '',
+})
+const validationProfileResult =
+  ref<ValidationProfileResult | null>(null)
+
+function requestStopValidation() {
+  stopValidationRequested.value = true
+  validationProfileProgress.value.message =
+    '目前這張辨識完成後停止…'
+}
+
+// Read-only experiment. Never reserve Test cohort, save baselines,
+// save benchmark runs, or retain any identity or sample-level results.
+async function profileValidationOnly() {
+  if (profilingValidation.value || retesting.value) {
+    return
+  }
+
+  profilingValidation.value = true
+  stopValidationRequested.value = false
+  validationProfileError.value = ''
+  validationProfileResult.value = null
+  validationProfileProgress.value = {
+    completed: 0,
+    total: 0,
+    message: '正在讀取 Validation 樣本…',
+  }
+
+  const outcomes: ValidationProfileSample[] = []
+  const failures: Record<string, number> = {}
+  let warmupMs = 0
+
+  try {
+    const samples =
+      await getTrainingEvaluationSamples('validation')
+    validationProfileProgress.value.total =
+      samples.length
+
+    if (samples.length === 0) {
+      validationProfileProgress.value.message =
+        '目前沒有 Validation 樣本。請先累積人工確認且勾選的資料。'
+      return
+    }
+
+    const warmupStart = performance.now()
+    await warmupPaddleOcr()
+    warmupMs = performance.now() - warmupStart
+
+    for (const [index, sample] of samples.entries()) {
+      if (stopValidationRequested.value) {
+        break
+      }
+
+      validationProfileProgress.value = {
+        completed: index,
+        total: samples.length,
+        message:
+          '辨識 Validation ' +
+          documentLabel(sample.documentType) +
+          ' ' + (index + 1) + ' / ' + samples.length,
+      }
+
+      // Permit the browser to paint progress between samples.
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve()),
+      )
+
+      if (stopValidationRequested.value) {
+        break
+      }
+
+      try {
+        const fetchStart = performance.now()
+        const image =
+          await getTrainingSampleImageFile(
+            sample.trainingSampleId,
+          )
+        const fetchMs =
+          performance.now() - fetchStart
+
+        const ocrStart = performance.now()
+        const prediction =
+          await currentFieldsForSample(sample, image)
+        const wallMs =
+          performance.now() - ocrStart
+
+        const truth = groundTruthForSample(sample)
+        const fields = (
+          fieldsByDocumentType[sample.documentType] ??
+          []
+        ).filter(field =>
+          !(
+            sample.documentType === 'PASSPORT' &&
+            field === 'nationalIdNumber' &&
+            !normalizeEvalValue(field, truth[field])
+          ),
+        )
+
+        outcomes.push({
+          documentType: sample.documentType,
+          hasExactOcrInput:
+            sample.hasExactOcrInput,
+          fullExact:
+            fields.length > 0 &&
+            fields.every(field =>
+              evalFieldEquals(
+                field,
+                prediction.fields[field],
+                truth[field],
+              ),
+            ),
+          fetchMs,
+          wallMs,
+          pipelineMs: prediction.totalMs,
+          orientationAttempts:
+            prediction.orientationAttempts,
+        })
+      } catch {
+        // Do not show filenames, IDs or recognized personal data.
+        failures[sample.documentType] =
+          (failures[sample.documentType] ?? 0) + 1
+      }
+
+      validationProfileProgress.value.completed =
+        index + 1
+    }
+
+    const documents = documentOrder
+      .map(documentType => {
+        const rows = outcomes.filter(
+          row => row.documentType === documentType,
+        )
+        const failedCount =
+          failures[documentType] ?? 0
+
+        if (rows.length === 0 && failedCount === 0) {
+          return null
+        }
+
+        return {
+          documentType,
+          sampleCount: rows.length,
+          exactInputCount: rows.filter(
+            row => row.hasExactOcrInput,
+          ).length,
+          fullExactRate: rows.length
+            ? rows.filter(row => row.fullExact).length /
+              rows.length
+            : 0,
+          medianPipelineMs: percentile(
+            rows.map(row => row.pipelineMs), 0.5,
+          ),
+          p90PipelineMs: percentile(
+            rows.map(row => row.pipelineMs), 0.9,
+          ),
+          medianWallMs: percentile(
+            rows.map(row => row.wallMs), 0.5,
+          ),
+          p90WallMs: percentile(
+            rows.map(row => row.wallMs), 0.9,
+          ),
+          medianFetchMs: percentile(
+            rows.map(row => row.fetchMs), 0.5,
+          ),
+          orientationRetryRate: rows.length
+            ? rows.filter(
+                row => row.orientationAttempts > 1,
+              ).length / rows.length
+            : 0,
+          failedCount,
+        }
+      })
+      .filter(
+        (item): item is ValidationProfileDocument =>
+          item !== null,
+      )
+
+    const failedCount = Object.values(failures)
+      .reduce((total, count) => total + count, 0)
+
+    validationProfileResult.value = {
+      pipelineVersion: OCR_PIPELINE_VERSION,
+      warmupMs,
+      sampleCount: outcomes.length,
+      failedCount,
+      cancelled: stopValidationRequested.value,
+      documents,
+    }
+
+    validationProfileProgress.value.message =
+      stopValidationRequested.value
+        ? '已停止，結果僅包含已完成樣本。'
+        : 'Validation 分析完成，結果僅保留在此頁面。'
+  } catch {
+    validationProfileError.value =
+      'Validation 讀取或 OCR 預熱失敗。未修改任何樣本、人工答案或 Test baseline。'
+  } finally {
+    profilingValidation.value = false
+  }
+}
+
 const documentCards = computed(() =>
   documentOrder.map(type => {
     const trainingSummary =
@@ -1355,6 +1595,157 @@ onMounted(load)
 
       <section class="retest-card">
         <div class="retest-copy">
+          <p class="page-kicker">VALIDATION PERFORMANCE</p>
+          <h2>Validation OCR 效能實驗</h2>
+          <p>
+            只使用 Validation 分組。沿用現有正式 OCR
+            辨識流程，不改模型、參數或 parser。
+            計算整張正確率、OCR 延遲 Median / P90、
+            影像讀取時間及方向重試率。
+          </p>
+          <small>
+            在瀏覽器執行，結果僅顯示聚合統計。
+            不寫入資料庫、不修改固定 Test baseline，
+            不保存姓名、證件號碼、圖片或單張辨識結果。
+            預熱時間若模型已初始化，不能視為冷啟動時間。
+          </small>
+        </div>
+
+        <div class="retest-action">
+          <button
+            type="button"
+            class="primary-action"
+            :disabled="
+              profilingValidation ||
+              retesting ||
+              !(training?.validationCount ?? 0)
+            "
+            @click="profileValidationOnly"
+          >
+            {{
+              profilingValidation
+                ? '分析中…'
+                : `分析 Validation ${training?.validationCount ?? 0} 張`
+            }}
+          </button>
+          <button
+            v-if="profilingValidation"
+            type="button"
+            class="secondary-action"
+            :disabled="stopValidationRequested"
+            @click="requestStopValidation"
+          >
+            停止後續樣本
+          </button>
+          <div
+            v-if="
+              profilingValidation ||
+              validationProfileProgress.message
+            "
+            class="retest-progress"
+          >
+            <div>
+              <span>{{ validationProfileProgress.message }}</span>
+              <strong>
+                {{ validationProfileProgress.completed }}
+                /
+                {{ validationProfileProgress.total }}
+              </strong>
+            </div>
+            <progress
+              :max="Math.max(1, validationProfileProgress.total)"
+              :value="validationProfileProgress.completed"
+            ></progress>
+          </div>
+        </div>
+
+        <p
+          v-if="validationProfileError"
+          class="retest-failed"
+        >
+          {{ validationProfileError }}
+        </p>
+
+        <div
+          v-if="validationProfileResult"
+          class="retest-results"
+        >
+          <article
+            v-for="result in validationProfileResult.documents"
+            :key="result.documentType"
+          >
+            <header>
+              <div>
+                <strong>{{ documentLabel(result.documentType) }}</strong>
+                <span>Validation n={{ result.sampleCount }}</span>
+                <small>
+                  完整 OCR 輸入 {{ result.exactInputCount }} /
+                  {{ result.sampleCount }}
+                </small>
+              </div>
+              <div class="retest-full-rate">
+                <small>整張完全正確</small>
+                <strong>
+                  {{
+                    result.sampleCount
+                      ? rate(result.fullExactRate)
+                      : '—'
+                  }}
+                </strong>
+              </div>
+            </header>
+            <footer>
+              <span>
+                OCR 中位數
+                <strong>{{ seconds(result.medianPipelineMs) }}</strong>
+              </span>
+              <span>
+                OCR P90
+                <strong>{{ seconds(result.p90PipelineMs) }}</strong>
+              </span>
+              <span>
+                呼叫總耗時中位數
+                <strong>{{ seconds(result.medianWallMs) }}</strong>
+              </span>
+              <span>
+                呼叫總耗時 P90
+                <strong>{{ seconds(result.p90WallMs) }}</strong>
+              </span>
+              <span>
+                影像讀取中位數
+                <strong>{{ seconds(result.medianFetchMs) }}</strong>
+              </span>
+              <span>
+                方向重試
+                <strong>
+                  {{
+                    result.sampleCount
+                      ? rate(result.orientationRetryRate)
+                      : '—'
+                  }}
+                </strong>
+              </span>
+              <span v-if="result.failedCount">
+                失敗 {{ result.failedCount }} 張
+              </span>
+            </footer>
+          </article>
+          <p class="retest-failed">
+            版本 {{ validationProfileResult.pipelineVersion }}；
+            本次預熱 {{ seconds(validationProfileResult.warmupMs) }}；
+            完成 {{ validationProfileResult.sampleCount }} 張；
+            失敗 {{ validationProfileResult.failedCount }} 張。
+            {{
+              validationProfileResult.cancelled
+                ? '這是中途停止的部分結果。'
+                : ''
+            }}
+          </p>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
           <p class="page-kicker">
             CURRENT TEST BENCHMARK
           </p>
@@ -1379,6 +1770,7 @@ onMounted(load)
             class="primary-action"
             :disabled="
               retesting ||
+              profilingValidation ||
               !fixedBenchmarkCount
             "
             @click="rerunTestSet"

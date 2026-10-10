@@ -51,6 +51,34 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Guard Validation OCR profiler scope
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const source = fs.readFileSync('src/views/OcrQualityPage.vue', 'utf8')
+          const start = source.indexOf('async function profileValidationOnly() {')
+          const end = source.indexOf('const documentCards = computed(', start)
+          if (start < 0 || end < 0) {
+            throw new Error('Validation profiler missing')
+          }
+          const body = source.slice(start, end)
+          if (!body.includes("getTrainingEvaluationSamples('validation')")) {
+            throw new Error('Validation source missing')
+          }
+          for (const forbidden of [
+            "getTrainingEvaluationSamples('test')",
+            "getTrainingEvaluationSamples('fixed-test')",
+            'reserveFixedTestCohort(',
+            'saveTrainingEvaluationBaseline(',
+            'saveOcrBenchmarkRun(',
+            'setTrainingSampleSelection(',
+          ]) {
+            if (body.includes(forbidden)) {
+              throw new Error('Validation profiler must remain read-only: ' + forbidden)
+            }
+          }
+          NODE
+
   docker-smoke:
     name: PostgreSQL and workflow smoke
     runs-on: ubuntu-latest
