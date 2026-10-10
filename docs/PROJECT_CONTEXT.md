@@ -1,5 +1,7 @@
 # Project Context
 
+> **交接與進度請先看 [HANDOFF.md](HANDOFF.md) 與 [WORKLOG.md](WORKLOG.md)。** 本文只記產品背景；當前實作狀態、已嘗試和已否定方案、CI、OCR 實測限制以交接與工作日誌為索引。任何修改應持續更新並提交 GitHub，不靠聊天記憶。
+
 ## 背景
 
 舊版 Passport Scanner 使用付費雲端 AI。V2 改採瀏覽器端 OCR，主要目的有兩個：
