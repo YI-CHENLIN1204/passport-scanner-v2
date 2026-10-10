@@ -7,6 +7,7 @@
     "postinstall": "node scripts/copy-ort-wasm.mjs",
     "dev": "vite",
     "test:romanization": "node scripts/test-romanization.mjs",
+    "test:permit-evidence": "node scripts/test-permit-evidence.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit"

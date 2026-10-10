@@ -51,6 +51,9 @@ jobs:
       - name: Romanization accuracy guard (synthetic only)
         run: npm run test:romanization
 
+      - name: Taiwan permit field evidence guard (synthetic only)
+        run: npm run test:permit-evidence
+
       - name: Build
         run: npm run build
 
