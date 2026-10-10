@@ -13,6 +13,7 @@ import {
 } from './ocr'
 import {
   compareChineseNameToMrzRomanization,
+  compareChineseNameToMrzWithOfficialVariants,
   classifyRomanizationConflict,
   type RomanizationCompatibility,
 } from './nameRomanization'
@@ -67,6 +68,7 @@ export interface PassportChineseNameDiagnostic {
   candidateTexts: string[]
   decisionTrace?: PassportNameDecision[]
   shadowOneMismatchName?: string | null
+  shadowOfficialName?: string | null
 }
 
 export interface PaddleBaselineResult {
@@ -300,7 +302,11 @@ function normalizeLatinNameForMatch(value: string) {
 function chooseTaiwanChineseName(
   items: PaddleItemLike[],
   parsedMrz: ParsedMrz | null,
-  trace?: (decisions: PassportNameDecision[], shadowName: string | null) => void,
+  trace?: (
+    decisions: PassportNameDecision[],
+    shadowName: string | null,
+    officialName: string | null,
+  ) => void,
 ) {
   const geometries = items
     .map((item) => {
@@ -388,6 +394,41 @@ function chooseTaiwanChineseName(
     return picked.text
   }
 
+  // Official-alias counterfactual: keep existing geometry, scoring and
+  // confidence gates, changing only *exact* source-checked phonetic aliases.
+  // This method is invoked only when the Validation trace is requested.
+  const selectOfficialShadow = (candidates: Array<{
+    text: string
+    score: number
+    romanizationStatus: RomanizationCompatibility
+    rank: number
+  }>, requireCompatible = false) => {
+    const alternatives = candidates.map(candidate => {
+      const officialStatus = parsedMrz
+        ? compareChineseNameToMrzWithOfficialVariants(
+            candidate.text,
+            parsedMrz.surname,
+            parsedMrz.givenNames,
+          )
+        : 'unknown'
+      return {
+        ...candidate,
+        officialStatus,
+        adjustedRank: candidate.rank +
+          (candidate.romanizationStatus !== 'compatible' &&
+            officialStatus === 'compatible' ? 1.5 : 0),
+      }
+    }).filter(candidate => candidate.officialStatus !== 'conflict' &&
+      (!requireCompatible || candidate.officialStatus === 'compatible'))
+      .sort((a, b) => b.adjustedRank - a.adjustedRank)
+
+    const picked = alternatives[0]
+    if (!picked || picked.score < 0.65) return null
+    if (parsedMrz && picked.officialStatus === 'unknown' &&
+      (picked.score < 0.78 || picked.adjustedRank < 1.35)) return null
+    return picked.text
+  }
+
   const directLabelValues = geometries.flatMap((item) => {
     if (!item.rawText.includes('姓名')) return []
 
@@ -461,7 +502,8 @@ function chooseTaiwanChineseName(
                   )
                 : undefined,
           }
-        }), selectShadow(directLabelValues))
+        }), selectShadow(directLabelValues),
+        selectOfficialShadow(directLabelValues, true))
     }
 
     return direct && direct.score >= 0.65
@@ -626,7 +668,8 @@ function chooseTaiwanChineseName(
               )
             : undefined,
       }
-    }), selectShadow([...directLabelValues, ...spatialCandidates]))
+    }), selectShadow([...directLabelValues, ...spatialCandidates]),
+      selectOfficialShadow([...directLabelValues, ...spatialCandidates]))
   }
 
   if (!best || best.score < 0.65) return null
@@ -3010,9 +3053,10 @@ async function predictOne(
       const vizName = chooseTaiwanChineseName(
         vizItems,
         best.parsedMrz,
-        (decisions, shadowName) => {
+        (decisions, shadowName, officialName) => {
           diagnostic.decisionTrace = decisions
           diagnostic.shadowOneMismatchName = shadowName
+          diagnostic.shadowOfficialName = officialName
         },
       )
 
