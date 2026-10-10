@@ -1077,6 +1077,10 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 既有資料庫啟動 migration 會把舊的 cascade FK 換成具名 restrict FK；CI 驗證 PostgreSQL `confdeltype = r`。
 
 目的：未來即使新增資料清理或誤用低階資料庫操作，也不能因刪全域主檔而悄悄抹除既有團別歷史。
+### D-083：Reviewed ScanItem（保留既有快照，fallback 規則由 D-084 取代）
+
+> D-083 原先描述的「刪除較新證件後 fallback 至舊掃描」已廢止。審核快照欄位暫保留相容性，不能作為自動更換團別證件的依據。
+
 ### D-083：Reviewed ScanItem 保留不可被全域主檔編輯覆寫的審核快照
 
 `scan_items` 在人工審核完成後除了保存目前可同步的 staging 欄位，還要保存一份當次人工確認值的 immutable review snapshot。
@@ -1089,3 +1093,18 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 這個 snapshot 與 D-079 的 `tour_member_documents` snapshot 目的不同：前者保存「這筆 scan 當時人工確認了什麼」，後者保存「這個團目前採用／當時確認的正式團別資料」。
 
 目的：避免「先修改全域 Traveler → 再刪除較新的證件 → fallback 到舊 scan」時，把舊團資料意外換成後來修改過的全域身份內容。
+
+### D-084：已審核證件不可直接刪除，也不可自動 fallback
+
+正式證件版本、團別收件紀錄與掃描暫存是不同資料責任：
+
+- 新護照建立新的 `DocumentVersion`，舊護照保留為 historical，不因換證而覆寫。
+- 各團 `TourMemberDocument` 保留當次指定證件與獨立 snapshot。全域 Traveler 編輯不得改寫舊團歷史。
+- 一般 `DELETE /api/scan-items/{id}` 只允許刪除 PENDING。已 REVIEWED 一律拒絕；不得連帶刪掉 training sample 或團別正式紀錄。
+- 前端只對 PENDING 顯示刪除按鈕。已審核資料仍可透過既有審核編輯流程修正一般欄位。
+- 既有 `ReconcileTourDocumentLink` 依掃描時間選擇舊 scan 的 fallback 取消。必要的身份修正，只能解除**確定由該次舊 review 產生且尚未被其他 review 改寫**的舊團別關聯；不能替換成任何較舊證件。
+- 若無法確定哪一筆 review 擁有團別關聯，先保留，不猜測。不因修正當前主檔，自動消除其他歷史資料。
+- 未來如需撤銷誤審核、誤歸人或更正已使用的正式團別證件，必須建立可追溯的明確更正流程，不透過一般刪除或 fallback 假裝修復。
+- 這是結構化歷史資料政策，不改變 production 證件照片「回國日 + 7 天」的清除期限。
+
+本決策取代 D-051 與 D-083 涉及「自動 fallback 舊掃描」的規則，不改動已存在的審核快照資料。
