@@ -4570,7 +4570,7 @@ function buildTaiwanCompatriotPermitResult(
     chineseNameConfidence:
       mrzChineseName
         ? (
-            parsedMrz.validation.requiredValid
+            parsedMrz?.validation.requiredValid === true
               ? 0.99
               : 0.9
           )
