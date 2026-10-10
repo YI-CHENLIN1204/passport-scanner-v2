@@ -77,7 +77,7 @@ const confident = {
   romanizationStatus: 'conflict',
 }
 const ambiguous = {
-  text: '王石明', score: 0.93, rank: 2.8,
+  text: '王依明', score: 0.93, rank: 2.8,
   romanizationStatus: 'conflict',
 }
 assert.equal(guardedOfficialNameSuggestion([confident], mrz)?.text, '王一明')
