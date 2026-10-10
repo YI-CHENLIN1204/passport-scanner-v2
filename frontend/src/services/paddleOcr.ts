@@ -66,6 +66,7 @@ export interface PassportChineseNameDiagnostic {
   rawTexts: string[]
   candidateTexts: string[]
   decisionTrace?: PassportNameDecision[]
+  shadowOneMismatchName?: string | null
 }
 
 export interface PaddleBaselineResult {
@@ -299,7 +300,7 @@ function normalizeLatinNameForMatch(value: string) {
 function chooseTaiwanChineseName(
   items: PaddleItemLike[],
   parsedMrz: ParsedMrz | null,
-  trace?: (decisions: PassportNameDecision[]) => void,
+  trace?: (decisions: PassportNameDecision[], shadowName: string | null) => void,
 ) {
   const geometries = items
     .map((item) => {
@@ -359,6 +360,33 @@ function chooseTaiwanChineseName(
 
     return fullMatch || partialMatch
   })
+
+  // Read-only counterfactual: do not change the production return path.
+  const shadowAllowed = (candidate: {
+    text: string
+    score: number
+    romanizationStatus: RomanizationCompatibility
+    rank: number
+  }) => candidate.romanizationStatus !== 'conflict' ||
+    (parsedMrz !== null &&
+      classifyRomanizationConflict(candidate.text, parsedMrz.surname,
+        parsedMrz.givenNames) === 'one-syllable-mismatch')
+
+  const selectShadow = (candidates: Array<{
+    text: string
+    score: number
+    romanizationStatus: RomanizationCompatibility
+    rank: number
+  }>) => {
+    const picked = candidates.filter(shadowAllowed)
+      .sort((a, b) => b.rank - a.rank)[0]
+    if (!picked || picked.score < 0.65) return null
+    // Relaxed candidates are NOT phonetically approved; retain the
+    // existing unknown confidence/rank safeguard.
+    if (parsedMrz && picked.romanizationStatus !== 'compatible' &&
+      (picked.score < 0.78 || picked.rank < 1.35)) return null
+    return picked.text
+  }
 
   const directLabelValues = geometries.flatMap((item) => {
     if (!item.rawText.includes('姓名')) return []
@@ -433,7 +461,7 @@ function chooseTaiwanChineseName(
                   )
                 : undefined,
           }
-        }))
+        }), selectShadow(directLabelValues))
     }
 
     return direct && direct.score >= 0.65
@@ -598,7 +626,7 @@ function chooseTaiwanChineseName(
               )
             : undefined,
       }
-    }))
+    }), selectShadow([...directLabelValues, ...spatialCandidates]))
   }
 
   if (!best || best.score < 0.65) return null
@@ -2982,8 +3010,9 @@ async function predictOne(
       const vizName = chooseTaiwanChineseName(
         vizItems,
         best.parsedMrz,
-        decisions => {
+        (decisions, shadowName) => {
           diagnostic.decisionTrace = decisions
+          diagnostic.shadowOneMismatchName = shadowName
         },
       )
 
