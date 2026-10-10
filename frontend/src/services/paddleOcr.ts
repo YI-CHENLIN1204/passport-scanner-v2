@@ -25,6 +25,7 @@ import {
 import {
   selectPermitNameCandidate,
   selectPermitSexCandidate,
+  selectPermitMrzVsVisualName,
 } from './permitFieldEvidence'
 import {
   parseTaiwanPermitMrz,
@@ -786,7 +787,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.3'
+  '2026.10.11.4'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4496,11 +4497,14 @@ function buildTaiwanCompatriotPermitResult(
       ? decodedMrzName
       : ''
 
-  const finalChineseName =
-    mrzChineseName ||
-    rowName?.value ||
-    name?.value ||
-    ''
+  const nameEvidence = selectPermitMrzVsVisualName(
+    mrzChineseName,
+    rowName?.value ?? '',
+    rowName?.compatibility ?? 'unknown',
+    name?.value ?? '',
+    name?.score ?? null,
+  )
+  const finalChineseName = nameEvidence.value
 
   const finalPermitNumber =
     parsedMrz?.permitNumber ||
@@ -4572,21 +4576,20 @@ function buildTaiwanCompatriotPermitResult(
         ? 1
         : 0,
     chineseNameConfidence:
-      mrzChineseName
-        ? (
-            parsedMrz?.validation.requiredValid === true
-              ? 0.99
-              : 0.9
-          )
-        : rowName?.value
-          ? (
-              rowName.compatibility === 'compatible'
-                ? 0.92
-                : 0.82
-            )
-          : name?.score !== null && name?.score !== undefined
-            ? Math.min(name.score, 0.85)
-            : null,
+      nameEvidence.source === 'visual-agreement'
+        ? Math.min(0.97, name?.score ?? 0.9)
+        : nameEvidence.source === 'mrz'
+          // The MRZ composite check does NOT cover the GBK name bytes.
+          ? 0.86
+          : rowName?.value
+            ? (
+                rowName.compatibility === 'compatible'
+                  ? 0.92
+                  : 0.82
+              )
+            : name?.score !== null && name?.score !== undefined
+              ? Math.min(name.score, 0.85)
+              : null,
     textHorizontalScore:
       estimateTextHorizontalScore(prediction),
     uprightSemanticScore:
@@ -5283,9 +5286,13 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
 
   // A nonempty but uncertain name can be wrong. Retry the name region
   // only under the existing time budget, and never override validated MRZ.
+  // Existing check digits do not cover MRZ GBK name characters.
+  // Only protect a corroborated name; otherwise a weak name may retry.
   const validatedMrzName =
     best.result.parsedMrz?.validation.requiredValid === true &&
-    Boolean(best.result.parsedMrz?.chineseName)
+    Boolean(best.result.parsedMrz?.chineseName) &&
+    best.result.chineseNameConfidence !== null &&
+    best.result.chineseNameConfidence >= 0.9
   if (
     shouldRetryUncertainPermitName(
       best.result.chineseName,
