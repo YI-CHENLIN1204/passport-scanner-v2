@@ -957,6 +957,7 @@ interface ValidationProfileDocument {
 
 interface ValidationProfileResult {
   mode: 'production' | 'wasm-direct' | 'wasm-worker'
+  completedAt: string
   pipelineVersion: string
   warmupMs: number
   sampleCount: number
@@ -977,6 +978,18 @@ const validationProfileProgress = ref({
 })
 const validationProfileHistory =
   ref<ValidationProfileResult[]>([])
+const validationProfileAttempt = ref<{
+  mode: ValidationProfileResult['mode']
+  status: 'running' | 'success' | 'cancelled' | 'failed'
+} | null>(null)
+
+function validationModeLabel(
+  mode: ValidationProfileResult['mode'],
+) {
+  if (mode === 'production') return '正式 auto 模式'
+  if (mode === 'wasm-direct') return '獨立 WASM 直接模式'
+  return '獨立 WASM Worker 模式'
+}
 
 function requestStopValidation() {
   stopValidationRequested.value = true
@@ -995,6 +1008,10 @@ async function profileValidationOnly() {
   stopValidationRequested.value = false
   validationProfileError.value = ''
   const selectedMode = validationProfileMode.value
+  validationProfileAttempt.value = {
+    mode: selectedMode,
+    status: 'running',
+  }
   validationProfileProgress.value = {
     completed: 0,
     total: 0,
@@ -1004,6 +1021,8 @@ async function profileValidationOnly() {
   const outcomes: ValidationProfileSample[] = []
   const failures: Record<string, number> = {}
   let warmupMs = 0
+  let stage: '讀取 Validation' | 'OCR 預熱' | '辨識 Validation' =
+    '讀取 Validation'
   let experimentalInstance:
     ValidationPaddleInstance | undefined
 
@@ -1014,11 +1033,16 @@ async function profileValidationOnly() {
       samples.length
 
     if (samples.length === 0) {
+      validationProfileAttempt.value = {
+        mode: selectedMode,
+        status: 'cancelled',
+      }
       validationProfileProgress.value.message =
         '目前沒有 Validation 樣本。請先累積人工確認且勾選的資料。'
       return
     }
 
+    stage = 'OCR 預熱'
     const warmupStart = performance.now()
     if (selectedMode === 'production') {
       await warmupPaddleOcr()
@@ -1036,6 +1060,7 @@ async function profileValidationOnly() {
     }
     warmupMs = performance.now() - warmupStart
 
+    stage = '辨識 Validation'
     for (const [index, sample] of samples.entries()) {
       if (stopValidationRequested.value) {
         break
@@ -1172,6 +1197,7 @@ async function profileValidationOnly() {
 
     const completedProfile: ValidationProfileResult = {
       mode: selectedMode,
+      completedAt: new Date().toISOString(),
       pipelineVersion: OCR_PIPELINE_VERSION,
       warmupMs,
       sampleCount: outcomes.length,
@@ -1186,20 +1212,36 @@ async function profileValidationOnly() {
       ),
     ].slice(0, 3)
 
+    validationProfileAttempt.value = {
+      mode: selectedMode,
+      status: stopValidationRequested.value
+        ? 'cancelled'
+        : 'success',
+    }
     validationProfileProgress.value.message =
       stopValidationRequested.value
         ? '已停止，結果僅包含已完成樣本。'
         : 'Validation 分析完成，結果僅保留在此頁面。'
   } catch {
+    validationProfileAttempt.value = {
+      mode: selectedMode,
+      status: 'failed',
+    }
     validationProfileError.value =
-      'Validation 讀取或 OCR 預熱失敗。未修改任何樣本、人工答案或 Test baseline。'
+      `本次 ${stage} 失敗（${validationModeLabel(selectedMode)}）。` +
+      '下方如有舊卡片，僅代表之前成功的測試，並非本次結果。' +
+      '請檢查瀏覽器開發人員工具 Console / Network；' +
+      '不會修改原始照片、人工答案或 Test baseline。'
+    validationProfileProgress.value.message =
+      `本次 ${stage} 失敗，沒有產生新結果。`
   } finally {
     if (experimentalInstance) {
       try {
         await experimentalInstance.dispose()
       } catch {
         validationProfileError.value =
-          'Worker 已完成推論，但釋放 Worker 資源失敗。請重新整理頁面。'
+          '實驗結果已計算，但獨立 OCR 實例的資源釋放失敗；' +
+          '請重新整理頁面後再執行下一種模式。'
       }
     }
     profilingValidation.value = false
@@ -1727,20 +1769,27 @@ onMounted(load)
         >
           {{ validationProfileError }}
         </p>
+        <p
+          v-if="
+            validationProfileAttempt?.status === 'running' &&
+            validationProfileHistory.length > 0
+          "
+          class="validation-history-note"
+        >
+          本次 {{ validationModeLabel(validationProfileAttempt.mode) }}
+          仍在執行中；下方顯示的是先前完成的測試。
+        </p>
 
         <div
           v-for="validationProfileResult in validationProfileHistory"
           :key="validationProfileResult.mode"
           class="retest-results"
         >
-          <p class="retest-failed">
-            {{
-              validationProfileResult.mode === 'production'
-                ? '原本正式模式（auto backend）'
-                : validationProfileResult.mode === 'wasm-direct'
-                  ? '獨立 WASM 直接模式'
-                  : '獨立 WASM Worker 模式'
-            }}：此頁面暫存聚合結果，不寫入資料庫。
+          <p class="validation-history-note">
+            {{ validationModeLabel(validationProfileResult.mode) }}
+            · 上次完成 {{
+              formatBenchmarkRunTime(validationProfileResult.completedAt)
+            }} · 頁面暫存的歷史結果，非當前執行中的結果。
           </p>
           <article
             v-for="result in validationProfileResult.documents"
@@ -1751,7 +1800,7 @@ onMounted(load)
                 <strong>{{ documentLabel(result.documentType) }}</strong>
                 <span>Validation n={{ result.sampleCount }}</span>
                 <small>
-                  完整 OCR 輸入 {{ result.exactInputCount }} /
+                  保存當時 OCR 工作圖 {{ result.exactInputCount }} /
                   {{ result.sampleCount }}
                 </small>
               </div>
@@ -1766,6 +1815,16 @@ onMounted(load)
                 </strong>
               </div>
             </header>
+            <p
+              v-if="result.exactInputCount < result.sampleCount"
+              class="validation-legacy-note"
+            >
+              {{
+                result.sampleCount - result.exactInputCount
+              }} 張缺少當時的 OCR 工作圖片，改用保存的審核影像重跑；
+              這些結果只能用於回歸比較，
+              不能當作完整上傳流程的準確率。
+            </p>
             <footer>
               <span>
                 OCR 中位數
@@ -2999,6 +3058,22 @@ onMounted(load)
 
 .retest-results article > footer strong {
   color: #4c5c72;
+}
+
+.validation-legacy-note {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #92612f;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.validation-history-note {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #68768a;
 }
 
 .retest-failed {
