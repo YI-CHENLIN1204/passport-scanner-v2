@@ -742,6 +742,79 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$SAME_TOUR_ID" > /tmp/same-reviewed-tour-after.json
           python3 -c "import json; data=json.load(open('/tmp/same-reviewed-tour-after.json')); assert data['tour']['memberCount'] == 2, data; assert data['tour']['reviewedMemberCount'] == 2, data; assert len(data['members']) == 2, data"
 
+      - name: Verify automatic consolidation reconciles current documents
+        run: |
+          REVIEWED_AT='2026-03-01T00:00:00Z'
+
+          docker compose exec -T database psql -U passport_scanner -d passport_scanner -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO travelers (
+            traveler_id, name_zh, name_en, birth_date, gender,
+            nationality, national_id_number,
+            personal_id_type, personal_id_number,
+            created_at, updated_at
+          ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000d081',
+              '自動合併甲', 'AUTO MERGE A', '1993-03-03', 'M',
+              'TWN', 'A110000004',
+              'PASSPORT', 'Z81000001',
+              NOW() - INTERVAL '2 days', NOW()
+            ),
+            (
+              '00000000-0000-0000-0000-00000000d082',
+              '自動合併乙', 'AUTO MERGE B', '1993-03-03', 'M',
+              'TWN', 'A110000004',
+              'PASSPORT', 'Z81000002',
+              NOW() - INTERVAL '1 day', NOW()
+            );
+
+          INSERT INTO document_versions (
+            document_version_id, traveler_id, document_type,
+            name_zh_on_document, name_en_on_document,
+            document_number, issuing_country, nationality,
+            expiry_date, is_current, verified_at, created_at
+          ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000e081',
+              '00000000-0000-0000-0000-00000000d081',
+              'PASSPORT',
+              '自動合併甲', 'AUTO MERGE A',
+              'Z81000001', 'TWN', 'TWN',
+              '2034-03-03', TRUE,
+              '2026-01-01T00:00:00Z',
+              '2026-01-01T00:00:00Z'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000e082',
+              '00000000-0000-0000-0000-00000000d082',
+              'PASSPORT',
+              '自動合併乙', 'AUTO MERGE B',
+              'Z81000002', 'TWN', 'TWN',
+              '2038-03-03', TRUE,
+              '2026-02-01T00:00:00Z',
+              '2026-02-01T00:00:00Z'
+            );
+          SQL
+
+          AUTO_STATUS=$(curl --silent --output /tmp/auto-current-merge.json --write-out "%{http_code}" -X POST http://localhost:5080/api/taiwan-national-id-reviews \
+            -H 'Content-Type: application/json' \
+            -d "{\"schemaVersion\":1,\"documentType\":\"tw-id\",\"chineseName\":\"自動合併\",\"nationalId\":\"A110000004\",\"birthDate\":\"1993-03-03\",\"sex\":\"M\",\"reviewAssertions\":{\"allFieldsVisuallyConfirmed\":true},\"ocr\":{\"engine\":\"paddleocr-ppocrv5\",\"extractedFieldCount\":4,\"averageScore\":0.9},\"reviewedAt\":\"$REVIEWED_AT\"}")
+          test "$AUTO_STATUS" = "200"
+
+          AUTO_TRAVELER_ID=$(python3 -c "import json; print(json.load(open('/tmp/auto-current-merge.json'))['travelerId'])")
+
+          AUTO_ID_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM travelers WHERE national_id_number = 'A110000004';" | tr -d '\r')
+          test "$AUTO_ID_COUNT" = "1"
+
+          AUTO_PASSPORT_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM document_versions WHERE traveler_id = '$AUTO_TRAVELER_ID' AND document_type = 'PASSPORT';" | tr -d '\r')
+          test "$AUTO_PASSPORT_COUNT" = "2"
+
+          AUTO_CURRENT_PASSPORT_COUNT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT COUNT(*) FROM document_versions WHERE traveler_id = '$AUTO_TRAVELER_ID' AND document_type = 'PASSPORT' AND is_current = TRUE;" | tr -d '\r')
+          test "$AUTO_CURRENT_PASSPORT_COUNT" = "1"
+
+          AUTO_CURRENT_PASSPORT=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document_number FROM document_versions WHERE traveler_id = '$AUTO_TRAVELER_ID' AND document_type = 'PASSPORT' AND is_current = TRUE;" | tr -d '\r')
+          test "$AUTO_CURRENT_PASSPORT" = "Z81000002"
+
       - name: Verify traveler merge reconciles duplicate current document types
         run: |
           REVIEWED_AT_OLD='2026-01-01T00:00:00Z'
