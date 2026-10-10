@@ -34,7 +34,7 @@
 
 ## 接下來真正要做的事情
 
-1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。已建立 shadow selector trace 實驗分支，待 CI／本機驗證；匿名原因將協助釐清 eligibility / rank / confidence / romanization，不修改正式 OCR。
+1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。PR #12 shadow selector 已本機實測：護照 7 張完整正確候選全部分類 romanization-conflict。下一步只讀診斷需區分字數／MRZ token 數不符或音節匹配不符，不直接放寬正式選擇器。
 2. 針對分類結果，必要時設計**不影響正式輸出**的 shadow selector A/B。不可只看到正確字串就自動採用；須保留位置、羅馬拼音與人工覆核規則。
 3. 陸續累積合法、人工確認且保存當次 OCR 工作影像的 Validation，按 Traveler 分組避免資料洩漏。身分證 Validation 目前沒有代表性。
 4. V2 尚待獨立設計正式已審核資料的撤銷／更正審計流程；不要把 fallback 或「刪除」當成更正。
