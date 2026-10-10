@@ -252,7 +252,9 @@ public sealed class PassportScannerDbContext(
         member.HasOne<TravelerRecord>()
             .WithMany()
             .HasForeignKey(item => item.TravelerId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_tour_members_traveler");
 
         var memberDocument =
             modelBuilder.Entity<TourMemberDocumentRecord>();
@@ -383,7 +385,9 @@ public sealed class PassportScannerDbContext(
         memberDocument.HasOne<DocumentVersionRecord>()
             .WithMany()
             .HasForeignKey(item => item.DocumentVersionId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_tour_member_documents_document_version");
 
         var scanBatch = modelBuilder.Entity<ScanBatchRecord>();
 
