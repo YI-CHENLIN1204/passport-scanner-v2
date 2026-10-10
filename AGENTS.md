@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件提供給 Codex、AI coding agent 與協作者。開始修改程式碼前，先讀 README 與 docs/ 內文件。
+本文件提供給 Codex、AI coding agent 與協作者。開始修改程式碼前，**必讀 `docs/HANDOFF.md` 頂端最新狀態、`docs/WORKLOG.md` 末尾、`docs/DECISIONS.md`、`docs/OCR_OPEN_SOURCE_REVIEW.md`**，再查最新 main SHA、PR、CI 與實際程式；下方過去的優先序不能凌駕於明確最新交接。
 
 ## 專案目標
 
@@ -22,8 +22,8 @@
 
 ## 目前開發優先順序
 
-- OCR recognition / parser 目前以固定 Test baseline `2026.10.09.1` 暫時凍結。
-- 除非使用者明確重新開啟 OCR 改善，不要自行調整 OCR model、recognition threshold、parser threshold、orientation strategy 或固定 Test split。
+- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。最新 main OCR pipeline 於 2026-10-11 為 `2026.10.11.5`，其新變動尚未取得用戶的實際 Validation 結果，後續以 `docs/HANDOFF.md` 最新段落查證。
+- 使用者**已明確要求加速推進 OCR 精準度改善**。必須集中有依據的修改、自動化回歸，並以一次 Validation 檢驗淨改善／退步；不得擅自改固定 Test split 或把未實測 PR 說成精準率提升。
 - 不要把固定 Test 圖片加入 Train；Train / Validation / Test 仍以 Traveler group 切分，避免同人資料洩漏。
 - 現階段優先完成 V2 系統本體：團別收件、批次掃描生命週期、人工審核、Traveler / DocumentVersion、人物合併、資料一致性、production photo retention、Training Dataset 管理、CSV 匯出與備份／還原。
 - OCR 歷史 PoC 文件可保留作技術歷史，不可因舊文件的 TODO 將已凍結 OCR 工作重新當成目前優先事項。
