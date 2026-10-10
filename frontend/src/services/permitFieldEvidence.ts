@@ -33,15 +33,44 @@ export function selectPermitSexCandidate(
   labeledScore: number | null,
   semanticSex: PermitEvidenceSex,
 ): PermitEvidenceSex {
-  if (mrzRequiredValid && mrzSex) return mrzSex
-
-  // Only overrule an unvalidated MRZ character when explicit labeled
-  // extraction AND row semantics agree with sufficiently strong OCR.
+  // Taiwan permit MRZ's existing checksum computation does not include
+  // the sex character, even when requiredValid=true. Strong, matching
+  // visual evidence is allowed to contradict it. Lower-quality visual
+  // evidence remains subordinate to MRZ, to prevent noisy false flips.
   if (
     labeledSex &&
     labeledSex === semanticSex &&
-    (labeledScore ?? 0) >= 0.8
+    (labeledScore ?? 0) >= (mrzRequiredValid ? 0.9 : 0.8)
   ) return labeledSex
 
-  return mrzSex || labeledSex || semanticSex || ''
+  if (mrzSex) return mrzSex
+  return labeledSex || semanticSex || ''
+}
+
+/** Permit MRZ composite check digit does not verify GBK name bytes.
+ * Use a stronger visual cross-check to resolve a conflict; otherwise
+ * retain original preference without claiming MRZ-name verification.
+ */
+export function selectPermitMrzVsVisualName(
+  mrzName: string,
+  rowName: string,
+  rowRomanizationStatus: 'compatible' | 'unknown' | 'conflict',
+  labelName: string,
+  labelScore: number | null,
+): { value: string; source: 'mrz' | 'visual-agreement' | 'row' | 'label' | 'empty' } {
+  const mrz = mrzName.trim()
+  const row = rowName.trim()
+  const label = labelName.trim()
+  const trustedVisual = row &&
+    row === label &&
+    rowRomanizationStatus === 'compatible' &&
+    (labelScore ?? 0) >= 0.88
+
+  if (trustedVisual && (!mrz || mrz !== row)) {
+    return { value: row, source: 'visual-agreement' }
+  }
+  if (mrz) return { value: mrz, source: 'mrz' }
+  if (row) return { value: row, source: 'row' }
+  if (label) return { value: label, source: 'label' }
+  return { value: '', source: 'empty' }
 }
