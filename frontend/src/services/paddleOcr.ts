@@ -776,6 +776,22 @@ export async function warmupPaddleOcr() {
   await getPaddle()
 }
 
+// Read-only runtime metadata for Validation diagnostics. Never runs OCR
+// or changes an already initialized production model.
+export function getValidationPaddleRuntimeSummary(
+  experimentalInstance?: ValidationPaddleInstance,
+) {
+  const initialized = experimentalInstance ?? paddleInstance
+  const summary = initialized?.getInitializationSummary()
+  if (!summary) return null
+  return {
+    backend: summary.backend,
+    detProvider: summary.detProvider,
+    recProvider: summary.recProvider,
+    webgpuAvailable: summary.webgpuAvailable,
+  }
+}
+
 function geometryFirstMatching(
   prediction: unknown,
   predicate: (text: string) => boolean,
