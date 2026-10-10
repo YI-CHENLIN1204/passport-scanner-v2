@@ -1053,3 +1053,27 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 若未來發現 fixed Test 的 ground truth 本身錯誤，不能用一般主檔編輯偷偷修正；應建立明確的 benchmark correction / reset / rebaseline 流程，並讓不同版本比較的基準變更可被辨識。
 
 目的：避免完全沒有修改 OCR pipeline，卻因日後主檔修正而讓 baseline accuracy、current accuracy 或 benchmark history 使用不同答案，造成版本進步／退步失真。
+
+### D-081：自動 Traveler consolidation 也必須先處理 Current DocumentVersion 衝突
+
+D-066 的「同一 Traveler／證件類型只能一筆 current」不只適用人工 merge，也適用 SaveDocumentReview 內因強識別觸發的自動重複 Traveler consolidation。
+
+- 自動 consolidation 搬移 duplicate Traveler 的 DocumentVersion 前，先把 canonical + duplicate 的同類型 current versions 一起比較。
+- current 勝出規則維持 VerifiedAt 最新，其次 CreatedAt 最新，再以 DocumentVersionId 穩定排序。
+- demotion 必須先 SaveChanges，再搬 traveler_id；避免 PostgreSQL partial unique index 在單一 SQL statement 中看到暫時兩筆 current 而拒絕。
+- 多個 duplicate 逐一處理，每次都重新以 canonical 目前 documents + 下一個 duplicate documents reconcile。
+- 若後續團別 link merge 或其他 validation 失敗，外層 review transaction 必須 rollback 前面的 demotion 與 document reassignment。
+
+目的：資料庫 unique index 是最後一道保護，不應讓正常的自動重複旅客整理因更新順序而變成 500。
+
+### D-082：團別歷史資料不得因 Traveler / DocumentVersion 刪除而 Cascade 消失
+
+per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / DocumentVersion 是它的來源參照，不是可向下 cascade 刪除歷史的父資料。
+
+- `tour_members.traveler_id -> travelers.traveler_id` 使用 `ON DELETE RESTRICT`。
+- `tour_member_documents.document_version_id -> document_versions.document_version_id` 使用 `ON DELETE RESTRICT`。
+- `tour_member_documents -> tour_members` 仍可使用 cascade，因明確刪除整個團員關聯本身就是在移除該團資料。
+- 刪除整個 Tour 時既有 `Tour -> TourMember -> TourMemberDocument` cascade 可維持，因那是明確刪除整個團別的語意；目前 V2 未提供一般使用者刪除 Traveler / DocumentVersion 的功能。
+- 既有資料庫啟動 migration 會把舊的 cascade FK 換成具名 restrict FK；CI 驗證 PostgreSQL `confdeltype = r`。
+
+目的：未來即使新增資料清理或誤用低階資料庫操作，也不能因刪全域主檔而悄悄抹除既有團別歷史。
