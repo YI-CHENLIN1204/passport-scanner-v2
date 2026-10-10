@@ -198,39 +198,56 @@ public sealed class PostgresTourStore(
             {
                 var traveler = travelers[item.TravelerId];
 
-                var memberDocuments = memberDocumentLinks
+                var memberLinks = memberDocumentLinks
                     .Where(link =>
-                        link.TourMemberId == item.TourMemberId &&
+                        link.TourMemberId ==
+                            item.TourMemberId &&
                         documents.ContainsKey(
                             link.DocumentVersionId))
+                    .ToList();
+
+                var identitySnapshot = memberLinks
+                    .OrderByDescending(link =>
+                        link.UpdatedAt)
+                    .ThenByDescending(link =>
+                        link.CreatedAt)
+                    .FirstOrDefault();
+
+                var memberDocuments = memberLinks
                     .Select(link =>
                     {
                         var document =
                             documents[link.DocumentVersionId];
 
                         return new TourMemberDocumentResponse(
-                            document.DocumentVersionId,
-                            document.DocumentType,
-                            document.NameZhOnDocument,
-                            document.NameEnOnDocument,
-                            document.DocumentNumber,
-                            document.IssuingCountry,
-                            document.Nationality,
-                            document.ExpiryDate,
+                            link.DocumentVersionId,
+                            link.DocumentType,
+                            link.SnapshotNameZhOnDocument,
+                            link.SnapshotNameEnOnDocument,
+                            link.SnapshotDocumentNumber,
+                            link.SnapshotIssuingCountry,
+                            link.SnapshotDocumentNationality,
+                            link.SnapshotExpiryDate,
                             document.IsCurrent,
-                            document.VerifiedAt);
+                            link.SnapshotVerifiedAt);
                     })
                     .ToList();
 
                 return new TourMemberResponse(
                     item.TourMemberId,
                     traveler.TravelerId,
-                    traveler.NameZh,
-                    traveler.NameEn,
-                    traveler.BirthDate,
-                    traveler.Gender,
-                    traveler.Nationality,
-                    traveler.NationalIdNumber,
+                    identitySnapshot?.SnapshotNameZh ??
+                        traveler.NameZh,
+                    identitySnapshot?.SnapshotNameEn ??
+                        traveler.NameEn,
+                    identitySnapshot?.SnapshotBirthDate ??
+                        traveler.BirthDate,
+                    identitySnapshot?.SnapshotGender ??
+                        traveler.Gender,
+                    identitySnapshot?.SnapshotNationality ??
+                        traveler.Nationality,
+                    identitySnapshot?.SnapshotNationalIdNumber ??
+                        traveler.NationalIdNumber,
                     memberDocuments);
             })
             .ToList();
@@ -412,7 +429,8 @@ public sealed class PostgresTourStore(
         Guid travelerId,
         Guid documentVersionId,
         string documentType,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TourMemberDocumentSnapshotInput? snapshot = null)
     {
         var tour = db.Tours.SingleOrDefault(
             item => item.TourId == tourId);
@@ -445,6 +463,32 @@ public sealed class PostgresTourStore(
         {
             return false;
         }
+
+        var traveler = db.Travelers
+            .SingleOrDefault(item =>
+                item.TravelerId == travelerId);
+
+        if (traveler is null)
+        {
+            return false;
+        }
+
+        var effectiveSnapshot =
+            snapshot ??
+            new TourMemberDocumentSnapshotInput(
+                traveler.NameZh,
+                traveler.NameEn,
+                traveler.BirthDate,
+                traveler.Gender,
+                traveler.Nationality,
+                traveler.NationalIdNumber,
+                document.NameZhOnDocument,
+                document.NameEnOnDocument,
+                document.DocumentNumber,
+                document.IssuingCountry,
+                document.Nationality,
+                document.ExpiryDate,
+                document.VerifiedAt);
 
         var membership = db.TourMembers
             .SingleOrDefault(item =>
@@ -485,6 +529,32 @@ public sealed class PostgresTourStore(
                         documentVersionId,
                     DocumentType =
                         normalizedDocumentType,
+                    SnapshotNameZh =
+                        effectiveSnapshot.NameZh,
+                    SnapshotNameEn =
+                        effectiveSnapshot.NameEn,
+                    SnapshotBirthDate =
+                        effectiveSnapshot.BirthDate,
+                    SnapshotGender =
+                        effectiveSnapshot.Gender,
+                    SnapshotNationality =
+                        effectiveSnapshot.Nationality,
+                    SnapshotNationalIdNumber =
+                        effectiveSnapshot.NationalIdNumber,
+                    SnapshotNameZhOnDocument =
+                        effectiveSnapshot.NameZhOnDocument,
+                    SnapshotNameEnOnDocument =
+                        effectiveSnapshot.NameEnOnDocument,
+                    SnapshotDocumentNumber =
+                        effectiveSnapshot.DocumentNumber,
+                    SnapshotIssuingCountry =
+                        effectiveSnapshot.IssuingCountry,
+                    SnapshotDocumentNationality =
+                        effectiveSnapshot.DocumentNationality,
+                    SnapshotExpiryDate =
+                        effectiveSnapshot.ExpiryDate,
+                    SnapshotVerifiedAt =
+                        effectiveSnapshot.VerifiedAt,
                     CreatedAt = now,
                     UpdatedAt = now
                 });
@@ -493,6 +563,32 @@ public sealed class PostgresTourStore(
         {
             link.DocumentVersionId =
                 documentVersionId;
+            link.SnapshotNameZh =
+                effectiveSnapshot.NameZh;
+            link.SnapshotNameEn =
+                effectiveSnapshot.NameEn;
+            link.SnapshotBirthDate =
+                effectiveSnapshot.BirthDate;
+            link.SnapshotGender =
+                effectiveSnapshot.Gender;
+            link.SnapshotNationality =
+                effectiveSnapshot.Nationality;
+            link.SnapshotNationalIdNumber =
+                effectiveSnapshot.NationalIdNumber;
+            link.SnapshotNameZhOnDocument =
+                effectiveSnapshot.NameZhOnDocument;
+            link.SnapshotNameEnOnDocument =
+                effectiveSnapshot.NameEnOnDocument;
+            link.SnapshotDocumentNumber =
+                effectiveSnapshot.DocumentNumber;
+            link.SnapshotIssuingCountry =
+                effectiveSnapshot.IssuingCountry;
+            link.SnapshotDocumentNationality =
+                effectiveSnapshot.DocumentNationality;
+            link.SnapshotExpiryDate =
+                effectiveSnapshot.ExpiryDate;
+            link.SnapshotVerifiedAt =
+                effectiveSnapshot.VerifiedAt;
             link.UpdatedAt = now;
         }
 
