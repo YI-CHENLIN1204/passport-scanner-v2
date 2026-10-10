@@ -22,6 +22,8 @@ import {
   recognizeTaiwanNationalIdWithPaddle,
   validateTaiwanNationalId,
   warmupPaddleOcr,
+  createValidationPaddleWorker,
+  type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
 
@@ -356,10 +358,15 @@ function groundTruthForSample(
 async function currentFieldsForSample(
   sample: TrainingEvaluationSampleResponse,
   file: File,
+  experimentalInstance?: ValidationPaddleInstance,
 ) {
   if (sample.documentType === 'PASSPORT') {
     const result =
-      await recognizePassportWithPaddle(file)
+      await recognizePassportWithPaddle(
+        file,
+        undefined,
+        experimentalInstance,
+      )
     const parsed = result.parsedMrz
 
     return {
@@ -408,6 +415,8 @@ async function currentFieldsForSample(
     const result =
       await recognizeTaiwanCompatriotPermitWithPaddle(
         file,
+        undefined,
+        experimentalInstance,
       )
 
     return {
@@ -433,6 +442,8 @@ async function currentFieldsForSample(
     const result =
       await recognizeTaiwanNationalIdWithPaddle(
         file,
+        undefined,
+        experimentalInstance,
       )
 
     return {
@@ -945,6 +956,7 @@ interface ValidationProfileDocument {
 }
 
 interface ValidationProfileResult {
+  mode: 'direct' | 'worker'
   pipelineVersion: string
   warmupMs: number
   sampleCount: number
@@ -953,6 +965,7 @@ interface ValidationProfileResult {
   documents: ValidationProfileDocument[]
 }
 
+const validationProfileMode = ref<'direct' | 'worker'>('direct')
 const profilingValidation = ref(false)
 const stopValidationRequested = ref(false)
 const validationProfileError = ref('')
@@ -961,8 +974,8 @@ const validationProfileProgress = ref({
   total: 0,
   message: '',
 })
-const validationProfileResult =
-  ref<ValidationProfileResult | null>(null)
+const validationProfileHistory =
+  ref<ValidationProfileResult[]>([])
 
 function requestStopValidation() {
   stopValidationRequested.value = true
@@ -980,7 +993,7 @@ async function profileValidationOnly() {
   profilingValidation.value = true
   stopValidationRequested.value = false
   validationProfileError.value = ''
-  validationProfileResult.value = null
+  const selectedMode = validationProfileMode.value
   validationProfileProgress.value = {
     completed: 0,
     total: 0,
@@ -990,6 +1003,8 @@ async function profileValidationOnly() {
   const outcomes: ValidationProfileSample[] = []
   const failures: Record<string, number> = {}
   let warmupMs = 0
+  let experimentalInstance:
+    ValidationPaddleInstance | undefined
 
   try {
     const samples =
@@ -1004,7 +1019,14 @@ async function profileValidationOnly() {
     }
 
     const warmupStart = performance.now()
-    await warmupPaddleOcr()
+    if (selectedMode === 'worker') {
+      validationProfileProgress.value.message =
+        '初始化本機 Worker OCR 實驗環境…'
+      experimentalInstance =
+        await createValidationPaddleWorker()
+    } else {
+      await warmupPaddleOcr()
+    }
     warmupMs = performance.now() - warmupStart
 
     for (const [index, sample] of samples.entries()) {
@@ -1041,7 +1063,9 @@ async function profileValidationOnly() {
 
         const ocrStart = performance.now()
         const prediction =
-          await currentFieldsForSample(sample, image)
+          await currentFieldsForSample(
+            sample, image, experimentalInstance,
+          )
         const wallMs =
           performance.now() - ocrStart
 
@@ -1139,7 +1163,8 @@ async function profileValidationOnly() {
     const failedCount = Object.values(failures)
       .reduce((total, count) => total + count, 0)
 
-    validationProfileResult.value = {
+    const completedProfile: ValidationProfileResult = {
+      mode: selectedMode,
       pipelineVersion: OCR_PIPELINE_VERSION,
       warmupMs,
       sampleCount: outcomes.length,
@@ -1147,6 +1172,12 @@ async function profileValidationOnly() {
       cancelled: stopValidationRequested.value,
       documents,
     }
+    validationProfileHistory.value = [
+      completedProfile,
+      ...validationProfileHistory.value.filter(
+        result => result.mode !== selectedMode,
+      ),
+    ].slice(0, 2)
 
     validationProfileProgress.value.message =
       stopValidationRequested.value
@@ -1156,6 +1187,14 @@ async function profileValidationOnly() {
     validationProfileError.value =
       'Validation 讀取或 OCR 預熱失敗。未修改任何樣本、人工答案或 Test baseline。'
   } finally {
+    if (experimentalInstance) {
+      try {
+        await experimentalInstance.dispose()
+      } catch {
+        validationProfileError.value =
+          'Worker 已完成推論，但釋放 Worker 資源失敗。請重新整理頁面。'
+      }
+    }
     profilingValidation.value = false
   }
 }
@@ -1607,11 +1646,24 @@ onMounted(load)
             在瀏覽器執行，結果僅顯示聚合統計。
             不寫入資料庫、不修改固定 Test baseline，
             不保存姓名、證件號碼、圖片或單張辨識結果。
+            可切換現有模式與獨立 Worker 比較；Worker 使用本機同源
+            WASM 檔案，會額外佔用記憶體。兩次比較須使用同一台電腦、
+            同一組 Validation、相同執行環境。
             預熱時間若模型已初始化，不能視為冷啟動時間。
           </small>
         </div>
 
         <div class="retest-action">
+          <label>
+            <span>執行模式</span>
+            <select
+              v-model="validationProfileMode"
+              :disabled="profilingValidation || retesting"
+            >
+              <option value="direct">原本的主執行緒</option>
+              <option value="worker">實驗用 PaddleOCR Worker</option>
+            </select>
+          </label>
           <button
             type="button"
             class="primary-action"
@@ -1667,9 +1719,17 @@ onMounted(load)
         </p>
 
         <div
-          v-if="validationProfileResult"
+          v-for="validationProfileResult in validationProfileHistory"
+          :key="validationProfileResult.mode"
           class="retest-results"
         >
+          <p class="retest-failed">
+            {{
+              validationProfileResult.mode === 'worker'
+                ? 'Worker 實驗模式'
+                : '正式直接模式（對照）'
+            }}：此頁面暫存聚合結果，不寫入資料庫。
+          </p>
           <article
             v-for="result in validationProfileResult.documents"
             :key="result.documentType"
