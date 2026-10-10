@@ -488,7 +488,10 @@ public sealed class PostgresScanQueueStore(
             saved.TravelerId,
             saved.DocumentVersionId,
             item.DocumentType,
-            now))
+            now,
+            BuildTourMemberSnapshot(
+                item,
+                now)))
         {
             throw new KeyNotFoundException(
                 "找不到指定團別、旅客或正式證件版本，或此團未要求這個證件類型。");
@@ -640,10 +643,12 @@ public sealed class PostgresScanQueueStore(
                 candidate.ReviewedAt descending,
                 candidate.UpdatedAt descending,
                 candidate.CreatedAt descending
-            select candidate.SavedDocumentVersionId!.Value
+            select candidate
         ).ToList();
 
         var candidateIds = candidates
+            .Select(candidate =>
+                candidate.SavedDocumentVersionId!.Value)
             .Distinct()
             .ToList();
 
@@ -657,18 +662,24 @@ public sealed class PostgresScanQueueStore(
                 document.DocumentVersionId)
             .ToHashSet();
 
-        var fallbackDocumentId = candidates
-            .FirstOrDefault(id =>
-                travelerDocumentIds.Contains(id));
+        var fallbackItem = candidates
+            .FirstOrDefault(candidate =>
+                candidate.SavedDocumentVersionId.HasValue &&
+                travelerDocumentIds.Contains(
+                    candidate.SavedDocumentVersionId.Value));
 
-        if (fallbackDocumentId != Guid.Empty)
+        if (fallbackItem is not null)
         {
             tourStore.EnsureMemberDocument(
                 tourId,
                 travelerId,
-                fallbackDocumentId,
+                fallbackItem.SavedDocumentVersionId!.Value,
                 documentType,
-                now);
+                now,
+                BuildTourMemberSnapshot(
+                    fallbackItem,
+                    fallbackItem.ReviewedAt ??
+                        fallbackItem.UpdatedAt));
             return;
         }
 
@@ -692,6 +703,33 @@ public sealed class PostgresScanQueueStore(
                      octet_length(image_bytes) > 0
                      OR ocr_input_image_bytes IS NOT NULL
                  )");
+    }
+
+    private static TourMemberDocumentSnapshotInput
+        BuildTourMemberSnapshot(
+            ScanItemRecord item,
+            DateTimeOffset verifiedAt)
+    {
+        if (!item.BirthDate.HasValue)
+        {
+            throw new InvalidOperationException(
+                "已審核證件缺少出生日期，無法建立團別快照。");
+        }
+
+        return new TourMemberDocumentSnapshotInput(
+            item.NameZh,
+            item.NameEn,
+            item.BirthDate.Value,
+            item.Gender,
+            item.Nationality,
+            item.NationalIdNumber,
+            item.NameZhOnDocument,
+            item.NameEn,
+            item.DocumentNumber,
+            item.IssuingCountry,
+            item.Nationality,
+            item.ExpiryDate,
+            verifiedAt);
     }
 
     private static ReviewedDocumentInput BuildReviewedDocumentInput(
