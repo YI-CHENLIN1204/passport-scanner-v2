@@ -19,6 +19,10 @@ import {
 } from './nameRomanization'
 import { guardedOfficialNameSuggestion } from './officialNameSuggestion'
 import {
+  selectPermitNameCandidate,
+  selectPermitSexCandidate,
+} from './permitFieldEvidence'
+import {
   parseTaiwanPermitMrz,
   type ParsedTaiwanPermitMrz,
 } from './taiwanPermitMrz'
@@ -3962,6 +3966,7 @@ function choosePermitChineseName(
   const phoneticCandidates: Array<
     PermitCandidate<string>
   > = []
+  let hasNearbyLatinName = false
 
   for (const item of geometries) {
     const chineseName =
@@ -3970,6 +3975,21 @@ function choosePermitChineseName(
     if (!chineseName) continue
 
     for (const anchor of latinAnchors) {
+      const scale = Math.max(
+        1,
+        item.height,
+        anchor.item.height,
+      )
+      const vertical =
+        Math.abs(item.centerY - anchor.item.centerY) / scale
+      const horizontal =
+        Math.abs(item.centerX - anchor.item.centerX) / scale
+
+      // Only a *nearby* romanized name can block a labeled candidate.
+      // A random Latin text elsewhere is not a reliable phonetic veto.
+      if (vertical > 7 || horizontal > 20) continue
+      hasNearbyLatinName = true
+
       const compatibility =
         compareChineseNameToMrzRomanization(
           chineseName,
@@ -3978,31 +3998,10 @@ function choosePermitChineseName(
         )
 
       if (compatibility === 'conflict') continue
-
       if (
         compatibility === 'unknown' &&
         (item.score ?? 0) < 0.78
-      ) {
-        continue
-      }
-
-      const scale = Math.max(
-        1,
-        item.height,
-        anchor.item.height,
-      )
-      const vertical =
-        Math.abs(
-          item.centerY - anchor.item.centerY,
-        ) / scale
-      const horizontal =
-        Math.abs(
-          item.centerX - anchor.item.centerX,
-        ) / scale
-
-      // Chinese and romanized names are normally within the same visual
-      // name group. This fallback does not require the tiny 姓名 label.
-      if (vertical > 7 || horizontal > 20) continue
+      ) continue
 
       phoneticCandidates.push({
         value: chineseName,
@@ -4016,18 +4015,12 @@ function choosePermitChineseName(
     }
   }
 
-  if (latinAnchors.length > 0) {
-    // Once the document itself exposes a romanized personal name, do not
-    // let a merely-nearby high-confidence Chinese location/authority label
-    // outrank it. A Chinese candidate must survive the phonetic cross-check.
-    return (
-      phoneticCandidates
-        .sort((a, b) => b.rank - a.rank)[0] ??
-      null
-    )
-  }
-
-  return labelAnchored
+  return selectPermitNameCandidate(
+    labelAnchored,
+    phoneticCandidates,
+    latinAnchors.length > 0,
+    hasNearbyLatinName,
+  )
 }
 
 function extractPermitNumberFromText(text: string) {
@@ -4491,8 +4484,15 @@ function buildTaiwanCompatriotPermitResult(
       scores.length
     : null
 
+  // A malformed GBK MRZ name must not shadow a valid visual name.
+  const mrzChineseName =
+    parsedMrz?.chineseName &&
+    isPlausiblePermitChineseName(parsedMrz.chineseName)
+      ? parsedMrz.chineseName
+      : ''
+
   const finalChineseName =
-    parsedMrz?.chineseName ||
+    mrzChineseName ||
     rowName?.value ||
     name?.value ||
     ''
@@ -4507,11 +4507,13 @@ function buildTaiwanCompatriotPermitResult(
     inferredBirth?.value ||
     ''
 
-  const finalSex =
-    parsedMrz?.sex ||
-    sex?.value ||
-    semanticSex ||
-    ''
+  const finalSex = selectPermitSexCandidate(
+    parsedMrz?.sex ?? '',
+    parsedMrz?.validation.requiredValid === true,
+    sex?.value ?? '',
+    sex?.score ?? null,
+    semanticSex ?? '',
+  )
 
   const finalExpiryDate =
     parsedMrz?.expiryDate ||
@@ -4553,19 +4555,19 @@ function buildTaiwanCompatriotPermitResult(
     parsedMrz,
     mrzUsed: parsedMrz !== null,
     chineseNamePasses:
-      parsedMrz?.chineseName ||
+      mrzChineseName ||
       rowName?.value ||
       name?.value
         ? 1
         : 0,
     chineseNameConsensus:
-      parsedMrz?.chineseName ||
+      mrzChineseName ||
       rowName?.value ||
       name?.value
         ? 1
         : 0,
     chineseNameConfidence:
-      parsedMrz?.chineseName
+      mrzChineseName
         ? (
             parsedMrz.validation.requiredValid
               ? 0.99
