@@ -4485,10 +4485,11 @@ function buildTaiwanCompatriotPermitResult(
     : null
 
   // A malformed GBK MRZ name must not shadow a valid visual name.
+  const decodedMrzName = parsedMrz?.chineseName ?? ''
   const mrzChineseName =
-    parsedMrz?.chineseName &&
-    isPlausiblePermitChineseName(parsedMrz.chineseName)
-      ? parsedMrz.chineseName
+    decodedMrzName &&
+    isPlausiblePermitChineseName(decodedMrzName)
+      ? decodedMrzName
       : ''
 
   const finalChineseName =
