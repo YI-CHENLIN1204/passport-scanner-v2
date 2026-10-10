@@ -162,7 +162,7 @@ using (var scope = app.Services.CreateScope())
                 ON DELETE CASCADE,
             traveler_id uuid NOT NULL
                 REFERENCES travelers(traveler_id)
-                ON DELETE CASCADE,
+                ON DELETE RESTRICT,
             created_at timestamptz NOT NULL
         );
 
@@ -176,7 +176,7 @@ using (var scope = app.Services.CreateScope())
                 ON DELETE CASCADE,
             document_version_id uuid NOT NULL
                 REFERENCES document_versions(document_version_id)
-                ON DELETE CASCADE,
+                ON DELETE RESTRICT,
             document_type varchar(40) NOT NULL,
             snapshot_name_zh varchar(80) NOT NULL,
             snapshot_name_en varchar(160) NOT NULL,
@@ -209,6 +209,80 @@ using (var scope = app.Services.CreateScope())
             ADD COLUMN IF NOT EXISTS snapshot_document_nationality varchar(12) NULL,
             ADD COLUMN IF NOT EXISTS snapshot_expiry_date date NULL,
             ADD COLUMN IF NOT EXISTS snapshot_verified_at timestamptz NULL;
+
+        DO $migration$
+        DECLARE
+            constraint_row record;
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname =
+                    'fk_tour_members_traveler'
+            ) THEN
+                FOR constraint_row IN
+                    SELECT con.conname
+                    FROM pg_constraint AS con
+                    INNER JOIN pg_class AS rel
+                        ON rel.oid = con.conrelid
+                    INNER JOIN pg_attribute AS attr
+                        ON attr.attrelid = rel.oid
+                        AND attr.attnum = ANY(con.conkey)
+                    WHERE
+                        con.contype = 'f'
+                        AND rel.relname = 'tour_members'
+                        AND attr.attname = 'traveler_id'
+                LOOP
+                    EXECUTE format(
+                        'ALTER TABLE tour_members DROP CONSTRAINT %I',
+                        constraint_row.conname);
+                END LOOP;
+
+                ALTER TABLE tour_members
+                    ADD CONSTRAINT
+                        fk_tour_members_traveler
+                    FOREIGN KEY (traveler_id)
+                    REFERENCES travelers(traveler_id)
+                    ON DELETE RESTRICT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname =
+                    'fk_tour_member_documents_document_version'
+            ) THEN
+                FOR constraint_row IN
+                    SELECT con.conname
+                    FROM pg_constraint AS con
+                    INNER JOIN pg_class AS rel
+                        ON rel.oid = con.conrelid
+                    INNER JOIN pg_attribute AS attr
+                        ON attr.attrelid = rel.oid
+                        AND attr.attnum = ANY(con.conkey)
+                    WHERE
+                        con.contype = 'f'
+                        AND rel.relname =
+                            'tour_member_documents'
+                        AND attr.attname =
+                            'document_version_id'
+                LOOP
+                    EXECUTE format(
+                        'ALTER TABLE tour_member_documents DROP CONSTRAINT %I',
+                        constraint_row.conname);
+                END LOOP;
+
+                ALTER TABLE tour_member_documents
+                    ADD CONSTRAINT
+                        fk_tour_member_documents_document_version
+                    FOREIGN KEY (document_version_id)
+                    REFERENCES document_versions(
+                        document_version_id
+                    )
+                    ON DELETE RESTRICT;
+            END IF;
+        END
+        $migration$;
 
         CREATE UNIQUE INDEX IF NOT EXISTS
             ux_tour_member_documents_member_type
