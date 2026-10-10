@@ -1077,3 +1077,15 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 既有資料庫啟動 migration 會把舊的 cascade FK 換成具名 restrict FK；CI 驗證 PostgreSQL `confdeltype = r`。
 
 目的：未來即使新增資料清理或誤用低階資料庫操作，也不能因刪全域主檔而悄悄抹除既有團別歷史。
+### D-083：Reviewed ScanItem 保留不可被全域主檔編輯覆寫的審核快照
+
+`scan_items` 在人工審核完成後除了保存目前可同步的 staging 欄位，還要保存一份當次人工確認值的 immutable review snapshot。
+
+- 新增 `scan_items.review_snapshot_json`。
+- 每次正式 batch review / re-review 時，用當下人工確認後的姓名、出生日期、性別、國籍、身分證字號與證件欄位重建 snapshot。
+- 一般 Traveler / current DocumentVersion 編輯仍可同步既有 reviewed scan item 的 staging 欄位，維持 Training Dataset 與主檔修正流程；但不得改寫 `review_snapshot_json`。
+- 刪除本團較新的 reviewed scan item，需要 fallback 到同團同人同證件類型較舊 reviewed scan item 時，`TourMemberDocument` snapshot 優先從該舊 scan 的 review snapshot 重建，而不是使用後來被全域主檔同步改寫的 scan staging 值。
+- 舊資料 migration 對既有 reviewed scan item 只能以 migration 當下的 scan 欄位 best-effort 建立 snapshot；已在過去被改寫且沒有歷史來源的值無法事後推回原始人工確認內容。
+- 這個 snapshot 與 D-079 的 `tour_member_documents` snapshot 目的不同：前者保存「這筆 scan 當時人工確認了什麼」，後者保存「這個團目前採用／當時確認的正式團別資料」。
+
+目的：避免「先修改全域 Traveler → 再刪除較新的證件 → fallback 到舊 scan」時，把舊團資料意外換成後來修改過的全域身份內容。

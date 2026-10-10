@@ -302,6 +302,75 @@ jobs:
           curl --fail --silent "http://localhost:5080/api/tours/$TOUR_ID/review-queue" > /tmp/queue-after-reviewed-delete.json
           python3 -c "import json; rows=json.load(open('/tmp/queue-after-reviewed-delete.json')); assert len(rows) == 1, rows; assert len(rows[0]['documents']) == 1, rows; assert rows[0]['documents'][0]['documentType'] == 'PASSPORT', rows"
 
+      - name: Verify reviewed fallback preserves original tour snapshot after traveler edit
+        run: |
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Review Snapshot Fallback","departureDate":"2099-12-20","returnDate":"2099-12-22","requiredDocumentTypes":["PASSPORT"]}' \
+            > /tmp/review-snapshot-tour.json
+          REVIEW_SNAPSHOT_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/review-snapshot-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$REVIEW_SNAPSHOT_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/review-snapshot-old-batch.json
+          REVIEW_SNAPSHOT_OLD_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/review-snapshot-old-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$REVIEW_SNAPSHOT_OLD_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"old-passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"回退旅客\",\"nameEn\":\"FALLBACK TRAVELER\",\"birthDate\":\"1990-09-09\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"F1234567\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2034-09-09\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/review-snapshot-old-item.json
+          REVIEW_SNAPSHOT_OLD_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/review-snapshot-old-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$REVIEW_SNAPSHOT_OLD_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"回退旅客","nameZhOnDocument":"回退旅客","nameEn":"FALLBACK TRAVELER","birthDate":"1990-09-09","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"F1234567","issuingCountry":"TWN","expiryDate":"2034-09-09","useForTraining":false}' \
+            > /tmp/review-snapshot-old-reviewed.json
+
+          REVIEW_SNAPSHOT_TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document.traveler_id FROM scan_items AS scan INNER JOIN document_versions AS document ON document.document_version_id = scan.saved_document_version_id WHERE scan.scan_item_id = '$REVIEW_SNAPSHOT_OLD_ITEM_ID';" | tr -d '\r')
+          test -n "$REVIEW_SNAPSHOT_TRAVELER_ID"
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$REVIEW_SNAPSHOT_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' \
+            > /tmp/review-snapshot-new-batch.json
+          REVIEW_SNAPSHOT_NEW_BATCH_ID=$(python3 -c "import json; print(json.load(open('/tmp/review-snapshot-new-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$REVIEW_SNAPSHOT_NEW_BATCH_ID/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"new-passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"回退旅客\",\"nameEn\":\"FALLBACK TRAVELER\",\"birthDate\":\"1990-09-09\",\"gender\":\"M\",\"nationality\":\"TWN\",\"documentNumber\":\"F7654321\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2039-09-09\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/review-snapshot-new-item.json
+          REVIEW_SNAPSHOT_NEW_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/review-snapshot-new-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$REVIEW_SNAPSHOT_NEW_ITEM_ID/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"回退旅客","nameZhOnDocument":"回退旅客","nameEn":"FALLBACK TRAVELER","birthDate":"1990-09-09","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"F7654321","issuingCountry":"TWN","expiryDate":"2039-09-09","useForTraining":false}' \
+            > /tmp/review-snapshot-new-reviewed.json
+
+          NEW_REVIEW_TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT document.traveler_id FROM scan_items AS scan INNER JOIN document_versions AS document ON document.document_version_id = scan.saved_document_version_id WHERE scan.scan_item_id = '$REVIEW_SNAPSHOT_NEW_ITEM_ID';" | tr -d '\r')
+          test "$NEW_REVIEW_TRAVELER_ID" = "$REVIEW_SNAPSHOT_TRAVELER_ID"
+
+          OLD_SNAPSHOT_BEFORE=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT (review_snapshot_json::jsonb ->> 'NameZh') || '|' || (review_snapshot_json::jsonb ->> 'DocumentNumber') FROM scan_items WHERE scan_item_id = '$REVIEW_SNAPSHOT_OLD_ITEM_ID';" | tr -d '\r')
+          test "$OLD_SNAPSHOT_BEFORE" = "回退旅客|F1234567"
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$REVIEW_SNAPSHOT_TRAVELER_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"全域修正","nameEn":"GLOBAL UPDATED","birthDate":"1990-09-09","gender":"M","nationality":"TWN","nationalIdNumber":null,"documents":[]}' \
+            > /tmp/review-snapshot-traveler-edited.json
+
+          MUTATED_OLD_SCAN=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT name_zh || '|' || name_en FROM scan_items WHERE scan_item_id = '$REVIEW_SNAPSHOT_OLD_ITEM_ID';" | tr -d '\r')
+          test "$MUTATED_OLD_SCAN" = "全域修正|FALLBACK TRAVELER"
+
+          OLD_SNAPSHOT_AFTER=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT (review_snapshot_json::jsonb ->> 'NameZh') || '|' || (review_snapshot_json::jsonb ->> 'DocumentNumber') FROM scan_items WHERE scan_item_id = '$REVIEW_SNAPSHOT_OLD_ITEM_ID';" | tr -d '\r')
+          test "$OLD_SNAPSHOT_AFTER" = "回退旅客|F1234567"
+
+          DELETE_NEW_STATUS=$(curl --silent --output /tmp/review-snapshot-delete-new.txt --write-out "%{http_code}" -X DELETE "http://localhost:5080/api/scan-items/$REVIEW_SNAPSHOT_NEW_ITEM_ID")
+          test "$DELETE_NEW_STATUS" = "204"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$REVIEW_SNAPSHOT_TOUR_ID" > /tmp/review-snapshot-tour-after-fallback.json
+          python3 -c "import json; data=json.load(open('/tmp/review-snapshot-tour-after-fallback.json')); assert len(data['members'])==1, data; member=data['members'][0]; assert member['nameZh']=='回退旅客', member; assert member['nameEn']=='FALLBACK TRAVELER', member; assert len(member['documents'])==1, member; doc=member['documents'][0]; assert doc['documentNumber']=='F1234567', doc; assert doc['nameZhOnDocument']=='回退旅客', doc; assert doc['expiryDate']=='2034-09-09', doc"
       - name: Verify invalid national ID cannot enter formal review data
         run: |
           PASSPORT_ITEM_ID=$(python3 -c "import json; print(json.load(open('/tmp/passport-scan-item.json'))['scanItemId'])")
