@@ -1035,7 +1035,7 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 正式 batch review 建立／重新審核 link 時，snapshot 優先使用該 `ScanItem` 人工覆核後的值。
 - legacy direct review 沒有 scan item 時，以當下已保存的 Traveler + DocumentVersion 建立 snapshot。
 - `GetTour`、團別操作畫面與 CSV 使用 snapshot；後續在「旅客資料」修改全域 Traveler 或 current DocumentVersion，不回頭改寫既有團別。
-- 同一旅客有多種證件時，團員層級 identity 顯示採該團最近一次明確 link / re-review 的 snapshot；各證件欄位則使用各自 link 的 document snapshot。
+- 同一旅客有多種證件時，團員層級 identity 由本團 snapshots 聚合：出生日期／性別採最近一次明確 link / re-review；中文姓名、英文姓名、國籍、身分證字號採由新到舊第一個非空值，避免台胞證／身分證沒有英文姓名等欄位時把已確認資料抹空。各證件欄位仍使用各自 link 的 document snapshot。
 - 同一團重新審核／重新 link 該證件時，允許明確刷新該 link snapshot。
 - Traveler merge 搬移或去重同一本證件 link 時，DocumentVersionId 與整組 snapshot 必須一起保留較新的 link，不得混搭。
 - 舊資料 migration 若能找到該團 reviewed scan，優先由 scan 回填 snapshot；只有缺 scan 欄位時才 fallback 到全域 Traveler / DocumentVersion。
