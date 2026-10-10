@@ -28,13 +28,13 @@
 - 使用者同機實測：正式 auto 護照 Median 1.4s／整張 37%，台胞證 1.0s／38%；單執行緒 WASM direct 護照 7.9s／37%，台胞證 5.9s／31%；WASM Worker 護照 8.9s／37%，台胞證 5.8s／31%。皆完成 32/32。單次小樣本，不能宣稱統計顯著差異。
 - 正式 auto 在該次 Chrome 測試的 detProvider 與 recProvider **均為 webgpu**。這是測得的裝置／session 狀態，不代表所有環境均如此。
 - Worker 曾因未部署相容的 `ort-wasm-simd-threaded.jsep.mjs` 而初始化在 0/32 失敗；PR #7 同步配送 ORT `.mjs` + `.wasm` 及加測 MIME / 同源資產，後續 32 張 Worker 測試成功。**不要再重做這條排錯路徑**。
-- 護照中文姓名 7/19 exact，另外 12 張舊分類為「正確但未選中 7、有錯誤候選 5、無候選 0」。但舊分類把 raw OCR **包含**正確姓名片段當作完整候選。PR #9 已修改 Validation 診斷為五個互斥分類（完整候選、完整原始行、僅片段、候選不符、無候選），**尚未取得新版五分類的真實測試數值**；不能直接斷言 7 張皆能靠 selector 修好。
+- 護照中文姓名 7/19 exact，另外 12 張舊分類為「正確但未選中 7、有錯誤候選 5、無候選 0」。但舊分類把 raw OCR **包含**正確姓名片段當作完整候選。PR #9 已修改 Validation 診斷為五個互斥分類（完整候選、完整原始行、僅片段、候選不符、無候選），新版五分類已實測：7 張為完整候選吻合、0 張原始行吻合、0 張僅字串包含、5 張候選不符、0 張無候選。尚不能直接斷言 7 張皆能靠 selector 修好；需分析位置、score、拼音與 threshold。
 - 台胞證正式 auto 中文姓名 46%，性別 77%；尚不能只靠改門檻解決。
 - **目前不導入 Worker 至正式掃描**，因這批實測沒有看到它相對同 WASM direct 的效能優勢；正式 OCR 流程未被這些 Validation-only 工具變更。
 
 ## 接下來真正要做的事情
 
-1. **先取得新版五分類 Validation 實測**（只執行正式 auto）；確認哪些案例是完整 OCR 候選，哪些只是在較長行中包含姓名片段。
+1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。下一步追查候選 eligibility / rank / confidence / romanization 的匿名原因，先做 read-only shadow selector trace，不修改正式 OCR。
 2. 針對分類結果，必要時設計**不影響正式輸出**的 shadow selector A/B。不可只看到正確字串就自動採用；須保留位置、羅馬拼音與人工覆核規則。
 3. 陸續累積合法、人工確認且保存當次 OCR 工作影像的 Validation，按 Traveler 分組避免資料洩漏。身分證 Validation 目前沒有代表性。
 4. V2 尚待獨立設計正式已審核資料的撤銷／更正審計流程；不要把 fallback 或「刪除」當成更正。
