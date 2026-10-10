@@ -68,3 +68,11 @@
 - 未證實：7 張是否因未涵蓋慣用譯名／舊拼法、多音字、OCR 誤字、MRZ token 化或候選幾何造成衝突。不能將 7/7 解讀為放寬拼音後必然修好 7 張。
 - 下一步：Validation-only 匿名 trace 區分音節數不符／單一音節不符／其他；影子比較保留原決策，衡量可能增益及既有正確樣本回歸，不直接修改 production selector。
 - 限制：32/32 缺少當次 OCR 工作圖，只適合 legacy regression；Test baseline `2026.10.09.1` 不動。
+
+## 2026-10-11 — 只讀 romanization conflict 子類型診斷
+
+- 狀態：實驗分支，待 CI 與使用者本機 Validation 驗證。正式 OCR 未變。
+- 範圍：`nameRomanization.ts` 增加只讀 `classifyRomanizationConflict()`，沿用正式 comparator 的相同逐字拼音別名／token 分段邏輯，僅將已判定 conflict 的候選標記為 token-count-mismatch、one-syllable-mismatch、other-mismatch 或 unclassified。
+- `paddleOcr.ts` 只在已存在的 shadow decision observer 回傳匿名 subtype；`OcrQualityPage.vue` 聚合數量，**不記錄任何姓名、MRZ token 或每張 OCR 結果**。
+- 舊 7/7 皆為 romanization-conflict，細分類仍待本機實測。多 crop 下同張採一個排序後代表原因，並不等於該原因唯一發生。
+- 固定 Test baseline `2026.10.09.1` 不動；不改正式候選核准規則。
