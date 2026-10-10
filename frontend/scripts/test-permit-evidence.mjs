@@ -33,7 +33,7 @@ try {
   rmSync(directory, { recursive: true, force: true })
 }
 
-const { selectPermitNameCandidate, selectPermitSexCandidate } = helpers
+const { selectPermitNameCandidate, selectPermitSexCandidate, selectPermitMrzVsVisualName } = helpers
 const label = { value: '甲乙', score: 0.94, rank: 2.9 }
 const phonetic = { value: '丙丁', score: 0.91, rank: 3.4 }
 assert.equal(selectPermitNameCandidate(label, [], false, false)?.value, '甲乙')
@@ -45,13 +45,41 @@ assert.equal(selectPermitNameCandidate(label, [], true, true), null)
 assert.equal(selectPermitNameCandidate(label, [phonetic], true, true)?.value, '丙丁')
 assert.equal(selectPermitNameCandidate(null, [], true, false), null)
 
-assert.equal(selectPermitSexCandidate('M', true, 'F', 0.94, 'F'), 'M')
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('M', false, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('M', false, 'F', 0.72, 'F'), 'M')
 assert.equal(selectPermitSexCandidate('M', false, 'F', 0.94, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('', false, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('', false, '', null, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('', false, '', null, ''), '')
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.88, 'F'), 'M')
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.97, 'M'), 'M')
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.98, ''), 'M')
+
+assert.deepEqual(
+  selectPermitMrzVsVisualName('甲乙', '丙丁', 'compatible', '丙丁', 0.93),
+  { value: '丙丁', source: 'visual-agreement' },
+)
+assert.deepEqual(
+  selectPermitMrzVsVisualName('甲乙', '丙丁', 'compatible', '丙丁', 0.7),
+  { value: '甲乙', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitMrzVsVisualName('甲乙', '丙丁', 'unknown', '丙丁', 0.93),
+  { value: '甲乙', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitMrzVsVisualName('甲乙', '丙丁', 'compatible', '甲乙', 0.93),
+  { value: '甲乙', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitMrzVsVisualName('', '丙丁', 'compatible', '丙丁', 0.93),
+  { value: '丙丁', source: 'visual-agreement' },
+)
+assert.deepEqual(
+  selectPermitMrzVsVisualName('', '丙丁', 'unknown', '甲乙', 0.93),
+  { value: '丙丁', source: 'row' },
+)
 
 const { shouldRetryUncertainPermitName, shouldUseRetriedPermitName } = retryPolicy
 assert.equal(shouldRetryUncertainPermitName('', null, false), true)
@@ -67,4 +95,4 @@ assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0
 assert.equal(shouldUseRetriedPermitName('丙丁', 0.81, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, null), false)
 
-console.log('Passed 24 synthetic permit field and name retry guards.')
+console.log('Passed 33 synthetic permit field, MRZ cross-check and retry guards.')
