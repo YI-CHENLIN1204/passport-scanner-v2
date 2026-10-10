@@ -164,7 +164,9 @@ jobs:
             -o /tmp/worker-ort-loader.mjs
           test -s /tmp/worker-ort-loader.mjs
           grep -Ei '^content-type: (application|text)/javascript' /tmp/worker-ort-mjs-headers
-          cmp frontend/node_modules/onnxruntime-web/dist/$MJS_NAME /tmp/worker-ort-loader.mjs
+          CONTAINER_SHA=$(docker compose exec -T frontend sha256sum "/usr/share/nginx/html/ort-wasm/$MJS_NAME" | awk '{print $1}')
+          DOWNLOAD_SHA=$(sha256sum /tmp/worker-ort-loader.mjs | awk '{print $1}')
+          test "$CONTAINER_SHA" = "$DOWNLOAD_SHA"
 
           for MISSING in not-an-ort-file.wasm not-an-ort-file.mjs; do
             STATUS=$(curl --silent --output /tmp/worker-ort-missing --write-out "%{http_code}" "http://localhost:5173/ort-wasm/$MISSING")
