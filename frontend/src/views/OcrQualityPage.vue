@@ -997,6 +997,30 @@ function validationModeLabel(
   return '獨立 WASM Worker 模式'
 }
 
+// Called only before fetching any Validation sample image. Do not
+// use this formatter for per-image OCR errors: those may include PII.
+// Keep this short and scrub URLs/query parameters from SDK errors.
+function describeValidationInitializationError(
+  error: unknown,
+) {
+  const kind =
+    error instanceof Error ? error.name : 'UnknownError'
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '初始化失敗，SDK 未提供訊息'
+
+  const safeMessage = message
+    .replace(/https?:\/\/[^\s"'\x60]+/g, '[資源網址]')
+    .replace(/[\r\n\t]+/g, ' ')
+    .slice(0, 350)
+    .trim()
+
+  return `${kind}: ${safeMessage || '沒有提供錯誤細節'}`
+}
+
 function requestStopValidation() {
   stopValidationRequested.value = true
   validationProfileProgress.value.message =
@@ -1252,16 +1276,32 @@ async function profileValidationOnly() {
       stopValidationRequested.value
         ? '已停止，結果僅包含已完成樣本。'
         : 'Validation 分析完成，結果僅保留在此頁面。'
-  } catch {
+  } catch (err: unknown) {
     validationProfileAttempt.value = {
       mode: selectedMode,
       status: 'failed',
     }
+    // No document image has been fetched during warmup, so the
+    // initialization exception can be reported for debugging.
+    // Never log unredacted per-sample OCR failures.
+    const initializationDetails =
+      stage === 'OCR 預熱'
+        ? describeValidationInitializationError(err)
+        : null
+    if (initializationDetails) {
+      console.error(
+        '[OCR Validation] 模型 / Worker 初始化失敗',
+        err,
+      )
+    }
+
     validationProfileError.value =
       `本次 ${stage} 失敗（${validationModeLabel(selectedMode)}）。` +
-      '下方如有舊卡片，僅代表之前成功的測試，並非本次結果。' +
-      '請檢查瀏覽器開發人員工具 Console / Network；' +
-      '不會修改原始照片、人工答案或 Test baseline。'
+      (initializationDetails
+        ? ` 初始化診斷：${initializationDetails}。`
+        : '') +
+      ' 下方如有舊卡片，僅代表之前成功的測試，並非本次結果。' +
+      '未修改原始照片、人工答案或 Test baseline。'
     validationProfileProgress.value.message =
       `本次 ${stage} 失敗，沒有產生新結果。`
   } finally {
