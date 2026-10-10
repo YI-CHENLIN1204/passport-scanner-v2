@@ -508,6 +508,60 @@ jobs:
           SOURCE_STATUS=$(curl --silent --output /tmp/merge-source-after.txt --write-out "%{http_code}" "http://localhost:5080/api/travelers/$SOURCE_ID")
           test "$SOURCE_STATUS" = "404"
 
+      - name: Verify tour identity aggregates non-empty document snapshots
+        run: |
+          IMAGE_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+          curl --fail --silent -X POST http://localhost:5080/api/tours \
+            -H 'Content-Type: application/json' \
+            -d '{"tourName":"CI Snapshot Aggregate","departureDate":"2099-12-06","returnDate":"2099-12-08","requiredDocumentTypes":["PASSPORT","TAIWAN_COMPATRIOT_PERMIT"]}' \
+            > /tmp/aggregate-tour.json
+          AGG_TOUR_ID=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-tour.json'))['tourId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$AGG_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"PASSPORT"}' > /tmp/aggregate-passport-batch.json
+          AGG_PASSPORT_BATCH=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-passport-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$AGG_PASSPORT_BATCH/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"aggregate-passport.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"聚合旅客\",\"nameZhOnDocument\":\"聚合旅客\",\"nameEn\":\"AGGREGATE TRAVELER\",\"birthDate\":\"1990-02-02\",\"gender\":\"M\",\"nationality\":\"TWN\",\"nationalIdNumber\":null,\"documentNumber\":\"G1234567\",\"issuingCountry\":\"TWN\",\"expiryDate\":\"2035-02-02\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/aggregate-passport-item.json
+          AGG_PASSPORT_ITEM=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-passport-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$AGG_PASSPORT_ITEM/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"聚合旅客","nameZhOnDocument":"聚合旅客","nameEn":"AGGREGATE TRAVELER","birthDate":"1990-02-02","gender":"M","nationality":"TWN","nationalIdNumber":null,"documentNumber":"G1234567","issuingCountry":"TWN","expiryDate":"2035-02-02","useForTraining":false}' \
+            > /tmp/aggregate-passport-reviewed.json
+
+          AGG_DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-passport-reviewed.json'))['savedDocumentVersionId'])")
+          AGG_TRAVELER_ID=$(docker compose exec -T database psql -U passport_scanner -d passport_scanner -Atc "SELECT traveler_id FROM document_versions WHERE document_version_id = '$AGG_DOC_ID';" | tr -d '\r')
+
+          curl --fail --silent -X POST "http://localhost:5080/api/tours/$AGG_TOUR_ID/scan-batches" \
+            -H 'Content-Type: application/json' \
+            -d '{"documentType":"TAIWAN_COMPATRIOT_PERMIT"}' > /tmp/aggregate-permit-batch.json
+          AGG_PERMIT_BATCH=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-permit-batch.json'))['scanBatchId'])")
+
+          curl --fail --silent -X POST "http://localhost:5080/api/scan-batches/$AGG_PERMIT_BATCH/items" \
+            -H 'Content-Type: application/json' \
+            -d "{\"originalFileName\":\"aggregate-permit.png\",\"imageContentType\":\"image/png\",\"imageBase64\":\"$IMAGE_BASE64\",\"nameZh\":\"聚合旅客\",\"nameZhOnDocument\":\"聚合旅客\",\"nameEn\":\"\",\"birthDate\":\"1990-02-02\",\"gender\":\"M\",\"nationality\":null,\"nationalIdNumber\":null,\"documentNumber\":\"24681357\",\"issuingCountry\":null,\"expiryDate\":\"2035-02-02\",\"ocrPayloadJson\":\"{}\"}" \
+            > /tmp/aggregate-permit-item.json
+          AGG_PERMIT_ITEM=$(python3 -c "import json; print(json.load(open('/tmp/aggregate-permit-item.json'))['scanItemId'])")
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/scan-items/$AGG_PERMIT_ITEM/review" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"聚合旅客","nameZhOnDocument":"聚合旅客","nameEn":"","birthDate":"1990-02-02","gender":"M","nationality":null,"nationalIdNumber":null,"documentNumber":"24681357","issuingCountry":null,"expiryDate":"2035-02-02","useForTraining":false}' \
+            > /tmp/aggregate-permit-reviewed.json
+
+          curl --fail --silent -X PUT "http://localhost:5080/api/travelers/$AGG_TRAVELER_ID" \
+            -H 'Content-Type: application/json' \
+            -d '{"nameZh":"聚合旅客","nameEn":"GLOBAL CHANGED","birthDate":"1990-02-02","gender":"M","nationality":"USA","nationalIdNumber":null,"documents":[]}' \
+            > /tmp/aggregate-global-edited.json
+          python3 -c "import json; data=json.load(open('/tmp/aggregate-global-edited.json')); assert data['traveler']['nameEn'] == 'GLOBAL CHANGED', data; assert data['traveler']['nationality'] == 'USA', data"
+
+          curl --fail --silent "http://localhost:5080/api/tours/$AGG_TOUR_ID" > /tmp/aggregate-tour-detail.json
+          python3 -c "import json; data=json.load(open('/tmp/aggregate-tour-detail.json')); assert len(data['members']) == 1, data; m=data['members'][0]; assert m['nameZh'] == '聚合旅客', m; assert m['nameEn'] == 'AGGREGATE TRAVELER', m; assert m['birthDate'] == '1990-02-02', m; assert m['gender'] == 'M', m; assert m['nationality'] == 'TWN', m; assert len(m['documents']) == 2, m"
+
       - name: Verify per-tour snapshots survive later traveler edits
         run: |
           REVIEWED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
