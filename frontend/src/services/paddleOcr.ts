@@ -787,7 +787,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.4'
+  '2026.10.11.5'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4970,9 +4970,13 @@ async function createPermitNameGroupCrop(
         (b.score ?? 0) - (a.score ?? 0),
     )
 
+  // Prefer the explicit printed Chinese-name label over a romanized
+  // name line: a high-scoring unrelated Latin field can otherwise steer
+  // the zoomed OCR crop away from the holder's name. Keep Latin fallback
+  // only when the document's name label was not detected.
   const anchor =
-    latinAnchors[0]?.item ??
     labelAnchors[0] ??
+    latinAnchors[0]?.item ??
     null
 
   if (!anchor) return null
