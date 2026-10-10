@@ -93,6 +93,7 @@ interface PassportNameDiagnosticSnapshot {
   decisionTrace?: Array<{
     text: string
     reason: string
+    conflictSubtype?: string
   }>
 }
 
@@ -1259,7 +1260,11 @@ async function profileValidationOnly() {
         const passportExactDecision = exactDecisions.length
           ? exactDecisions.some(item => item.reason === 'selected')
             ? 'selected-other-attempt'
-            : exactDecisions.map(item => item.reason).sort()[0] ?? null
+            : exactDecisions.map(item =>
+                item.reason === 'romanization-conflict'
+                  ? `romanization:${item.conflictSubtype ?? 'unclassified'}`
+                  : item.reason,
+              ).sort()[0] ?? null
           : passportNameFailure === 'exact-candidate'
             ? 'not-in-selector-trace'
             : null
@@ -1355,6 +1360,10 @@ async function profileValidationOnly() {
               ? [
                   'selected-other-attempt',
                   'no-anchor',
+                  'romanization:token-count-mismatch',
+                  'romanization:one-syllable-mismatch',
+                  'romanization:other-mismatch',
+                  'romanization:unclassified',
                   'romanization-conflict',
                   'below-confidence',
                   'unknown-threshold',
