@@ -1026,3 +1026,18 @@ D-053 仍維持「合法且相同的 NationalIdNumber 可作為強識別並自�
 - 新增同一 fixed-Test Traveler 的 Training Sample 可能讓 Dataset 的 Test count 增加，但不會改變固定 benchmark baseline sample count。
 
 目的：Dataset split 解決 Train/Test leakage；Fixed Benchmark 解決版本比較公平性。兩者不能再用同一個『Test 數量』混為一談。
+
+### D-079：團別正式資料使用 per-tour identity / document snapshot
+
+`Traveler` 與 current `DocumentVersion` 是全域目前資料；某一團當時實際使用、人工確認的旅客與證件內容則必須固定在 `tour_member_documents` snapshot。
+
+- 每個 `TourMemberDocument` 保存當次團別連結時的旅客姓名、出生日期、性別、國籍、身分證字號，以及該證件的姓名、證號、簽發國、國籍、有效期限與確認時間。
+- 正式 batch review 建立／重新審核 link 時，snapshot 優先使用該 `ScanItem` 人工覆核後的值。
+- legacy direct review 沒有 scan item 時，以當下已保存的 Traveler + DocumentVersion 建立 snapshot。
+- `GetTour`、團別操作畫面與 CSV 使用 snapshot；後續在「旅客資料」修改全域 Traveler 或 current DocumentVersion，不回頭改寫既有團別。
+- 同一旅客有多種證件時，團員層級 identity 顯示採該團最近一次明確 link / re-review 的 snapshot；各證件欄位則使用各自 link 的 document snapshot。
+- 同一團重新審核／重新 link 該證件時，允許明確刷新該 link snapshot。
+- Traveler merge 搬移或去重同一本證件 link 時，DocumentVersionId 與整組 snapshot 必須一起保留較新的 link，不得混搭。
+- 舊資料 migration 若能找到該團 reviewed scan，優先由 scan 回填 snapshot；只有缺 scan 欄位時才 fallback 到全域 Traveler / DocumentVersion。
+
+目的：全域主檔可以持續修正與換證，但歷史／既有團不能因日後主檔變更而悄悄改變當時已確認的出團資料。
