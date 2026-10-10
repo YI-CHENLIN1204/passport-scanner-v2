@@ -34,7 +34,7 @@
 
 ## 接下來真正要做的事情
 
-1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。PR #12 shadow selector 已本機實測：護照 7 張完整正確候選全部分類 romanization-conflict。PR #14 拼音子類診斷已合併且使用者本機實測：完整候選遭拒的 7 張全屬 one-syllable-mismatch。下一步在 Validation 做匿名、保留其他檢查條件的反事實 shadow selector，比較回收與回歸；正式拼音 gate 不得直接放寬。
+1. **已取得新版五分類 Validation 實測**（正式 auto：完整候選 7、候選不符 5）。PR #12 shadow selector 已本機實測：護照 7 張完整正確候選全部分類 romanization-conflict。PR #14 拼音子類診斷已合併且使用者本機實測：完整候選遭拒的 7 張全屬 one-syllable-mismatch。已在 feat/shadow-single-mismatch-counterfactual 分支做匿名 shadow 對照，待 CI 和本機 Validation；正式拼音 gate 不得直接放寬。
 2. 針對分類結果，必要時設計**不影響正式輸出**的 shadow selector A/B。不可只看到正確字串就自動採用；須保留位置、羅馬拼音與人工覆核規則。
 3. 陸續累積合法、人工確認且保存當次 OCR 工作影像的 Validation，按 Traveler 分組避免資料洩漏。身分證 Validation 目前沒有代表性。
 4. V2 尚待獨立設計正式已審核資料的撤銷／更正審計流程；不要把 fallback 或「刪除」當成更正。

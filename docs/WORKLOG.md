@@ -85,3 +85,10 @@
 - 缺陷限制：32/32 缺少保存當時 OCR 工作輸入圖，使用審核影像回歸；7 張可能包含同一 Traveler 的不同照片，不可推為七個獨立人名。
 - 直接可疑的判斷規則：`nameRomanization.ts` 對中文字與 MRZ token 數相同，若剛好一字音節不符合現有拼音別名，認定 `conflict`。實測尚未說明是未涵蓋台式慣用譯音、異體字／多音字還是正確的阻擋。
 - 下一步：先做 Validation-only、匿名的 shadow「一音節差異候選」的保守反事實評估，衡量有機會救回的案例與原本正確姓名會被誤選的風險；先不放寬 production romanization gate，亦不靠 Test 調參。
+
+## 2026-10-11 — 單音節衝突 shadow 反事實實驗
+
+- 狀態：研究分支；**正式 OCR 候選輸出不改**；需 CI 及本機 Validation 實測。
+- 既有 selector 原樣運作；只在診斷 observer 計算允許一音節衝突的候選，且把衝突視作未獲拼音核准，保留較嚴格的 unknown confidence/rank gate，不加 compatible 權重。
+- Validation 只留匿名彙總：潛在改善、潛在退步、維持正確、維持錯誤。這是已走到的 crop/方向的近似反事實觀察，不是完整第二套 OCR 流程，也不能當作正式改版門檻。
+- 本資料集 32/32 缺少當年確切 OCR 工作圖；須按 Traveler 檢查重複樣本，固定 Test baseline `2026.10.09.1` 不動。
