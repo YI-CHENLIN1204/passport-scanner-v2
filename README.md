@@ -1,5 +1,7 @@
 # Passport Scanner V2
 
+> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md)（目前主線 OCR `2026.10.11.5`，最後已測版本 `2026.10.11.3`）、[docs/WORKLOG.md](./docs/WORKLOG.md) 與 [docs/OCR_OPEN_SOURCE_REVIEW.md](./docs/OCR_OPEN_SOURCE_REVIEW.md)。本 README 其餘功能描述是概覽，不代表最新 OCR 實測數據。
+
 旅行社內部使用的證件掃描與旅客資料整理系統。
 
 V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI 成本與敏感證件影像外送風險；只擷取真正有業務價值的欄位，並保留人工覆核流程。**
