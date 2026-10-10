@@ -1296,14 +1296,35 @@ public sealed class PostgresTravelerStore(
                     duplicate.NationalIdNumber;
             }
 
-            var duplicateDocuments = db.DocumentVersions
-                .Where(item => item.TravelerId == duplicate.TravelerId)
+            var canonicalDocuments = db.DocumentVersions
+                .Where(item =>
+                    item.TravelerId ==
+                        canonical.TravelerId)
                 .ToList();
+
+            var duplicateDocuments = db.DocumentVersions
+                .Where(item =>
+                    item.TravelerId ==
+                        duplicate.TravelerId)
+                .ToList();
+
+            ReconcileMergedCurrentDocuments(
+                canonicalDocuments,
+                duplicateDocuments);
+
+            // The database enforces one current document per
+            // traveler + type with a partial unique index.
+            // Persist demotions before moving duplicate rows so
+            // the reassignment never creates a transient conflict.
+            db.SaveChanges();
 
             foreach (var document in duplicateDocuments)
             {
-                document.TravelerId = canonical.TravelerId;
+                document.TravelerId =
+                    canonical.TravelerId;
             }
+
+            db.SaveChanges();
 
             var duplicateMemberships = db.TourMembers
                 .Where(item => item.TravelerId == duplicate.TravelerId)
