@@ -1129,3 +1129,10 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 對姓名非空白但 confidence <0.90、且沒有 validated MRZ 中文姓名背書者，可以在同次現有 9 秒軟預算內做姓名局部 OCR 重試。
 - 只有**兩個裁切視角都出現相同新姓名**、新分數 >=0.86、confidence >=0.92、現有 confidence <0.88，才允許變動**待人工審核的 OCR 預填建議**；已驗證 MRZ 背書的姓名與強信心選擇器輸出不可被覆蓋。
 - 若證據不足或時間不足，不做變更；所有資料仍需人工審核；不得更動主檔、歷史證件或透過 fallback 回填。需 CI + 本機 Validation 確認實際效果及速度，不能憑合成測試推論。
+
+### D-088：台胞證 MRZ 檢查碼有效不代表姓名／性別已通過驗證（待本機驗收）
+
+- `taiwanPermitMrz.ts` 中 MRZ requiredValid **不包含**性別字元 line1[22] 與 GBK 中文姓名區 line2[0..15] 的直接完整性驗證。不得將 requiredValid 當作二者的欄位層 checksum success。
+- 性別仍優先 MRZ，唯正面標籤與 row semantic 一致、score >=0.90 時可選不同的視覺性別；否則不覆蓋。使用同一組 OCR 結果解析的兩個資訊源**不是統計獨立的雙模型驗證**，需要人工審核。
+- 姓名以強相符的正面標籤與拼音 row 候選（score >=0.88）才覆蓋衝突的 MRZ GBK 名；未有確證仍可對低信心姓名做受限局部 OCR 重試，但不憑任意新文字變更姓名。
+- 這只修改待人工審核 OCR 建議，不能修改正式旅客主檔、舊證件獨立歷史紀錄、fixed Test baseline 或照片保留規則。需先通過 CI，僅用新 Validation 實測後確認是否應採用。
