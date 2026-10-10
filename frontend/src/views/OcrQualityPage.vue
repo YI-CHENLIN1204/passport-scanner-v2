@@ -933,9 +933,20 @@ async function rerunTestSet() {
 
 
 type ValidationPassportNameFailure =
-  | 'selector-miss'
+  | 'exact-candidate'
+  | 'exact-raw-line'
+  | 'raw-line-substring'
   | 'wrong-candidate'
   | 'no-candidate'
+
+interface ValidationPassportNameFailureSummary {
+  incorrectCount: number
+  exactCandidateCount: number
+  exactRawLineCount: number
+  substringCount: number
+  recognitionWrongCount: number
+  notDetectedCount: number
+}
 
 interface ValidationProfileSample {
   documentType: string
@@ -965,7 +976,8 @@ interface ValidationProfileDocument {
   p90WallMs: number | null
   medianFetchMs: number | null
   orientationRetryRate: number
-  passportNameFailures: PassportNameFailureSummary | null
+  passportNameFailures:
+    ValidationPassportNameFailureSummary | null
   failedCount: number
 }
 
@@ -1040,6 +1052,7 @@ function categorizeValidationPassportNameFailure(
   if (evalFieldEquals('nameZh', selected, expectedName)) {
     return null
   }
+
   const expected = normalizeEvalValue('nameZh', expectedName)
   const candidateTexts = diagnostics.flatMap(item =>
     item.candidateTexts,
@@ -1048,17 +1061,27 @@ function categorizeValidationPassportNameFailure(
   const normalizedCandidates = candidateTexts.map(value =>
     normalizeEvalValue('nameZh', value),
   )
-  const seen = Boolean(expected) && (
-    normalizedCandidates.includes(expected) ||
-    rawTexts.some(value => {
-      const normalized = value
-        .replace(/\s+/g, '')
-        .replace(/[，,。．.：:；;()（）\[\]【】]/g, '')
-      return normalized === expected ||
-        normalized.includes(expected)
-    })
+  const normalizedRaw = rawTexts.map(value =>
+    value
+      .replace(/\s+/g, '')
+      .replace(/[，,。．.：:；;()（）\[\]【】]/g, ''),
   )
-  if (seen) return 'selector-miss'
+
+  // The original diagnostic lumped exact OCR candidates together
+  // with a surname appearing inside a larger OCR row. A substring
+  // alone is NOT proof that the selector had a valid full name.
+  if (expected && normalizedCandidates.includes(expected)) {
+    return 'exact-candidate'
+  }
+  if (expected && normalizedRaw.includes(expected)) {
+    return 'exact-raw-line'
+  }
+  if (
+    expected &&
+    normalizedRaw.some(text => text.includes(expected))
+  ) {
+    return 'raw-line-substring'
+  }
   return normalizedCandidates.length > 0
     ? 'wrong-candidate'
     : 'no-candidate'
@@ -1302,8 +1325,14 @@ async function profileValidationOnly() {
                   incorrectCount: rows.filter(
                     row => row.passportNameFailure !== null,
                   ).length,
-                  selectorMissCount: rows.filter(
-                    row => row.passportNameFailure === 'selector-miss',
+                  exactCandidateCount: rows.filter(
+                    row => row.passportNameFailure === 'exact-candidate',
+                  ).length,
+                  exactRawLineCount: rows.filter(
+                    row => row.passportNameFailure === 'exact-raw-line',
+                  ).length,
+                  substringCount: rows.filter(
+                    row => row.passportNameFailure === 'raw-line-substring',
                   ).length,
                   recognitionWrongCount: rows.filter(
                     row => row.passportNameFailure === 'wrong-candidate',
@@ -1998,13 +2027,18 @@ onMounted(load)
               class="validation-legacy-note"
             >
               中文姓名錯誤 {{ result.passportNameFailures.incorrectCount }} 張：
-              曾辨識正確但未選中
-              {{ result.passportNameFailures.selectorMissCount }} 張；
-              有候選但不符
+              候選文字完整吻合
+              {{ result.passportNameFailures.exactCandidateCount }} 張；
+              原始 OCR 行完整吻合
+              {{ result.passportNameFailures.exactRawLineCount }} 張；
+              僅在較長 OCR 文字中出現姓名
+              {{ result.passportNameFailures.substringCount }} 張；
+              有其他候選但內容不符
               {{ result.passportNameFailures.recognitionWrongCount }} 張；
-              未取得可用候選
+              沒有可用候選
               {{ result.passportNameFailures.notDetectedCount }} 張。
-              這是候選字串的近似分類，並非已證明的模型錯誤原因。
+              候選文字完整吻合也不代表符合實際版面與拼音篩選條件；
+              這是匿名近似分類，不可直接視為選擇器可修復張數。
             </p>
             <footer>
               <span>

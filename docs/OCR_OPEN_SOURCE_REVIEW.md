@@ -143,3 +143,21 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 - 先追加「有完整 OCR 輸入工作影像」的 Validation，再基於匿名分類進行最小幅度候選策略實驗；固定 Test baseline `2026.10.09.1` 持續凍結。
 
 **此 PR 僅補充 read-only provider / Validation 診斷，不更動正式 OCR、parser、runtime backend 與模型。**
+
+## 2026-10-10：WebGPU 實際 provider 與姓名診斷精細化
+
+新一輪正式 auto Validation（護照 19、台胞證 13）：
+- SDK 初始化回報 detProvider = `webgpu`、recProvider = `webgpu`，實證當次正式 auto 走 WebGPU；不代表任何電腦都會用 WebGPU。
+- 護照中文姓名：19 張中 7 張完全正確、12 張錯誤。舊報告把錯誤分類為「正確但未選中 7、其他候選錯誤 5、無候選 0」，台胞證中文姓名 46%、性別 77%。
+- **舊「正確但未選中」的 7 張不能直接視為 selector 可修復：** 原算法只要 `candidateTexts` 包含正確姓名，或 `rawTexts` 的任意一行**包含**正確姓名，就歸在同一類；較長的 OCR 行（例如標籤與姓名連在一起）包含姓名並不代表完整、符合位置及拼音條件的候選存在。
+
+後續 Validation-only 診斷拆成五組，優先順序如下：
+1. 候選文字完整相符（但不保證符合 selector 的排版／拼音 eligibility）。
+2. 原始 OCR 行完整相符。
+3. 只有較長 OCR 行包含正確姓名片段（非完整候選，不應直接稱 selector miss）。
+4. 有候選但皆不符。
+5. 沒有候選。
+
+分類順序互斥，合計必須等於中文姓名錯誤數；只保留聚合張數，不保留影像、姓名、逐張真值或檔名。**這份分類改進尚未改動正式的 `chooseTaiwanChineseName()`。** 下一次依照重新取得的 Validation 摘要評估是否值得設計 shadow selector 比較；不從既有固定 Test 進行調參。
+
+現有 32 張仍全部缺少「當次真正 OCR 工作圖」；這是 legacy 回歸樣本，不能以此推論正式上傳端到端準確率。
