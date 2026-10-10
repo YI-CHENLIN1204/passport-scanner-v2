@@ -42,10 +42,24 @@ interface PaddleItemGeometry {
   points: Array<[number, number]>
 }
 
+export type PassportNameDecisionReason =
+  | 'selected'
+  | 'no-anchor'
+  | 'romanization-conflict'
+  | 'below-confidence'
+  | 'unknown-threshold'
+  | 'lower-rank'
+
+export interface PassportNameDecision {
+  text: string
+  reason: PassportNameDecisionReason
+}
+
 export interface PassportChineseNameDiagnostic {
   source: 'name-field' | 'viz-crop'
   rawTexts: string[]
   candidateTexts: string[]
+  decisionTrace?: PassportNameDecision[]
 }
 
 export interface PaddleBaselineResult {
@@ -279,6 +293,7 @@ function normalizeLatinNameForMatch(value: string) {
 function chooseTaiwanChineseName(
   items: PaddleItemLike[],
   parsedMrz: ParsedMrz | null,
+  trace?: (decisions: PassportNameDecision[]) => void,
 ) {
   const geometries = items
     .map((item) => {
@@ -377,10 +392,32 @@ function chooseTaiwanChineseName(
   ) {
     const direct = directLabelValues
       .filter(
-        (candidate) =>
-          candidate.romanizationStatus === 'compatible',
+        candidate => candidate.romanizationStatus === 'compatible',
       )
       .sort((a, b) => b.rank - a.rank)[0]
+
+    if (trace) {
+      trace(geometries
+        .filter(item => isPlausibleTaiwanChineseName(item.normalized))
+        .map(item => {
+          const matches = directLabelValues.filter(
+            candidate => candidate.text === item.normalized,
+          )
+          const reason: PassportNameDecisionReason =
+            !matches.length
+              ? 'no-anchor'
+              : matches.every(candidate =>
+                  candidate.romanizationStatus !== 'compatible')
+                ? 'romanization-conflict'
+                : direct?.text === item.normalized &&
+                    direct.score >= 0.65
+                  ? 'selected'
+                  : matches.every(candidate => candidate.score < 0.65)
+                    ? 'below-confidence'
+                    : 'lower-rank'
+          return { text: item.normalized, reason }
+        }))
+    }
 
     return direct && direct.score >= 0.65
       ? direct
@@ -496,6 +533,45 @@ function chooseTaiwanChineseName(
 
   const best = eligible
     .sort((a, b) => b.rank - a.rank)[0]
+
+  if (trace) {
+    const possible = new Set([
+      ...geometries
+        .filter(item => isPlausibleTaiwanChineseName(item.normalized))
+        .map(item => item.normalized),
+      ...directLabelValues.map(candidate => candidate.text),
+    ])
+    trace(Array.from(possible, text => {
+      const options = [
+        ...directLabelValues,
+        ...spatialCandidates,
+      ].filter(candidate => candidate.text === text)
+      const valid = options.filter(
+        candidate => candidate.romanizationStatus !== 'conflict',
+      )
+      const chosen = valid.some(candidate => candidate === best)
+      const blockedUnknown =
+        Boolean(parsedMrz) &&
+        best?.romanizationStatus === 'unknown' &&
+        (best.score < 0.78 || best.rank < 1.35)
+
+      const reason: PassportNameDecisionReason =
+        !options.length
+          ? 'no-anchor'
+          : !valid.length
+            ? 'romanization-conflict'
+            : chosen && best.score < 0.65
+              ? 'below-confidence'
+              : chosen && blockedUnknown
+                ? 'unknown-threshold'
+                : chosen
+                  ? 'selected'
+                  : valid.every(candidate => candidate.score < 0.65)
+                    ? 'below-confidence'
+                    : 'lower-rank'
+      return { text, reason }
+    }))
+  }
 
   if (!best || best.score < 0.65) return null
 
@@ -2868,15 +2944,19 @@ async function predictOne(
         ),
       )
 
-      best.chineseNameDiagnostics.push({
+      const diagnostic: PassportChineseNameDiagnostic = {
         source: crop.source,
         rawTexts,
         candidateTexts,
-      })
+      }
+      best.chineseNameDiagnostics.push(diagnostic)
 
       const vizName = chooseTaiwanChineseName(
         vizItems,
         best.parsedMrz,
+        decisions => {
+          diagnostic.decisionTrace = decisions
+        },
       )
 
       best.predictMs += vizPredictMs

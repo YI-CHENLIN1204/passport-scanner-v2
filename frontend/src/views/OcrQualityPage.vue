@@ -90,6 +90,10 @@ const fieldsByDocumentType: Record<string, string[]> = {
 interface PassportNameDiagnosticSnapshot {
   rawTexts: string[]
   candidateTexts: string[]
+  decisionTrace?: Array<{
+    text: string
+    reason: string
+  }>
 }
 
 interface RetestSampleOutcome {
@@ -402,6 +406,7 @@ async function currentFieldsForSample(
         result.chineseNameDiagnostics.map(item => ({
           rawTexts: item.rawTexts,
           candidateTexts: item.candidateTexts,
+          decisionTrace: item.decisionTrace,
         })),
       totalMs: result.totalMs,
       orientationAttempts:
@@ -953,6 +958,7 @@ interface ValidationProfileSample {
   hasExactOcrInput: boolean
   fullExact: boolean
   passportNameFailure: ValidationPassportNameFailure | null
+  passportExactDecision: string | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -978,6 +984,10 @@ interface ValidationProfileDocument {
   orientationRetryRate: number
   passportNameFailures:
     ValidationPassportNameFailureSummary | null
+  passportDecisionReasons: Array<{
+    reason: string
+    count: number
+  }>
   failedCount: number
 }
 
@@ -1234,11 +1244,32 @@ async function profileValidationOnly() {
               )
             : null
 
+        const expectedName = normalizeEvalValue(
+          'nameZh', truth.nameZh,
+        )
+        const exactDecisions = sample.documentType === 'PASSPORT' &&
+          passportNameFailure === 'exact-candidate'
+          ? prediction.passportNameDiagnostics.flatMap(
+              group => group.decisionTrace ?? [],
+            ).filter(decision =>
+              normalizeEvalValue('nameZh', decision.text) === expectedName,
+            )
+          : []
+        // Store only classification, never candidate text or truth.
+        const passportExactDecision = exactDecisions.length
+          ? exactDecisions.some(item => item.reason === 'selected')
+            ? 'selected-other-attempt'
+            : exactDecisions.map(item => item.reason).sort()[0] ?? null
+          : passportNameFailure === 'exact-candidate'
+            ? 'not-in-selector-trace'
+            : null
+
         outcomes.push({
           documentType: sample.documentType,
           hasExactOcrInput:
             sample.hasExactOcrInput,
           passportNameFailure,
+          passportExactDecision,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1319,6 +1350,23 @@ async function profileValidationOnly() {
                 row => row.orientationAttempts > 1,
               ).length / rows.length
             : 0,
+          passportDecisionReasons:
+            documentType === 'PASSPORT'
+              ? [
+                  'selected-other-attempt',
+                  'no-anchor',
+                  'romanization-conflict',
+                  'below-confidence',
+                  'unknown-threshold',
+                  'lower-rank',
+                  'not-in-selector-trace',
+                ].map(reason => ({
+                  reason,
+                  count: rows.filter(row =>
+                    row.passportExactDecision === reason,
+                  ).length,
+                })).filter(item => item.count > 0)
+              : [],
           passportNameFailures:
             documentType === 'PASSPORT'
               ? {
@@ -2039,6 +2087,19 @@ onMounted(load)
               {{ result.passportNameFailures.notDetectedCount }} 張。
               候選文字完整吻合也不代表符合實際版面與拼音篩選條件；
               這是匿名近似分類，不可直接視為選擇器可修復張數。
+            </p>
+            <p
+              v-if="result.passportDecisionReasons.length"
+              class="validation-legacy-note"
+            >
+              完整吻合候選的 shadow 決策追蹤（只顯示匿名張數）：
+              <span
+                v-for="item in result.passportDecisionReasons"
+                :key="item.reason"
+              >
+                {{ item.reason }} {{ item.count }} 張；
+              </span>
+              這是候選狀態的近似分類，尚未代表自動修復效果。
             </p>
             <footer>
               <span>

@@ -182,3 +182,9 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 - 下一步優先做 read-only **shadow selector decision trace**，比較舊 selector 與候選 eligibility/排名各階段的匿名原因計數，不在正式掃描套用新的選擇器。只保留聚合計數，不上傳真名、原始 OCR 字串、證號與影像。先評估 7 張的潛在回收率及是否引發既有正確 7 張回歸。
 - 固定 Test baseline `2026.10.09.1` 仍凍結；不拿 Test 反覆調參。
 
+
+## 2026-10-11：候選選擇器 shadow decision trace（實驗）
+
+為追查 7 張中文姓名完整候選未輸出的原因，在 `chooseTaiwanChineseName()` 增加可選 observer，記錄候選是否缺少 spatial/name anchor、MRZ romanization conflict、confidence 門檻、unknown 門檻或排名較低。原 selector 排名／返回值不變；Validation 用人工 truth 在瀏覽器當次比對，僅將**匿名原因張數**留在本頁聚合結果。候選文字不寫進資料庫或 GitHub。
+
+注意：同張照片可能有不同 crop 或方向的診斷；此階段分類不等於可以直接救回的數量。需先本機測試並核對分布。固定 Test baseline 保持 `2026.10.09.1`。
