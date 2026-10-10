@@ -208,3 +208,10 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 已知程式行為：`compareChineseNameToMrzRomanization()` 在中文字與 MRZ token 數相同、恰一音節不相容時回傳 `conflict`；selector 拒絕 conflict。這是證據指向的一個**具體 gate**，但不保證放寬它能救回全部 7 張，因為影像樣本不一定代表七個獨立人名，亦可能有其他 eligibility／排名條件。
 
 **下一個安全驗證關卡：** 不輸出姓名與 token，只做 Validation-only shadow comparison：觀察若允許一音節衝突（但保留幾何位置、score 與其他條件），能修正多少張原本錯誤樣本，又會使多少張原本正確樣本退步。必要時候再研究具體台灣常見譯音別名，但不得基於 Test baseline 反覆調參。此次樣本的 exact OCR 工作輸入圖仍為 0/32，只能作 legacy regression。
+
+## 2026-10-11 — 單音節衝突 shadow 反事實實驗
+
+- 狀態：研究分支；**正式 OCR 候選輸出不改**；需 CI 及本機 Validation 實測。
+- 既有 selector 原樣運作；只在診斷 observer 計算允許一音節衝突的候選，且把衝突視作未獲拼音核准，保留較嚴格的 unknown confidence/rank gate，不加 compatible 權重。
+- Validation 只留匿名彙總：潛在改善、潛在退步、維持正確、維持錯誤。這是已走到的 crop/方向的近似反事實觀察，不是完整第二套 OCR 流程，也不能當作正式改版門檻。
+- 本資料集 32/32 缺少當年確切 OCR 工作圖；須按 Traveler 檢查重複樣本，固定 Test baseline `2026.10.09.1` 不動。
