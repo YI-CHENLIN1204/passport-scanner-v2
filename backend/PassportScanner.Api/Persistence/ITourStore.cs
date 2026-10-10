@@ -24,7 +24,8 @@ public interface ITourStore
         Guid travelerId,
         Guid documentVersionId,
         string documentType,
-        DateTimeOffset now);
+        DateTimeOffset now,
+        TourMemberDocumentSnapshotInput? snapshot = null);
 
     bool RemoveMemberDocument(
         Guid tourId,
@@ -34,3 +35,19 @@ public interface ITourStore
 
     byte[] ExportCsv(Guid tourId);
 }
+
+
+public sealed record TourMemberDocumentSnapshotInput(
+    string NameZh,
+    string NameEn,
+    DateOnly BirthDate,
+    string Gender,
+    string? Nationality,
+    string? NationalIdNumber,
+    string NameZhOnDocument,
+    string NameEnOnDocument,
+    string DocumentNumber,
+    string? IssuingCountry,
+    string? DocumentNationality,
+    DateOnly? ExpiryDate,
+    DateTimeOffset VerifiedAt);
