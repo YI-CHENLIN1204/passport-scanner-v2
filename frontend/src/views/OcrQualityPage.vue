@@ -22,7 +22,7 @@ import {
   recognizeTaiwanNationalIdWithPaddle,
   validateTaiwanNationalId,
   warmupPaddleOcr,
-  createValidationPaddleWorker,
+  createValidationPaddleInstance,
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
@@ -956,7 +956,7 @@ interface ValidationProfileDocument {
 }
 
 interface ValidationProfileResult {
-  mode: 'direct' | 'worker'
+  mode: 'production' | 'wasm-direct' | 'wasm-worker'
   pipelineVersion: string
   warmupMs: number
   sampleCount: number
@@ -965,7 +965,8 @@ interface ValidationProfileResult {
   documents: ValidationProfileDocument[]
 }
 
-const validationProfileMode = ref<'direct' | 'worker'>('direct')
+const validationProfileMode =
+  ref<'production' | 'wasm-direct' | 'wasm-worker'>('production')
 const profilingValidation = ref(false)
 const stopValidationRequested = ref(false)
 const validationProfileError = ref('')
@@ -1019,13 +1020,19 @@ async function profileValidationOnly() {
     }
 
     const warmupStart = performance.now()
-    if (selectedMode === 'worker') {
-      validationProfileProgress.value.message =
-        '初始化本機 Worker OCR 實驗環境…'
-      experimentalInstance =
-        await createValidationPaddleWorker()
-    } else {
+    if (selectedMode === 'production') {
       await warmupPaddleOcr()
+    } else {
+      validationProfileProgress.value.message =
+        '初始化獨立 ' +
+        (selectedMode === 'wasm-worker'
+          ? 'Worker'
+          : '直接') +
+        ' WASM OCR 模型…'
+      experimentalInstance =
+        await createValidationPaddleInstance(
+          selectedMode === 'wasm-worker',
+        )
     }
     warmupMs = performance.now() - warmupStart
 
@@ -1177,7 +1184,7 @@ async function profileValidationOnly() {
       ...validationProfileHistory.value.filter(
         result => result.mode !== selectedMode,
       ),
-    ].slice(0, 2)
+    ].slice(0, 3)
 
     validationProfileProgress.value.message =
       stopValidationRequested.value
@@ -1646,9 +1653,11 @@ onMounted(load)
             在瀏覽器執行，結果僅顯示聚合統計。
             不寫入資料庫、不修改固定 Test baseline，
             不保存姓名、證件號碼、圖片或單張辨識結果。
-            可切換現有模式與獨立 Worker 比較；Worker 使用本機同源
-            WASM 檔案，會額外佔用記憶體。兩次比較須使用同一台電腦、
-            同一組 Validation、相同執行環境。
+            可比較原本正式 auto 模式、獨立 WASM 直接模式與
+            獨立 WASM Worker。請只用兩個 WASM 模式比較
+            Worker 的效能影響；auto 模式可能選用不同後端。
+            實驗使用同源 WASM，需額外記憶體。
+            比較須使用同一台電腦及 Validation 分組。
             預熱時間若模型已初始化，不能視為冷啟動時間。
           </small>
         </div>
@@ -1660,8 +1669,9 @@ onMounted(load)
               v-model="validationProfileMode"
               :disabled="profilingValidation || retesting"
             >
-              <option value="direct">原本的主執行緒</option>
-              <option value="worker">實驗用 PaddleOCR Worker</option>
+              <option value="production">原本正式流程（auto backend）</option>
+              <option value="wasm-direct">獨立 WASM 直接模式（對照）</option>
+              <option value="wasm-worker">獨立 WASM Worker（實驗）</option>
             </select>
           </label>
           <button
@@ -1725,9 +1735,11 @@ onMounted(load)
         >
           <p class="retest-failed">
             {{
-              validationProfileResult.mode === 'worker'
-                ? 'Worker 實驗模式'
-                : '正式直接模式（對照）'
+              validationProfileResult.mode === 'production'
+                ? '原本正式模式（auto backend）'
+                : validationProfileResult.mode === 'wasm-direct'
+                  ? '獨立 WASM 直接模式'
+                  : '獨立 WASM Worker 模式'
             }}：此頁面暫存聚合結果，不寫入資料庫。
           </p>
           <article
