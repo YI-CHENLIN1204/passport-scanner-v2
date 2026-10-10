@@ -16,13 +16,20 @@ function compile(inputPath, outputPath) {
     },
     fileName: inputPath,
   }).outputText
-  writeFileSync(outputPath, output.replace(
-    "from './officialRomanizationVariants'",
-    "from './officialRomanizationVariants.mjs'",
-  ))
+  writeFileSync(outputPath, output
+    .replace(
+      "from './officialRomanizationVariants'",
+      "from './officialRomanizationVariants.mjs'",
+    )
+    .replace(
+      "from './nameRomanization'",
+      "from './nameRomanization.mjs'",
+    ),
+  )
 }
 
 let imported
+let guardedOfficialNameSuggestion
 try {
   compile('src/services/officialRomanizationVariants.ts',
     resolve(temp, 'officialRomanizationVariants.mjs'))
@@ -30,6 +37,11 @@ try {
     resolve(temp, 'nameRomanization.mjs'))
   imported = await import(pathToFileURL(
     resolve(temp, 'nameRomanization.mjs')).href)
+  compile('src/services/officialNameSuggestion.ts',
+    resolve(temp, 'officialNameSuggestion.mjs'))
+  const fallback = await import(pathToFileURL(
+    resolve(temp, 'officialNameSuggestion.mjs')).href)
+  guardedOfficialNameSuggestion = fallback.guardedOfficialNameSuggestion
 } finally {
   rmSync(temp, { recursive: true, force: true })
 }
@@ -58,3 +70,26 @@ for (const entry of cases) {
   )
 }
 console.log('Passed ' + cases.length + ' synthetic romanization cases.')
+
+const mrz = { surname: 'WANG', givenNames: 'I MING' }
+const confident = {
+  text: '王一明', score: 0.92, rank: 2.7,
+  romanizationStatus: 'conflict',
+}
+const ambiguous = {
+  text: '王依明', score: 0.93, rank: 2.8,
+  romanizationStatus: 'conflict',
+}
+assert.equal(guardedOfficialNameSuggestion([confident], mrz)?.text, '王一明')
+assert.equal(guardedOfficialNameSuggestion(
+  [{ ...confident, score: 0.77 }], mrz,
+), null)
+assert.equal(guardedOfficialNameSuggestion([confident, ambiguous], mrz), null)
+assert.equal(guardedOfficialNameSuggestion([confident], null), null)
+assert.equal(guardedOfficialNameSuggestion(
+  [{ ...confident, romanizationStatus: 'compatible' }], mrz,
+), null)
+assert.equal(guardedOfficialNameSuggestion(
+  [{ ...confident, text: '王英明' }], mrz,
+), null)
+console.log('Passed six guarded review-suggestion positive/negative checks.')

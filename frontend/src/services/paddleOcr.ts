@@ -17,6 +17,7 @@ import {
   classifyRomanizationConflict,
   type RomanizationCompatibility,
 } from './nameRomanization'
+import { guardedOfficialNameSuggestion } from './officialNameSuggestion'
 import {
   parseTaiwanPermitMrz,
   type ParsedTaiwanPermitMrz,
@@ -508,7 +509,7 @@ function chooseTaiwanChineseName(
 
     return direct && direct.score >= 0.65
       ? direct
-      : null
+      : guardedOfficialNameSuggestion(directLabelValues, parsedMrz)
   }
 
   const spatialCandidates = geometries
@@ -672,7 +673,11 @@ function chooseTaiwanChineseName(
       selectOfficialShadow([...directLabelValues, ...spatialCandidates]))
   }
 
-  if (!best || best.score < 0.65) return null
+  if (!best || best.score < 0.65) {
+    return guardedOfficialNameSuggestion(
+      [...directLabelValues, ...spatialCandidates], parsedMrz,
+    )
+  }
 
   if (
     parsedMrz &&
@@ -694,7 +699,9 @@ function chooseTaiwanChineseName(
       best.rank < 1.35
     )
   ) {
-    return null
+    return guardedOfficialNameSuggestion(
+      [...directLabelValues, ...spatialCandidates], parsedMrz,
+    )
   }
 
   return best
@@ -771,7 +778,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.09.1'
+  '2026.10.11.1'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
