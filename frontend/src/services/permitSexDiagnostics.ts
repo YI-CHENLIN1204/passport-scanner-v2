@@ -6,6 +6,7 @@ export type PermitSexDiagnosticSource =
   | 'mrz'
   | 'label'
   | 'semantic'
+  | 'standalone-token'
   | 'empty'
 
 export interface PermitSexEvidenceLike {
@@ -14,6 +15,9 @@ export interface PermitSexEvidenceLike {
   labeledSex: PermitSexDiagnosticValue
   labeledScore: number | null
   semanticSex: PermitSexDiagnosticValue
+  standaloneSex: PermitSexDiagnosticValue
+  standaloneTokenCount: number
+  standaloneTokenConflict: boolean
   selectedSource: PermitSexDiagnosticSource
 }
 
@@ -27,6 +31,10 @@ export function aggregatePermitSexEvidence(
       rows.filter(row => Boolean(row?.labeledSex)).length,
     samplesWithSemanticSex:
       rows.filter(row => Boolean(row?.semanticSex)).length,
+    samplesWithStandaloneSexToken:
+      rows.filter(row => Boolean(row?.standaloneSex)).length,
+    samplesWithStandaloneTokenConflict:
+      rows.filter(row => row?.standaloneTokenConflict === true).length,
     mrzSemanticConflict:
       rows.filter(row =>
         Boolean(
@@ -54,6 +62,8 @@ export function aggregatePermitSexEvidence(
       rows.filter(row => row?.selectedSource === 'label').length,
     selectedSemantic:
       rows.filter(row => row?.selectedSource === 'semantic').length,
+    selectedStandaloneToken:
+      rows.filter(row => row?.selectedSource === 'standalone-token').length,
     selectedEmpty:
       rows.filter(row => row?.selectedSource === 'empty').length,
   }
