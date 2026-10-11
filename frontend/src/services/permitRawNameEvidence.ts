@@ -26,7 +26,7 @@ export function isConservativeConflictFallback(
     candidate.compatibility === 'conflict' &&
     candidate.exactRow &&
     candidate.latinDistance !== null &&
-    candidate.latinDistance <= 2 &&
+    candidate.latinDistance <= 4 &&
     length >= 2 &&
     length <= 4
   )
@@ -87,7 +87,7 @@ export function selectPermitRawNameCandidate(
   if (accepted) return accepted.candidate
 
   // Last-resort visual fallback for legacy/non-standard romanization:
-  // only a short, standalone Han row immediately adjacent to a parsed
+  // only a short, standalone Han row near a parsed
   // Latin name may survive a phonetic conflict. This never outranks a
   // compatible/unknown candidate.
   return candidates
