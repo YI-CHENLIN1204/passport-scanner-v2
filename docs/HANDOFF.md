@@ -1,5 +1,23 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — `.18` 無提升但定位 sex 缺失來源；main 已進入 `.19` standalone-token fallback
+
+使用者完成 `2026.10.11.18` 正式 auto Validation，32/32 成功。護照維持全欄 68%（13/19）。台胞證維持全欄 77%（10/13）、中文姓名 100%（13/13）、出生日期 100%、性別 77%（10/13）、證件號碼 100%、有效期限 100%。因此 `.18` 沒有提高準確率，但姓名 13/13 無回歸。
+
+`.18` sex evidence 診斷否定了原先 MRZ override 假設：13 張中 **MRZ 有性別 0 張**；geometry labeled sex 10 張；same-row semantic sex 3 張；MRZ vs semantic conflict 0；最終來源 visual-agreement 3、label 7、semantic-row override 0、MRZ 0、semantic fallback 0、**empty 3**。這 3 張 empty 正好解釋 sex 10/13，因此剩餘問題是「沒有抽到 sex evidence」，不是 MRZ 蓋掉正確值。
+
+### `.19` main 候選：standalone sex token
+
+- 不再調 MRZ priority，也不再碰已達 13/13 的台胞證姓名 selector。
+- 新增 `permitStandaloneSexEvidence.ts`：只把 OCR detection box **整個文字恰好等於** `男`、`女`、`M` 或 `F` 視為 standalone sex token。`SEX F`、姓名英文、MRZ 整列等都不符合。
+- 如果同張影像只有單一性別值（可有多個同值 token）則形成 standalone candidate；若同時出現 M 與 F，標記 conflict 並拒絕自動選。
+- selector 優先序保持保守：visual-agreement > semantic-row conflict override > MRZ > labeled sex > semantic sex > **standalone-token fallback** > empty。也就是 standalone token 只在所有既有強證據都沒有時才生效。
+- Validation 新增匿名 standalone 指標：有唯一 standalone sex token 的樣本數、M/F token 衝突樣本數、最終實際採用 standalone-token 的樣本數。
+- executable tests 新增：男/女/M/F 單 token 正例、M+F 衝突拒絕、`SEX F` 不當 standalone；selector 測試保證 MRZ / label / semantic 都優先於 token；sex diagnostics/UI wiring 已同步。
+- pipeline metadata 更新為 `2026.10.11.19`。
+
+`.19` 尚未在使用者 Windows 本機執行 `npm.cmd run verify:ocr`、Docker rebuild 或 32 張 Validation，不能宣稱 sex 改善。若 `.19` 顯示 3 張 empty 樣本連 standalone token 都沒有，下一步直接做性別小區域重讀，不再繼續放寬 selector。
+
 ## 2026-10-12 — `.17` 台胞證中文姓名達 13/13；main 已轉向 `.18` 性別證據修正
 
 使用者完成 `2026.10.11.17` 正式 auto Validation，32/32 成功。護照維持全欄 68%（13/19）、中文姓名 68%。台胞證再提升：全欄 **77%（10/13）**、中文姓名 **100%（13/13）**、出生日期 100%、性別 **77%（10/13）**、證件號碼 100%、有效期限 100%。因此目前台胞證唯一剩餘非滿分欄位就是 sex，且 3 張整張錯誤可由 sex 77% 解釋。
