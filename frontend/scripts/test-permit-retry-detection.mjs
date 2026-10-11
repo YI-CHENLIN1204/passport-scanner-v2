@@ -22,6 +22,7 @@ const empty = summarize([])
 assert.deepEqual(empty, { attemptedCrops: 0, cropsWithTextBoxes: 0, cropsWithNameCandidates: 0 })
 const first = summarize([{ hasBoxes: false, hasCandidate: false }, { hasBoxes: true, hasCandidate: true }])
 const second = summarize([{ hasBoxes: true, hasCandidate: false }])
+assert.deepEqual(summarize([{ hasBoxes: false, hasCandidate: true }]), { attemptedCrops: 1, cropsWithTextBoxes: 0, cropsWithNameCandidates: 0 })
 assert.deepEqual(first, { attemptedCrops: 2, cropsWithTextBoxes: 1, cropsWithNameCandidates: 1 })
 assert.deepEqual(aggregate([null, empty, first, second]), {
   scansWithRetry: 2, attemptedCrops: 3, cropsWithTextBoxes: 2, cropsWithNameCandidates: 1,
