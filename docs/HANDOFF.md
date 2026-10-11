@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 — GitHub Actions 額度保護（最新操作規範）
+
+GitHub 寄送已用 2,700 / 3,000 included Actions 分鐘（90%）通知；使用者明確要求**停止使用 GitHub Actions 額度**。因此在 main commit `fdea84db799c9b6a19f1ac7bca2f15b68763e5ca`，將唯一 `.github/workflows/ci.yml` workflow 由 push + pull_request 自動觸發改成 **workflow_dispatch 手動觸發**，以免每輪提交或 PR 自動跑昂貴的 Docker smoke test。**嚴禁自行手動觸發 workflow 或恢復自動 CI**，除非使用者明確同意。
+
+往後採用本機檢查：`cd frontend && npm ci && npm run test:romanization && npm run test:permit-evidence && npm run test:permit-image && npm run test:permit-buckets && npm run build`；`dotnet build backend/PassportScanner.Api/PassportScanner.Api.csproj --configuration Release`（請先核對 csproj 實際路徑）。必要時本機 `docker compose up -d --build` 做煙霧驗證，但絕不執行 `down -v`。若 GitHub Connector 環境無法執行本機驗證，必須將狀態寫明「未在本機執行」而非宣稱 CI 成功。之後 PR 不會有自動 CI；禁止把它當作通過測試。
+
+最新版 OCR 原碼仍為 `2026.10.11.6`；最後照片準確率實測仍為 `.5`，無增益。應優先影像來源/ROI 的實質改善與合法樣本可用性，不再反覆小幅 selector 調參。
+
+
 ## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
 
 在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。
