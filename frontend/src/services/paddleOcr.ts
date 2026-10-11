@@ -3625,6 +3625,8 @@ export interface PermitRawNameEvidenceSummary {
   compatibleCandidateCount: number
   unknownCandidateCount: number
   conflictCandidateCount: number
+  shortExactConflictCandidateCount: number
+  nearestConflictLatinDistance: number | null
   eligibleConflictFallbackCount: number
   selectedCompatibility: PermitRawNameCompatibility | null
 }
@@ -4287,6 +4289,28 @@ function extractPermitChineseNameFromRows(
           candidate =>
             candidate.compatibility === 'conflict',
         ).length,
+      shortExactConflictCandidateCount:
+        candidates.filter(candidate =>
+          candidate.compatibility === 'conflict' &&
+          candidate.exactRow &&
+          Array.from(
+            candidate.value.replace(/[\s·‧]/g, ''),
+          ).length >= 2 &&
+          Array.from(
+            candidate.value.replace(/[\s·‧]/g, ''),
+          ).length <= 4
+        ).length,
+      nearestConflictLatinDistance: (() => {
+        const distances = candidates
+          .filter(candidate =>
+            candidate.compatibility === 'conflict' &&
+            candidate.latinDistance !== null
+          )
+          .map(candidate => candidate.latinDistance as number)
+        return distances.length
+          ? Math.min(...distances)
+          : null
+      })(),
       eligibleConflictFallbackCount:
         candidates.filter(
           isConservativeConflictFallback,
