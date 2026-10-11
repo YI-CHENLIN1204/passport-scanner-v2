@@ -183,6 +183,26 @@ assert.equal(
   null,
 )
 
+assert.equal(
+  select([
+    {
+      value: '甲乙丙',
+      compatibility: 'conflict',
+      latinDistance: 3,
+      labelDistance: null,
+      exactRow: true,
+    },
+    {
+      value: '庚辛壬',
+      compatibility: 'conflict',
+      latinDistance: 4,
+      labelDistance: null,
+      exactRow: true,
+    },
+  ]),
+  null,
+)
+
 assert.equal(select([]), null)
 
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
