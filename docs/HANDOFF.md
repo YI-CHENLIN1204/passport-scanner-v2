@@ -1,5 +1,13 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 — `.12` 本機驗證被 Latin-name regex 語法錯誤阻擋，已直接修復
+
+使用者執行 `npm.cmd run verify:ocr` 時 Node/TypeScript 在 `src/services/permitLatinName.ts(33,20)` 報 `TS1517: Range out of order in character class`，同時 Node 顯示 `SyntaxError: Invalid regular expression: /[^A-Z,- ]/g`；Docker frontend rebuild 也在 `npm run build` 同樣失敗。這代表 `.12` 尚未進入 OCR Validation，不能把任何舊頁面結果當成 `.12`。
+
+根因是從 GitHub 端新增 parser 時正則跳脫遺失：`/[^A-Z,\- ]/g` 被寫成非法的 `/[^A-Z,- ]/g`，且 whitespace normalization 的 `/\s+/g` 也被誤寫成 `/s+/g`。已在 main 修正兩處並重新核對 `permitLatinName.ts` 實際內容：字元類別中的 hyphen 已 escape、whitespace regex 已恢復。GitHub Actions 未執行。
+
+下一步只需重新 `git pull origin main` 後跑既有 `npm.cmd run verify:ocr`；若通過，再 rebuild frontend container 並進行 `.12` Validation。不要重複修改 OCR 邏輯，先確認此語法修復。
+
 ## 2026-10-11 — `.11` 實測無準確率改善；main 已進入 `.12` Latin-name anchor 修正
 
 使用者在 Docker frontend 顯示 `目前頁面 OCR pipeline: 2026.10.11.11` 後完成正式 auto Validation。32/32 成功；護照維持全欄 68%（13/19）、中文姓名 68%、其餘欄位 100%。台胞證仍為全欄 31%（4/13）、中文姓名 38%（5/13）、性別 77%、出生日期／證件號碼／有效期限 100%。因此 `.11` 的 all-raw-row selector 在現有樣本上沒有帶來正確率提升。
