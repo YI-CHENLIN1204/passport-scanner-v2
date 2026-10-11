@@ -20,12 +20,16 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => (row?.compatibleCandidateCount ?? 0) > 0).length,
     samplesWithUnknownCandidate:
       rows.filter(row => (row?.unknownCandidateCount ?? 0) > 0).length,
+    samplesWithConflictCandidate:
+      rows.filter(row => (row?.conflictCandidateCount ?? 0) > 0).length,
     totalCandidates:
       rows.reduce((sum, row) => sum + (row?.candidateCount ?? 0), 0),
     selectedCompatible:
       rows.filter(row => row?.selectedCompatibility === 'compatible').length,
     selectedUnknown:
       rows.filter(row => row?.selectedCompatibility === 'unknown').length,
+    selectedConflictFallback:
+      rows.filter(row => row?.selectedCompatibility === 'conflict').length,
     selectedNone:
       rows.filter(row => row && row.selectedCompatibility === null).length,
   }
