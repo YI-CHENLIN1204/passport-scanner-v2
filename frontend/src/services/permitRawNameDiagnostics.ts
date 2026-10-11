@@ -9,7 +9,6 @@ export interface PermitRawNameEvidenceLike {
   selectedOfficialVariant: boolean
   shortExactConflictCandidateCount: number
   nearestConflictLatinDistance: number | null
-  eligibleConflictFallbackCount: number
   selectedCompatibility: 'compatible' | 'unknown' | 'conflict' | null
 }
 
@@ -39,20 +38,12 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => row?.nearestConflictLatinDistance !== null && row?.nearestConflictLatinDistance !== undefined && row.nearestConflictLatinDistance >= 3 && row.nearestConflictLatinDistance <= 4).length,
     samplesConflictDistance5Plus:
       rows.filter(row => row?.nearestConflictLatinDistance !== null && row?.nearestConflictLatinDistance !== undefined && row.nearestConflictLatinDistance >= 5).length,
-    samplesWithEligibleConflictFallback:
-      rows.filter(row => (row?.eligibleConflictFallbackCount ?? 0) > 0).length,
-    samplesWithUniqueEligibleConflictFallback:
-      rows.filter(row => row?.eligibleConflictFallbackCount === 1).length,
-    samplesWithAmbiguousEligibleConflictFallback:
-      rows.filter(row => (row?.eligibleConflictFallbackCount ?? 0) > 1).length,
     totalCandidates:
       rows.reduce((sum, row) => sum + (row?.candidateCount ?? 0), 0),
     selectedCompatible:
       rows.filter(row => row?.selectedCompatibility === 'compatible').length,
     selectedUnknown:
       rows.filter(row => row?.selectedCompatibility === 'unknown').length,
-    selectedConflictFallback:
-      rows.filter(row => row?.selectedCompatibility === 'conflict').length,
     selectedNone:
       rows.filter(row => row && row.selectedCompatibility === null).length,
   }
