@@ -2,6 +2,14 @@
 
 本文件提供給 Codex、AI coding agent 與協作者。開始修改程式碼前，**必讀 `docs/HANDOFF.md` 頂端最新狀態、`docs/WORKLOG.md` 末尾、`docs/DECISIONS.md`、`docs/OCR_OPEN_SOURCE_REVIEW.md`**，再查最新 main SHA、PR、CI 與實際程式；下方過去的優先序不能凌駕於明確最新交接。
 
+## 最新單人開發流程（2026-10-11；優先於歷史開發節奏）
+
+- 使用者目前單獨開發，要求以 main 為主要工作線，將相關 OCR 修改集中為批次，不再每個小功能都建立分支和 PR。必要隔離風險時才使用短期分支。
+- 目前既存 PR #33 保留尚未本機驗證的改動；先統一完成本機測試後合併，不能將未測試內容宣稱成功。
+- GitHub Actions 分鐘已接近額度：ci.yml 僅 workflow_dispatch，禁止自行觸發或恢復自動 CI。PowerShell 本機用 npm.cmd 執行測試與 Build。
+- 最後有照片實測的 OCR 為 .6，main 目前為 .8；不將合成測試、PR 數量或診斷欄位數當成準確率提升。
+- 聚焦台胞證中文姓名辨識、工作影像、ROI 以及可比較的錯誤分析，累積一批有實質假設的改進後一次正式 Validation。固定 Test 不做調參，個資與證件圖片不推 GitHub。
+
 ## 專案目標
 
 建立 Passport Scanner V2：旅行社內部使用的證件掃描系統，核心是瀏覽器端 OCR、人工覆核、旅客主檔／證件版本管理，以及由團別頁手動匯出 CSV。
