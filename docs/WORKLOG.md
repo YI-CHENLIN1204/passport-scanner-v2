@@ -558,3 +558,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 **本版本只有匿名診斷，不能宣稱超越 14/19；尚須本機 npm.cmd run verify:ocr、Docker frontend rebuild、固定 32 張 Validation。** 待觀察確切來源與拒絕分類後，才考慮保守修正。legacy 32 張沒有真正 OCR 工作輸入，不能推論新照片泛化準確率；禁止 GitHub Actions、branch/PR 微改與個資上傳。
 
+## 2026-10-12 — .24 正式 Validation：護照 14/19，唯一正確候選被 one-syllable mismatch 擋住
+
+使用者在 Windows 本機完成 pipeline 2026.10.11.24 固定 auto Validation：32/32 完成、0 失敗；護照全欄及中文姓名 14/19（74%），其餘七欄 19/19；台胞證全部五欄及全欄 13/13（100%）。與 .23 持平，無回歸。
+
+護照剩餘 5 張姓名錯誤的匿名診斷：完整正確候選 1、錯誤候選內容不符 4、沒有可用候選 0；name-field 正確候選 1、其他候選 2、未執行 2；broad VIZ 正確候選 1、其他候選 2、未執行 2。新來源／拒絕原因診斷確定：**name-field / romanization:one-syllable-mismatch = 1 張**。其他來源／拒絕原因沒有出現。這解釋一張正確姓名已在 OCR 候選但未採用；不能由此推論所有 one-syllable mismatch 都安全，因拼音同音或多套拼法可能把不同人名混淆。
+
+下一步檢查一個可逆、嚴格受限的候選接納政策：只限同一 name-field 中唯一完整獨立漢字候選、存在明確姓名 label/英文錨點、無其他 conflicting 合格候選、且 subtype 僅是 one-syllable-mismatch；必須用 synthetic tests 防止模糊採用與既有正確結果被改寫。先用匿名 shadow 對照驗證淨改善及退步風險，不可直接依 ground truth 作選擇或上傳真實姓名／OCR 文字。最佳實測 pipeline .24 準確率仍為護照 14/19、台胞證 13/13；32 張均缺真實工作輸入影像，不能宣稱新照片泛化。禁止 GitHub Actions。
+
