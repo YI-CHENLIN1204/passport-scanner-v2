@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .27 固定 Validation：focused VIZ 未帶來改善
+
+使用者在 Windows 本機完成 pipeline 2026.10.11.27 固定 32 張 auto Validation：完成 32 張、失敗 0。護照全欄與中文姓名 14/19（74%），其餘七欄 19/19；台胞證全欄與五個必要欄位 13/13（100%）。.27 仍無淨改善。
+
+護照五張中文姓名錯誤的 ROI 匿名診斷：name-field 正確候選 1、其他候選 2、未執行 2；broad VIZ 正確候選 1、其他候選 2、未執行 2；新增 focused VIZ 正確候選 0、其他候選 1、無候選 0、未執行 4。唯一正確候選未採用原因仍為 name-field / romanization:one-syllable-mismatch 1 張。focused VIZ 未補回任何正確姓名，且新增不必要 OCR；不應繼續疊加固定裁切 ROI。嚴格單音節 shadow 潛在改善 0、退步 0。
+
+結論：正式最佳已實測準確率仍 14/19 護照、13/13 台胞證；.27 不能視為改善。下一步先撤除無收益 focused VIZ 額外辨識並保留原有有效的 .21 broad VIZ 策略，再考慮需證據支持的 recognition-quality 實驗。32 張 legacy Validation 都缺原始 OCR 工作輸入圖；不能推論新上傳的 production 準確率。禁止 GitHub Actions、不得提交個資。
+
+
 
 ## 2026-10-12 — .27 第二個 TypeScript build blocker
 
