@@ -2299,6 +2299,10 @@ onMounted(load)
               {{ result.permitRawNameEvidenceCounts.samplesWithJoinedTokenCandidate }} 張；
               最終實際選到黏連音節精確切分候選
               {{ result.permitRawNameEvidenceCounts.selectedJoinedToken }} 張；
+              符合「唯一 2–4 字完整列 + one-syllable mismatch」保守 fallback
+              {{ result.permitRawNameEvidenceCounts.samplesWithOneSyllableFallbackEligible }} 張；
+              最終實際採用 one-syllable fallback
+              {{ result.permitRawNameEvidenceCounts.selectedOneSyllableFallback }} 張；
               剩餘 conflict 類型（匿名樣本數）：
               token-count {{ result.permitRawNameEvidenceCounts.samplesWithConflictTokenCountMismatch }}；
               one-syllable {{ result.permitRawNameEvidenceCounts.samplesWithConflictOneSyllableMismatch }}；
