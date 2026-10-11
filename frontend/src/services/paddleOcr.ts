@@ -5011,12 +5011,20 @@ async function retryPermitChineseName(
     crops.push(anchored)
   }
 
-  const broadBlob = await createRelativeCrop(
+  // Name retry requires legible Han glyphs. The generic relative crop
+  // downscales broad regions, even when the source itself is low resolution.
+  // Use bounded upscaling only for the *retry* crop, never for primary OCR.
+  const broadBitmap = await createImageBitmap(image)
+  const broadWidth = broadBitmap.width
+  const broadHeight = broadBitmap.height
+  broadBitmap.close()
+  const broadBlob = await createPixelCrop(
     image,
-    0.08,
-    0.06,
-    0.84,
-    0.72,
+    broadWidth * 0.08,
+    broadHeight * 0.06,
+    broadWidth * 0.84,
+    broadHeight * 0.72,
+    1500,
   )
 
   crops.push(
