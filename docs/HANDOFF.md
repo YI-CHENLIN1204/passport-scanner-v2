@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .23 護照 unknown-name VIZ 確認候選（待本機 Validation）
+
+正式已實測基準 .22：護照中文姓名 14/19、台胞證全欄 13/13。分區診斷指出剩餘 5 張錯誤：name-field 完整正確候選 1、錯誤候選 2、未執行 2；broad VIZ 正確候選 0、錯誤候選 2、未執行 3。.22 完整輸出未執行不一定是 detection failure：程式 `predictOne()` 在 name-field 找到任一合格姓名時即 break，即使 romanizationStatus=unknown 也阻止 broad VIZ 嘗試。
+
+.23 最小保守修正：若 name-field 選到明確 compatible 姓名，維持既有立即採用且不增加 OCR；若只選到 unknown，先保留其內容及來源作為人工審核候選，繼續執行原本已存在的 broad VIZ OCR；只有第二次 VIZ 選到 **明確 compatible** 姓名才覆寫 provisional 值，若仍 unknown／無候選則維持第一個姓名，不猜、不放寬 romanization selector。如此僅可能增加原本因 unknown 提前停止的護照 VIZ OCR，不更動台胞證任何已驗證路徑。新增 `test-passport-unknown-viz.mjs` 靜態守衛並加入 `verify:ocr`，pipeline 候選更新為 2026.10.11.23。
+
+**.23 尚未跑 Windows verify/build 或 32 張固定 auto Validation，不得宣稱精準率提升；正式最佳實測仍是 .22 的 14/19 與 13/13。** 待集中本機驗證後，將匿名結果寫回文件。所有 legacy 32 張缺少真正 OCR 工作輸入圖像，不代表對新照片的泛化準確率。GitHub Actions 禁止執行，真實證件照片、姓名、號碼、raw OCR 個資不可上傳 GitHub。
+
+
 ## 2026-10-12 — .22 正式 Validation：護照 14/19、台胞證 13/13；裁切分區診斷
 
 使用者本機完成 2026.10.11.22 固定 auto Validation，32/32 完成、0 失敗。護照中文姓名與整張全欄均 14/19（74%），其他七欄 19/19；台胞證全部五個必要欄位及整張 13/13（100%）。.22 沒修改辨識算法，準確率與 .21 持平。
