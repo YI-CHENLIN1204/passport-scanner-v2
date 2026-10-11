@@ -26,8 +26,8 @@ import {
   getValidationPaddleRuntimeSummary,
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
-  type PermitRetryDetectionSummary,
 } from '../services/paddleOcr'
+import { aggregatePermitRetryDetection, type PermitRetryDetectionSummary } from '../services/permitRetryDetection'
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
 import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../services/permitSourceEvidence'
@@ -1456,12 +1456,7 @@ async function profileValidationOnly() {
               : null,
           permitRetryDetectionCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
-              ? {
-                  attemptedCrops: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.attemptedCrops ?? 0), 0),
-                  cropsWithTextBoxes: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.cropsWithTextBoxes ?? 0), 0),
-                  cropsWithNameCandidates: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.cropsWithNameCandidates ?? 0), 0),
-                  scansWithRetry: rows.filter(row => (row.permitRetryDetection?.attemptedCrops ?? 0) > 0).length,
-                }
+              ? aggregatePermitRetryDetection(rows.map(row => row.permitRetryDetection))
               : null,
           permitSourceCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
