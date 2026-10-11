@@ -53,9 +53,11 @@ assert.deepEqual(aggregate(rows), {
   samplesWithLabelRows: 2,
   samplesWithCompatibleCandidate: 1,
   samplesWithUnknownCandidate: 2,
+  samplesWithConflictCandidate: 1,
   totalCandidates: 4,
   selectedCompatible: 1,
   selectedUnknown: 1,
+  selectedConflictFallback: 0,
   selectedNone: 1,
 })
 const safe = JSON.stringify(aggregate(rows))
