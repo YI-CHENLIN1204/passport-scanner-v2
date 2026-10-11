@@ -113,7 +113,7 @@ const rows = [
     standaloneTokenCount: 0,
     standaloneTokenConflict: false,
     selectedSource: 'semantic',
-  },,
+  },
   {
     mrzSex: '',
     mrzRequiredValid: false,
