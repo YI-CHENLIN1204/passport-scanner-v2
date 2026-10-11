@@ -95,7 +95,7 @@ const fieldsByDocumentType: Record<string, string[]> = {
 }
 
 interface PassportNameDiagnosticSnapshot {
-  source: 'name-field' | 'viz-crop'
+  source: 'name-field' | 'viz-crop' | 'focused-viz'
   rawTexts: string[]
   candidateTexts: string[]
   decisionTrace?: Array<{
@@ -1156,6 +1156,7 @@ type PassportCropClass = 'exact' | 'other' | 'none' | 'not-run'
 interface PassportCropDiagnosis {
   nameField: PassportCropClass
   vizCrop: PassportCropClass
+  focusedViz: PassportCropClass
 }
 interface PassportCropDiagnosisCounts {
   incorrectSamples: number
@@ -1167,6 +1168,10 @@ interface PassportCropDiagnosisCounts {
   vizOther: number
   vizNone: number
   vizNotRun: number
+  focusedExact: number
+  focusedOther: number
+  focusedNone: number
+  focusedNotRun: number
   bothWrong: number
   vizRescuedExact: number
 }
@@ -1194,11 +1199,12 @@ function diagnosePassportCrops(
   expected: string,
   diagnostics: PassportNameDiagnosticSnapshot[],
 ): PassportCropDiagnosis {
-  const get = (source: 'name-field' | 'viz-crop') =>
+  const get = (source: 'name-field' | 'viz-crop' | 'focused-viz') =>
     diagnostics.find(item => item.source === source)
   return {
     nameField: classifyPassportCrop(expected, get('name-field')),
     vizCrop: classifyPassportCrop(expected, get('viz-crop')),
+    focusedViz: classifyPassportCrop(expected, get('focused-viz')),
   }
 }
 
@@ -1224,6 +1230,10 @@ function aggregatePassportCropDiagnostics(
     vizOther: count('vizCrop', 'other'),
     vizNone: count('vizCrop', 'none'),
     vizNotRun: count('vizCrop', 'not-run'),
+    focusedExact: count('focusedViz', 'exact'),
+    focusedOther: count('focusedViz', 'other'),
+    focusedNone: count('focusedViz', 'none'),
+    focusedNotRun: count('focusedViz', 'not-run'),
     bothWrong: wrong.filter(row =>
       row.passportCropDiagnosis?.nameField === 'other' &&
       row.passportCropDiagnosis?.vizCrop === 'other'
@@ -2604,6 +2614,10 @@ onMounted(load)
               其他候選 {{ result.passportCropDiagnosisCounts.vizOther }}、
               無候選 {{ result.passportCropDiagnosisCounts.vizNone }}、
               未執行 {{ result.passportCropDiagnosisCounts.vizNotRun }}；
+              focused VIZ：正確候選 {{ result.passportCropDiagnosisCounts.focusedExact }}、
+              其他候選 {{ result.passportCropDiagnosisCounts.focusedOther }}、
+              無候選 {{ result.passportCropDiagnosisCounts.focusedNone }}、
+              未執行 {{ result.passportCropDiagnosisCounts.focusedNotRun }}；
               兩區都只有錯誤候選 {{ result.passportCropDiagnosisCounts.bothWrong }}；
               正確候選只在 VIZ 出現 {{ result.passportCropDiagnosisCounts.vizRescuedExact }}。
               只反映既有裁切輸出，不新增 OCR、不記錄真實姓名或圖片；
