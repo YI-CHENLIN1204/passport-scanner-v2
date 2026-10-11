@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .24 護照正確候選的來源／拒絕原因歸因（待本機驗證）
+
+正式已實測基準 .23：護照全欄／中文姓名 14/19（74%）、台胞證全欄 13/13（100%），32/32 固定 auto Validation 成功。.23 的 ROI 診斷顯示剩餘五張護照中文姓名錯誤中，name-field 與 broad VIZ 各出現一張正確候選，但最終仍未正確；分區 overlap 不代表兩張獨立樣本。
+
+.24 只對既有「完整正確候選」decisionTrace 附加來源 `name-field`／`viz-crop` 與匿名原因彙總，判別 `selected-other-attempt`、拼音衝突 subtype、無錨點、信心門檻、unknown threshold 或其他 reject；UI 僅顯示 aggregate 件數。不儲存姓名、證件號碼、raw OCR、檔名或逐張資料。新測試 `test-passport-exact-source.mjs` 已接入 `verify:ocr`，pipeline 版本候選 `2026.10.11.24`。護照 selector、裁切、OCR 次數、台胞證已達 13/13 的路徑全部未改。
+
+**本版本只有匿名診斷，不能宣稱超越 14/19；尚須本機 npm.cmd run verify:ocr、Docker frontend rebuild、固定 32 張 Validation。** 待觀察確切來源與拒絕分類後，才考慮保守修正。legacy 32 張沒有真正 OCR 工作輸入，不能推論新照片泛化準確率；禁止 GitHub Actions、branch/PR 微改與個資上傳。
+
+
 ## 2026-10-12 — .23 正式 Validation：護照 14/19 持平，VIZ 出現新正確候選
 
 使用者本機完成 pipeline 2026.10.11.23 固定 auto Validation：32/32 完成、失敗 0。護照全欄與中文姓名仍 14/19（74%），其餘七欄 19/19；台胞證所有必要欄位及整張 13/13（100%），無回歸。護照 OCR 中位數約 1.2 秒、P90 2.3 秒。
