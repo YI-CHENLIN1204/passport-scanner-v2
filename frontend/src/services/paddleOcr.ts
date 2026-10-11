@@ -787,7 +787,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.7'
+  '2026.10.11.8'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4964,21 +4964,21 @@ async function createPermitNameGroupCrop(
         (b.item.score ?? 0) - (a.item.score ?? 0),
     )
 
-  const labelAnchors = geometries
-    .filter((item) =>
-      permitLabelMatches(item.text, ['姓名', 'Name']),
-    )
-    .sort(
-      (a, b) =>
-        (b.score ?? 0) - (a.score ?? 0),
-    )
+  // Do not let an unrelated, high-confidence English "Name" label
+  // displace an actual printed Chinese 姓名 anchor on the permit.
+  const chineseLabelAnchors = geometries
+    .filter((item) => item.text.replace(/\s+/g, '').includes('姓名'))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
 
-  // Prefer the explicit printed Chinese-name label over a romanized
-  // name line: a high-scoring unrelated Latin field can otherwise steer
-  // the zoomed OCR crop away from the holder's name. Keep Latin fallback
-  // only when the document's name label was not detected.
+  const englishLabelAnchors = geometries
+    .filter((item) => permitLabelMatches(item.text, ['Name']))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+
+  // This affects only the ROI source of a guarded name reread, never
+  // the parsed permit fields or already-reviewed documents.
   const anchor =
-    labelAnchors[0] ??
+    chineseLabelAnchors[0] ??
+    englishLabelAnchors[0] ??
     latinAnchors[0]?.item ??
     null
 
