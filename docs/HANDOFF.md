@@ -1,5 +1,9 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
+
+在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。
+
 ## 2026-10-11 — OCR .6 選中影像與覆核顯示一致性修正（待 CI / 本機驗收）
 
 在台胞證 `recognizeTaiwanCompatriotPermitWithPaddle` 找到真實程式缺口：deskew 後若重新 OCR 品質分數比原候選差，`best` 仍保留原候選，但舊碼會繼續用 deskew 圖作為覆核圖及旋轉角度，導致覆核圖不一定是 OCR 真正選中的影像。新分支 `fix/permit-selected-image-consistency` 改為**先完成 candidate 品質比較，再從選中的 `best.image` / `best.rotation` 取得覆核輸入與角度**，保留原有角度判斷、分數門檻、MRZ、姓名和人工審核機制。提議 OCR 版本 `2026.10.11.6`；新增程式結構自動守衛並放入 CI。此修正主要改善結果／覆核影像一致性，**不能聲稱 OCR 準確率已提高，也未獲照片驗收**。最新正式實測仍是 `.5` 無淨增益。此項不代替後續真實 OCR 工作輸入影像和 ROI 錯誤歸因。
