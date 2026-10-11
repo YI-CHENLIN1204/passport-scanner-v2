@@ -793,7 +793,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.15'
+  '2026.10.11.16'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3628,6 +3628,8 @@ export interface PermitRawNameEvidenceSummary {
   conflictCandidateCount: number
   officialVariantCandidateCount: number
   selectedOfficialVariant: boolean
+  joinedTokenCandidateCount: number
+  selectedJoinedToken: boolean
   conflictTokenCountMismatchCandidateCount: number
   conflictOneSyllableMismatchCandidateCount: number
   conflictOtherMismatchCandidateCount: number
@@ -4220,6 +4222,8 @@ function extractPermitChineseNameFromRows(
     const latinDistance = romanization.latinDistance
     const officialVariantPromotion =
       romanization.officialVariantPromotion
+    const joinedTokenPromotion =
+      romanization.joinedTokenPromotion
 
     const labelDistance = labelIndexes.length
       ? Math.min(
@@ -4238,6 +4242,7 @@ function extractPermitChineseNameFromRows(
       labelDistance,
       exactRow: compactRow === value,
       officialVariantPromotion,
+      joinedTokenPromotion,
       conflictSubtype: romanization.conflictSubtype,
     }]
   })
@@ -4278,6 +4283,13 @@ function extractPermitChineseNameFromRows(
         ).length,
       selectedOfficialVariant:
         selected?.officialVariantPromotion === true,
+      joinedTokenCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.joinedTokenPromotion === true,
+        ).length,
+      selectedJoinedToken:
+        selected?.joinedTokenPromotion === true,
       conflictTokenCountMismatchCandidateCount:
         candidates.filter(
           candidate =>
