@@ -1281,9 +1281,11 @@ async function createPixelCrop(
     Math.min(bitmap.height - y, Math.floor(sourceHeight)),
   )
 
+  // Prevent oversized canvas allocation and extreme interpolation for
+  // tiny/OCR-distant crops. Keep existing 1800px ceiling.
   const targetWidth = Math.min(
     1800,
-    Math.max(minimumTargetWidth, width),
+    Math.max(width, Math.min(minimumTargetWidth, width * 2.5)),
   )
   const scale = targetWidth / width
   const targetHeight = Math.max(
