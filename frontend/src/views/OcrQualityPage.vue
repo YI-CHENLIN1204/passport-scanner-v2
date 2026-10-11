@@ -29,6 +29,7 @@ import {
 } from '../services/paddleOcr'
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
+import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../services/permitSourceEvidence'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -977,12 +978,7 @@ interface ValidationProfileSample {
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   permitScriptEquivalentOnly: boolean
   permitNameRawFailure: PermitNameRawFailureBucket | null
-  permitSource: {
-    distanceCropUsed: boolean
-    nameRetryPasses: number
-    nameRetryConsensus: number
-    mrzUsed: boolean
-  } | null
+  permitSource: PermitSourceEvidence | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -1016,12 +1012,7 @@ interface ValidationProfileDocument {
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
-  permitSourceCounts: {
-    distanceCropUsed: number
-    nameRetryAttempted: number
-    nameRetryConsensus: number
-    mrzUsed: number
-  } | null
+  permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
   failedCount: number
 }
 
@@ -1451,12 +1442,7 @@ async function profileValidationOnly() {
               : null,
           permitSourceCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
-              ? {
-                  distanceCropUsed: rows.filter(row => row.permitSource?.distanceCropUsed).length,
-                  nameRetryAttempted: rows.filter(row => (row.permitSource?.nameRetryPasses ?? 0) > 0).length,
-                  nameRetryConsensus: rows.filter(row => (row.permitSource?.nameRetryConsensus ?? 0) >= 2).length,
-                  mrzUsed: rows.filter(row => row.permitSource?.mrzUsed).length,
-                }
+              ? aggregatePermitSourceEvidence(rows.map(row => row.permitSource))
               : null,
           permitNameRawFailureCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
@@ -2218,8 +2204,8 @@ onMounted(load)
             >
               台胞證選中來源（匿名件數）：放大距離裁切
               {{ result.permitSourceCounts.distanceCropUsed }}；
-              姓名雙區域重讀已產生候選
-              {{ result.permitSourceCounts.nameRetryAttempted }}；
+              姓名重讀候選已採用
+              {{ result.permitSourceCounts.nameRetryAccepted }}；
               重讀雙區域有一致候選
               {{ result.permitSourceCounts.nameRetryConsensus }}；
               MRZ 曾提供欄位
