@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .20 正式 Validation 成功，台胞證全欄 13/13
+
+使用者本機完成 2026.10.11.20 固定 auto Validation：32/32 完成、失敗 0。護照全欄及中文姓名 13/19（68%），其餘七個欄位 19/19；台胞證整張全欄、中文姓名、性別、出生日期、證件號碼、有效期限均 13/13（100%）。與 .19 相比，台胞證性別及全欄各進步 1 張，護照及中文姓名沒有退步。
+
+focused sex retry 匿名診斷：啟動 1、label ROI 1、fixed ROI 0、有文字框 1、有候選 1、衝突 0、實際補值 1、仍 empty 0。原有 standalone fallback 最終採用 2 張，其他最終來源 visual-agreement 3、label 7；MRZ sex 0。此結果支持只對缺失性別進行一次 ROI OCR 的 .20 改進。
+
+正式最佳實測 pipeline 更新為 2026.10.11.20。下一主要目標轉為護照中文姓名 13/19；凍結台胞證已成功的 BOCA、joined-token、unique one-syllable 及 .19/.20 sex 路徑。仍須注意這 32 張都缺少原始 OCR work-input image，此為固定 legacy Validation，不代表未來全新照片有 100% 準確率。禁止 GitHub Actions，集中 main 開發與驗證。
+
+
 ## 2026-10-12 — `.20` focused sex retry 已完成 main 候選（待本機驗證）
 
 main 已完成 `2026.10.11.20` 候選，但**目前最佳真實照片 Validation 仍是 `.19`**，尚不能宣稱台胞證已達 13/13。
