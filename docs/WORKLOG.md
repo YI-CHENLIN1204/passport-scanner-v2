@@ -382,3 +382,23 @@ pipeline metadata 已更新為 `2026.10.11.12`。`.12` 尚未本機 regression/b
 剩餘 conflict subtype 匿名樣本數：token-count mismatch 6、one-syllable mismatch 2、other 0、unclassified 0。這些是樣本是否出現該類 conflict candidate 的匿名計數，可重疊，不等於 8 張唯一錯誤樣本。下一步應針對剩餘 4 張姓名錯誤，先處理 **token-count mismatch** 與 **one-syllable mismatch** 的可安全自動判斷，不再回到 row-index distance fallback。
 
 `.15` 已證明：標準 romanization + BOCA 官方拼音別名 + all-raw-row selector 是目前有效方向。任何後續修改都必須維持護照 13/19、不降低台胞證現有 9/13 中文姓名，並保留固定 Validation 比較。
+
+
+## 2026-10-12 — `.15` 首次大幅提升；main 已進入 `.16` exact joined-token Romanization
+
+`.15` 正式 auto Validation 已確認有效：32/32 成功；護照全欄維持 68%（13/19）、中文姓名 68%。台胞證全欄提升到 **54%（7/13）**，中文姓名提升到 **69%（9/13）**；出生日期 100%、性別 77%、證件號碼 100%、有效期限 100%。這是自 `.6` 之後第一個明確超越舊基準的台胞證姓名版本。
+
+`.15` 匿名 selector 證據：BOCA 官方／舊式拼音 promotion candidate 4 張，最終實際選中 4 張；最終 compatible 共 9 張，raw-row none 4 張。剩餘 conflict subtype 樣本數為 token-count mismatch 6、one-syllable mismatch 2、other 0、unclassified 0。這些 subtype 樣本數可重疊，不等同 8 張唯一錯誤樣本。
+
+### `.16` main 候選
+
+- 不改 BOCA `.15` 成功邏輯，也不恢復 row-distance fallback。
+- 針對最大的剩餘 subtype `token-count-mismatch`：新增 `matchesChineseNameToJoinedRomanizationWithOfficialVariants()`。只有當標準與 BOCA 一般 token-by-token 比對仍 conflict，且 conflict subtype 是 token-count mismatch 時才啟用。
+- joined-token 判斷會把 surname + given-name tokens 正規化後完整串接，再以每個中文字所有合法 Hanyu/common/BOCA 拼音 aliases 做精確動態切分；**每個中文字必須消耗一個合法 alias，整個 Latin 字串必須剛好全部消耗**。不允許任意 fuzzy edit，也不處理 one-syllable mismatch。
+- 範例：`王一明 / WANG IMING` 可由 `WANG + I + MING` 精確切分；`王英明 / WANG YINMING` 仍不可因只差一個音節而通過。
+- resolver 優先序：標準 compatible > BOCA official compatible > exact joined-token compatible > anchored unknown > conflict。標準 compatible 即使距離較遠仍優先於 promotion。
+- Validation 新增匿名 joined-token 指標：有 exact joined-token promotion candidate 的樣本數、最終實際選中 joined-token candidate 的樣本數。既有 conflict subtype 同輪保留，因此 `.16` 若仍未救完剩餘 4 張，不需再跑純診斷版本。
+- 新增/擴充 executable tests：`test-romanization.mjs` 直接測 joined-token 正負例；`test-permit-raw-name-romanization.mjs` 測 resolver promotion、標準優先及負例；diagnostics test 驗證 joined-token 匿名 aggregate 與 UI wiring。所有測試仍由 `npm.cmd run verify:ocr` 一次執行。
+- pipeline metadata 更新為 `2026.10.11.16`。
+
+`.16` 尚未在使用者 Windows 本機執行 verify/build 或照片 Validation，不能宣稱進一步提升。GitHub Actions 仍 workflow_dispatch only、未執行。
