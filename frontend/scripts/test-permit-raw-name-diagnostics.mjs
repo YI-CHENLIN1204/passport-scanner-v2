@@ -22,60 +22,63 @@ try {
 const rows = [
   {
     latinRowCount: 1,
-    labelRowCount: 1,
+    labelRowCount: 0,
     candidateCount: 3,
     compatibleCandidateCount: 1,
-    unknownCandidateCount: 1,
-    conflictCandidateCount: 1,
+    unknownCandidateCount: 0,
+    conflictCandidateCount: 2,
+    officialVariantCandidateCount: 1,
+    selectedOfficialVariant: true,
     shortExactConflictCandidateCount: 1,
-    nearestConflictLatinDistance: 1,
-    eligibleConflictFallbackCount: 1,
+    nearestConflictLatinDistance: 6,
     selectedCompatibility: 'compatible',
   },
   {
-    latinRowCount: 0,
-    labelRowCount: 1,
+    latinRowCount: 1,
+    labelRowCount: 0,
+    candidateCount: 1,
+    compatibleCandidateCount: 0,
+    unknownCandidateCount: 0,
+    conflictCandidateCount: 1,
+    officialVariantCandidateCount: 0,
+    selectedOfficialVariant: false,
+    shortExactConflictCandidateCount: 1,
+    nearestConflictLatinDistance: 3,
+    selectedCompatibility: null,
+  },
+  {
+    latinRowCount: 1,
+    labelRowCount: 0,
     candidateCount: 1,
     compatibleCandidateCount: 0,
     unknownCandidateCount: 1,
     conflictCandidateCount: 0,
+    officialVariantCandidateCount: 0,
+    selectedOfficialVariant: false,
     shortExactConflictCandidateCount: 0,
     nearestConflictLatinDistance: null,
-    eligibleConflictFallbackCount: 0,
     selectedCompatibility: 'unknown',
   },
-  {
-    latinRowCount: 0,
-    labelRowCount: 0,
-    candidateCount: 0,
-    compatibleCandidateCount: 0,
-    unknownCandidateCount: 0,
-    conflictCandidateCount: 0,
-    shortExactConflictCandidateCount: 0,
-    nearestConflictLatinDistance: null,
-    eligibleConflictFallbackCount: 0,
-    selectedCompatibility: null,
-  },
 ]
+
 assert.deepEqual(aggregate(rows), {
-  samplesWithLatinRows: 1,
-  samplesWithLabelRows: 2,
+  samplesWithLatinRows: 3,
+  samplesWithLabelRows: 0,
   samplesWithCompatibleCandidate: 1,
-  samplesWithUnknownCandidate: 2,
-  samplesWithConflictCandidate: 1,
-  samplesWithShortExactConflictCandidate: 1,
-  samplesConflictDistanceLe2: 1,
-  samplesConflictDistance3To4: 0,
-  samplesConflictDistance5Plus: 0,
-  samplesWithEligibleConflictFallback: 1,
-  samplesWithUniqueEligibleConflictFallback: 1,
-  samplesWithAmbiguousEligibleConflictFallback: 0,
-  totalCandidates: 4,
+  samplesWithUnknownCandidate: 1,
+  samplesWithConflictCandidate: 2,
+  samplesWithOfficialVariantCandidate: 1,
+  selectedOfficialVariant: 1,
+  samplesWithShortExactConflictCandidate: 2,
+  samplesConflictDistanceLe2: 0,
+  samplesConflictDistance3To4: 1,
+  samplesConflictDistance5Plus: 1,
+  totalCandidates: 5,
   selectedCompatible: 1,
   selectedUnknown: 1,
-  selectedConflictFallback: 0,
   selectedNone: 1,
 })
+
 const safe = JSON.stringify(aggregate(rows))
 for (const secret of ['姓名', '甲乙', 'rawRows', 'groundTruth', 'sampleId']) {
   assert.equal(safe.includes(secret), false)
@@ -83,5 +86,8 @@ for (const secret of ['姓名', '甲乙', 'rawRows', 'groundTruth', 'sampleId'])
 
 const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
 assert.match(page, /aggregatePermitRawNameEvidence\(rows\.map\(row => row\.permitRawNameEvidence\)\)/)
-assert.match(page, /result\.permitRawNameEvidenceCounts\.samplesWithLatinRows/)
-console.log('Permit raw-name diagnostics aggregation and wiring tests passed')
+assert.match(page, /samplesWithOfficialVariantCandidate/)
+assert.match(page, /selectedOfficialVariant/)
+assert.doesNotMatch(page, /selectedConflictFallback|samplesWithEligibleConflictFallback/)
+
+console.log('Permit raw-name .15 diagnostics aggregation and wiring tests passed')
