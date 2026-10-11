@@ -172,3 +172,11 @@
 - 與 `2026.10.11.3` 的同批 legacy Validation 相比：護照與台胞證整張及各欄位 exact 比率全部持平。**PR #21（未受 checksum 驗證的 MRZ 欄位交叉證據）與 PR #22（姓名標籤優先 crop）在此 cohort 未帶來可測淨改善**；並不代表程式修正沒有安全意義，也不能推斷單張案例沒有互相抵消。
 - 統計限制：護照 19/19、台胞證 13/13 均無當次真實 OCR 工作輸入影像，使用保存的審核影像做 legacy regression；可能同 Traveler 多張；台灣身分證 Validation n=0。不可外推到新照片端到端辨識率或人群泛化。
 - 下一步：**停止反覆小幅調 selector / MRZ threshold**；先針對台胞證未正確的 7/13 姓名與 3/13 性別，在合法且本機保存的真正工作輸入、影像變換、OCR boxes、來源 ROI 上作錯誤歸因，集中改良 orientation、detection、recognition 或 crop 並以合成正反案例 CI＋一次 Validation 比對。固定 Test `2026.10.09.1` 不動，production 原圖仍回國日 +7 天，私有影像與個資不上 GitHub。追蹤：Issue #25。
+
+## 2026-10-11 — 選中台胞證 OCR 影像與覆核旋轉不一致：修正候選來源（候選 .6）
+
+- 狀態：已實作於 `fix/permit-selected-image-consistency`；CI 待確認，本機照片精準率未驗證。
+- 原因：台胞證 deskew 的新 `reviewImage` 即使品質比較不通過，仍直接作覆核圖與 `rotationDegrees`，而姓名重讀及欄位內容保留來自舊 `best.image` / `best.prediction`。這是程式靜態可確定的「輸出與覆核影像來源不一致」；不應藉此宣稱已修好中文姓名錯誤。
+- 修改：僅在 deskew 品質分數不低於舊候選時替換 `best`，所有情況在候選選定後才從 `best.image` / `best.rotation` 給覆核圖與角度；維持既有矯正、重辨識、MRZ/姓名候選及人工覆核政策。版本預計 `2026.10.11.6`。
+- 自動防退步：`frontend/scripts/test-permit-image-consistency.mjs` 監控 production function 的選中來源與資料流（結構性測試，非實際影像準確率測試）；新增 `npm run test:permit-image` 到 CI。
+- 下一步：CI 成功後核對選中影像與結果一致；繼續做真實 OCR 工作圖 / ROI 歸因，整批完成後才一次 Validation，勿再逐小修請使用者重跑 32 張。固定 Test 不動、私人資料不上 GitHub。

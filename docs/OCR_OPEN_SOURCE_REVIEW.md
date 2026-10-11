@@ -276,3 +276,9 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 **對照 `.3` 的欄位正確數一致，`.4` MRZ 姓名／性別交叉證據及 `.5` 姓名標籤優先重裁切未在此 cohort 帶來淨改善。** 不能解讀為單張沒有正負變化；也不能以合成測試成功推論真實 OCR 準確率。32 張皆缺當次真實 OCR 工作影像、可能存在同 Traveler 多張，身分證 n=0。這是保留審核影像的 legacy regression，不是新上傳端到端數據。
 
 後續不再推進相同的門檻微調，改先取得合法可用且**保留真正 OCR 工作輸入**的 Train/Validation（同 Traveler 不跨 split），分離出 orientation、detection、recognition、crop/ROI、MRZ/parse 的失敗來源；本機離線分析，絕不將個資、OCR raw text、證件圖推至 GitHub。重點在台胞證姓名及性別錯誤歸因與成批改善；fixed Test 凍結。詳見 Issue #25。
+
+## 2026-10-11 — 台胞證 OCR candidate / review-image provenance 檢查（候選 .6，未實測）
+
+檢查 `recognizeTaiwanCompatriotPermitWithPaddle` 發現：微傾角 deskew 可以執行第二次 OCR，當品質未達原 `best` 時應保留舊 OCR prediction；但此前 `reviewImage`、`reviewRotation` 已更新為新圖，即使新 OCR 被拒絕也會提供不同影像供覆核／擷取，而欄位仍來自舊圖。修正為**品質 gate 選出 `best` 後才設定 review image / rotation**，避免將被拒絕的影像標作被選中之 OCR 的工作來源。
+
+這是來源一致性修復，不包含影像對照實測；不代表改善台胞證姓名 6/13 或性別 10/13。結構性 CI guard 只保護程式路徑，不能保證端到端辨識率。後續需蒐集合法且可分組的真正 OCR 工作輸入，方可評估 ROI 與 recognition 失敗根因。

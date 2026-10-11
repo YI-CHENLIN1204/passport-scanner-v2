@@ -10,7 +10,8 @@
     "test:permit-evidence": "node scripts/test-permit-evidence.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "test:permit-image": "node scripts/test-permit-image-consistency.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
