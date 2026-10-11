@@ -801,7 +801,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.22'
+  '2026.10.11.23'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3057,6 +3057,11 @@ async function predictOne(
       source: 'viz-crop',
     })
 
+    // Keep an accepted but romanization-unknown name as the fallback.
+    // Only a later explicitly compatible VIZ result may replace it.
+    // This prevents an unknown name-field guess from prematurely skipping
+    // the already existing broad VIZ crop.
+    let provisionalName: ReturnType<typeof chooseTaiwanChineseName> = null
     for (const crop of crops) {
       const vizStartedAt = performance.now()
       const [vizPrediction] = await instance.predict(crop.blob)
@@ -3110,16 +3115,27 @@ async function predictOne(
       best.totalMs = performance.now() - totalStartedAt
 
       if (vizName) {
-        best.chineseName = vizName.text
-        best.chineseNameScore = vizName.score
-        best.chineseNameSource = crop.source
-        best.chineseNameRomanizationStatus =
-          vizName.romanizationStatus
-        break
+        if (!provisionalName) {
+          provisionalName = vizName
+          best.chineseName = vizName.text
+          best.chineseNameScore = vizName.score
+          best.chineseNameSource = crop.source
+          best.chineseNameRomanizationStatus =
+            vizName.romanizationStatus
+        }
+
+        // The first compatible match wins. An unknown first-pass name
+        // remains a review suggestion if VIZ cannot corroborate it.
+        if (vizName.romanizationStatus === 'compatible') {
+          best.chineseName = vizName.text
+          best.chineseNameScore = vizName.score
+          best.chineseNameSource = crop.source
+          best.chineseNameRomanizationStatus =
+            vizName.romanizationStatus
+          break
+        }
       }
 
-      // The dynamic name-field crop is preferred. Only if it fails do we
-      // spend another inference on the broader VIZ area.
       if (crop.source === 'viz-crop') break
     }
   }
