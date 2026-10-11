@@ -1018,12 +1018,8 @@ interface ValidationProfileDocument {
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
-  permitRetryDetectionCounts: {
-    attemptedCrops: number
-    cropsWithTextBoxes: number
-    cropsWithNameCandidates: number
-    scansWithRetry: number
-  } | null
+  permitRetryDetectionCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
+  permitRetryWrongNameCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
   failedCount: number
 }
 
@@ -1457,6 +1453,13 @@ async function profileValidationOnly() {
           permitRetryDetectionCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
               ? aggregatePermitRetryDetection(rows.map(row => row.permitRetryDetection))
+              : null,
+          permitRetryWrongNameCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? aggregatePermitRetryDetection(
+                  rows.filter(row => row.fieldExact.nameZh === false)
+                    .map(row => row.permitRetryDetection),
+                )
               : null,
           permitSourceCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
@@ -2226,6 +2229,17 @@ onMounted(load)
               有文字框 {{ result.permitRetryDetectionCounts.cropsWithTextBoxes }} 次；
               有符合目前姓名候選規則 {{ result.permitRetryDetectionCounts.cropsWithNameCandidates }} 次。
               不能據此直接認定文字偵測與文字辨識哪一段出錯。
+            </p>
+            <p
+              v-if="result.permitRetryWrongNameCounts"
+              class="validation-legacy-note"
+            >
+              只看中文姓名錯誤的樣本：有執行重讀
+              {{ result.permitRetryWrongNameCounts.scansWithRetry }} 張；
+              重讀裁切合計 {{ result.permitRetryWrongNameCounts.attemptedCrops }} 次；
+              有文字框 {{ result.permitRetryWrongNameCounts.cropsWithTextBoxes }} 次；
+              有合格姓名候選 {{ result.permitRetryWrongNameCounts.cropsWithNameCandidates }} 次。
+              這是匿名錯誤子群彙總，不代表重讀造成錯誤。
             </p>
             <p
               v-if="result.permitSourceCounts"
