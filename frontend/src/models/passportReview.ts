@@ -26,7 +26,7 @@ export interface PassportReviewAssertions {
 export interface PassportReviewOcrMetadata {
   engine: 'paddleocr-ppocrv5'
   line2Validated: boolean
-  chineseNameSource: 'name-field' | 'viz-crop' | null
+  chineseNameSource: 'name-field' | 'viz-crop' | 'focused-viz' | null
   chineseNameScore: number | null
   chineseNameRomanizationStatus:
     | 'compatible'
