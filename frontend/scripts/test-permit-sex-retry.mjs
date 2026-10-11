@@ -85,7 +85,7 @@ assert.deepEqual(
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
 assert.match(
   ocr,
-  /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.21'/,
+  /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.22'/,
 )
 
 const retryStart = ocr.indexOf('async function retryPermitSex(')
