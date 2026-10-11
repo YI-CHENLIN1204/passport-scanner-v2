@@ -37,5 +37,5 @@ assert.equal(parse('LIN'), null)
 
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
 assert.match(ocr, /extractPermitLatinName, type PermitLatinName/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.27'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.28'/)
 console.log('Permit Latin-name label parsing and wiring tests passed')
