@@ -488,8 +488,15 @@ function chooseTaiwanChineseName(
         anchored: Boolean(nameLabels.length || englishNameAnchors.length),
       })),
       candidates.some(candidate =>
-        candidate.romanizationStatus === 'compatible' ||
-        candidate.romanizationStatus === 'unknown'
+        candidate.score >= 0.65 &&
+        (
+          candidate.romanizationStatus === 'compatible' ||
+          (
+            candidate.romanizationStatus === 'unknown' &&
+            candidate.score >= 0.78 &&
+            candidate.rank >= 1.35
+          )
+        )
       ),
     )
     return evaluated
