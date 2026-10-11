@@ -90,7 +90,7 @@ assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, true), false)
 const consensus = { value: '丙丁', score: 0.94, confidence: 0.96, consensus: 2 }
 assert.equal(shouldUseRetriedPermitName('', null, consensus), true)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, consensus), true)
-assert.equal(shouldUseRetriedPermitName('甲乙', null, consensus), true)
+assert.equal(shouldUseRetriedPermitName('甲乙', null, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.94, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, consensus: 1 }), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0.75 }), false)
