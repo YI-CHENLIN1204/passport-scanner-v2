@@ -22,9 +22,10 @@ try {
 const compatibleFar = {
   value: '甲乙丙',
   compatibility: 'compatible',
-  latinDistance: 4,
-  labelDistance: 4,
+  latinDistance: 8,
+  labelDistance: null,
   exactRow: true,
+  officialVariantPromotion: false,
 }
 const unknownNear = {
   value: '丁戊己',
@@ -32,6 +33,7 @@ const unknownNear = {
   latinDistance: 1,
   labelDistance: 1,
   exactRow: true,
+  officialVariantPromotion: false,
 }
 assert.equal(
   select([unknownNear, compatibleFar])?.value,
@@ -41,15 +43,29 @@ assert.equal(
 assert.equal(
   select([
     {
-      value: '錯誤名',
+      value: '官方拼音',
+      compatibility: 'compatible',
+      latinDistance: 9,
+      labelDistance: null,
+      exactRow: true,
+      officialVariantPromotion: true,
+    },
+  ])?.officialVariantPromotion,
+  true,
+)
+
+assert.equal(
+  select([
+    {
+      value: '衝突姓名',
       compatibility: 'conflict',
-      latinDistance: 0,
+      latinDistance: 1,
       labelDistance: 0,
       exactRow: true,
+      officialVariantPromotion: false,
     },
-    unknownNear,
-  ])?.value,
-  '丁戊己',
+  ]),
+  null,
 )
 
 assert.equal(
@@ -60,6 +76,7 @@ assert.equal(
       latinDistance: 4,
       labelDistance: 5,
       exactRow: true,
+      officialVariantPromotion: false,
     },
   ]),
   null,
@@ -73,6 +90,7 @@ assert.equal(
       latinDistance: null,
       labelDistance: 1,
       exactRow: true,
+      officialVariantPromotion: false,
     },
   ])?.value,
   '近姓名',
@@ -81,11 +99,12 @@ assert.equal(
 assert.equal(
   select([
     {
-      value: '正確相容',
+      value: '標準相容',
       compatibility: 'compatible',
-      latinDistance: 4,
+      latinDistance: 6,
       labelDistance: null,
       exactRow: true,
+      officialVariantPromotion: false,
     },
     {
       value: '近但衝突',
@@ -93,114 +112,10 @@ assert.equal(
       latinDistance: 1,
       labelDistance: null,
       exactRow: true,
+      officialVariantPromotion: false,
     },
   ])?.value,
-  '正確相容',
-)
-
-assert.equal(
-  select([
-    {
-      value: '近未知',
-      compatibility: 'unknown',
-      latinDistance: 1,
-      labelDistance: null,
-      exactRow: true,
-    },
-    {
-      value: '近但衝突',
-      compatibility: 'conflict',
-      latinDistance: 1,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ])?.value,
-  '近未知',
-)
-
-assert.equal(
-  select([
-    {
-      value: '甲乙丙',
-      compatibility: 'conflict',
-      latinDistance: 1,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ])?.value,
-  '甲乙丙',
-)
-
-assert.equal(
-  select([
-    {
-      value: '發證機關文字',
-      compatibility: 'conflict',
-      latinDistance: 1,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ]),
-  null,
-)
-
-assert.equal(
-  select([
-    {
-      value: '甲乙丙',
-      compatibility: 'conflict',
-      latinDistance: 4,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ])?.value,
-  '甲乙丙',
-)
-
-assert.equal(
-  select([
-    {
-      value: '甲乙丙',
-      compatibility: 'conflict',
-      latinDistance: 5,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ]),
-  null,
-)
-
-assert.equal(
-  select([
-    {
-      value: '甲乙丙',
-      compatibility: 'conflict',
-      latinDistance: 1,
-      labelDistance: null,
-      exactRow: false,
-    },
-  ]),
-  null,
-)
-
-assert.equal(
-  select([
-    {
-      value: '甲乙丙',
-      compatibility: 'conflict',
-      latinDistance: 3,
-      labelDistance: null,
-      exactRow: true,
-    },
-    {
-      value: '庚辛壬',
-      compatibility: 'conflict',
-      latinDistance: 4,
-      labelDistance: null,
-      exactRow: true,
-    },
-  ]),
-  null,
+  '標準相容',
 )
 
 assert.equal(select([]), null)
@@ -211,7 +126,11 @@ const rowSelectorEnd = ocr.indexOf('function buildTaiwanCompatriotPermitResult('
 assert.ok(rowSelectorStart >= 0 && rowSelectorEnd > rowSelectorStart)
 const rowSelector = ocr.slice(rowSelectorStart, rowSelectorEnd)
 assert.match(rowSelector, /selectPermitRawNameCandidate\(candidates\)/)
-assert.doesNotMatch(rowSelector, /offset <= 2/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.14'/)
+assert.match(rowSelector, /resolvePermitRawRomanization/)
+assert.doesNotMatch(
+  readFileSync('src/services/permitRawNameEvidence.ts', 'utf8'),
+  /fallbackCandidates|isConservativeConflictFallback/,
+)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.15'/)
 
-console.log('Permit raw-row name evidence ranking and wiring tests passed')
+console.log('Permit raw-row selector .15 policy and wiring tests passed')
