@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 const dir = mkdtempSync(resolve('node_modules', '.permit-name-enhance-'))
-let enhance
+let enhancePixels
 try {
   const compiled = ts.transpileModule(
     readFileSync('src/services/permitNameEnhancement.ts', 'utf8'),
@@ -13,17 +13,17 @@ try {
   ).outputText
   const file = resolve(dir, 'enhance.mjs')
   writeFileSync(file, compiled)
-  ;({ enhancePermitNamePixels: enhance } = await import(pathToFileURL(file).href))
+  ;({ enhancePermitNamePixels: enhancePixels } = await import(pathToFileURL(file).href))
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }
 
-const source = new Uint8ClampedArray([
+const sourcePixels = new Uint8ClampedArray([
   100, 150, 200, 255,
   10, 10, 10, 128,
   250, 250, 250, 64,
 ])
-const result = enhance(source.slice())
+const result = enhancePixels(sourcePixels.slice())
 for (let index = 0; index < result.length; index += 4) {
   assert.equal(result[index], result[index + 1])
   assert.equal(result[index + 1], result[index + 2])
@@ -41,6 +41,5 @@ assert.match(retry, /createPermitNameEnhancedVariant\(enhancementSource\)/)
 assert.match(retry, /if \(!canContinue\(\)\) break/)
 assert.match(retry, /completedPasses \+= 1/)
 assert.match(retry, /passes: completedPasses/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\\s*=\\s*'2026\\.10\\.11\\.10'/)
-
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.10'/)
 console.log('Permit name enhancement functional and retry-budget tests passed')
