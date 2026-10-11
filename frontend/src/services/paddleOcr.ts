@@ -787,7 +787,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.6'
+  '2026.10.11.7'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4862,6 +4862,7 @@ async function predictPermit(
   const fullPrediction = await predict(image)
 
   let bestPrediction = fullPrediction
+  let bestPredictionImage = image
   let best =
     buildTaiwanCompatriotPermitResult(
       fullPrediction,
@@ -4903,6 +4904,7 @@ async function predictPermit(
       ) {
         best = candidate
         bestPrediction = cropPrediction
+        bestPredictionImage = crop.file
       }
 
       if (
@@ -4923,6 +4925,7 @@ async function predictPermit(
 
   return {
     prediction: bestPrediction,
+    predictionImage: bestPredictionImage,
     result: best,
   }
 }
@@ -5142,6 +5145,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     rotation: number
     image: File
     prediction: unknown
+    predictionImage: File
     result: TaiwanCompatriotPermitOcrResult
   }> = []
 
@@ -5181,6 +5185,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       rotation,
       image: rotated,
       prediction: predicted.prediction,
+      predictionImage: predicted.predictionImage,
       result: predicted.result,
     })
 
@@ -5279,6 +5284,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
           rotation: deskewRotation,
           image: deskewImage,
           prediction: deskewPrediction.prediction,
+          predictionImage: deskewPrediction.predictionImage,
           result: deskewPrediction.result,
         }
       }
@@ -5320,7 +5326,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
 
     const retriedName = await retryPermitChineseName(
       instance,
-      best.image,
+      best.predictionImage,
       best.prediction,
     )
 
