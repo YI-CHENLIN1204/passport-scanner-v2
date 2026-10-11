@@ -188,7 +188,7 @@ assert.match(rowSelector, /resolvePermitRawRomanization/)
 assert.match(rowSelector, /selectedOneSyllableFallback/)
 assert.match(
   ocr,
-  /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.26'/,
+  /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.27'/,
 )
 
 console.log('Permit raw-row selector .17 conservative one-syllable fallback tests passed')
