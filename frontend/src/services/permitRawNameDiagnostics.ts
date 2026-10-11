@@ -35,6 +35,10 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => row?.nearestConflictLatinDistance !== null && row?.nearestConflictLatinDistance !== undefined && row.nearestConflictLatinDistance >= 5).length,
     samplesWithEligibleConflictFallback:
       rows.filter(row => (row?.eligibleConflictFallbackCount ?? 0) > 0).length,
+    samplesWithUniqueEligibleConflictFallback:
+      rows.filter(row => row?.eligibleConflictFallbackCount === 1).length,
+    samplesWithAmbiguousEligibleConflictFallback:
+      rows.filter(row => (row?.eligibleConflictFallbackCount ?? 0) > 1).length,
     totalCandidates:
       rows.reduce((sum, row) => sum + (row?.candidateCount ?? 0), 0),
     selectedCompatible:
