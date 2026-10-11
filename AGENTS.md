@@ -7,7 +7,7 @@
 - 使用者目前單獨開發，要求以 main 為主要工作線，將相關 OCR 修改集中為批次，不再每個小功能都建立分支和 PR。必要隔離風險時才使用短期分支。
 - 舊 PR #33 已由 main 直接整合並關閉，沒有 open PR；不要重新合併舊分支。
 - GitHub Actions 分鐘已接近額度：ci.yml 僅 workflow_dispatch，禁止自行觸發或恢復自動 CI。PowerShell 本機用 npm.cmd 執行測試與 Build。
-- 最新照片實測 `.10` 已確認台胞證退步；main 目前為 `.13` conservative conflict fallback 候選，`.6` 仍是較佳比較基準；不將合成測試、PR 數量或診斷欄位數當成準確率提升。
+- 最新照片實測 `.10` 已確認台胞證退步；main 目前為 `.14` four-row conservative conflict fallback 候選，`.6` 仍是較佳比較基準；不將合成測試、PR 數量或診斷欄位數當成準確率提升。
 - 聚焦台胞證中文姓名辨識、工作影像、ROI 以及可比較的錯誤分析，累積一批有實質假設的改進後一次正式 Validation。固定 Test 不做調參，個資與證件圖片不推 GitHub。
 - `.10/.11` 真實 Validation：護照皆 13/19 全欄；台胞證皆 4/13 全欄、中文姓名 5/13。8 個錯誤姓名 8/8 已完整存在 raw row。`.12` 已發現 `Name LIN YI CHEN` 會被舊 stop-word parser 拒絕，優先修 Romanization anchor，不再增加影像 retry。
 
@@ -31,7 +31,7 @@
 
 ## 目前開發優先順序
 
-- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前 main OCR pipeline 為 `2026.10.11.13`；最新照片實測 `.12` 仍無改善，`.10/.11/.12` 台胞證皆低於 `.6`；以 `docs/HANDOFF.md` 最上方最新段落為權威。
+- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前 main OCR pipeline 為 `2026.10.11.14`；最新照片實測 `.13` 仍無改善，`.10/.11/.12/.13` 台胞證皆低於 `.6`；以 `docs/HANDOFF.md` 最上方最新段落為權威。
 - 使用者**已明確要求加速推進 OCR 精準度改善**。必須集中有依據的修改、自動化回歸，並以一次 Validation 檢驗淨改善／退步；不得擅自改固定 Test split 或把未實測 PR 說成精準率提升。
 - 不要把固定 Test 圖片加入 Train；Train / Validation / Test 仍以 Traveler group 切分，避免同人資料洩漏。
 - 現階段優先完成 V2 系統本體：團別收件、批次掃描生命週期、人工審核、Traveler / DocumentVersion、人物合併、資料一致性、production photo retention、Training Dataset 管理、CSV 匯出與備份／還原。
