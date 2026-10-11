@@ -3,6 +3,7 @@ import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from 
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
 import { isConservativeConflictFallback, selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
+import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -4204,65 +4205,18 @@ function extractPermitChineseNameFromRows(
     const value = extractHanNameFromPermitText(row)
     if (!value) return []
 
-    let compatibility: PermitRawNameCompatibility =
-      latinRows.length ? 'conflict' : 'unknown'
-    let latinDistance: number | null = null
-    let officialVariantPromotion = false
-    let standardCompatibleDistance: number | null = null
-    let officialCompatibleDistance: number | null = null
-    let unknownDistance: number | null = null
-
-    for (const entry of latinRows) {
-      const current =
-        compareChineseNameToMrzRomanization(
-          value,
-          entry.latin.surname,
-          entry.latin.givenNames,
-        )
-      const distance = Math.abs(index - entry.index)
-
-      if (current === 'compatible') {
-        standardCompatibleDistance =
-          standardCompatibleDistance === null
-            ? distance
-            : Math.min(standardCompatibleDistance, distance)
-        continue
-      }
-
-      if (
-        current === 'conflict' &&
-        compareChineseNameToMrzWithOfficialVariants(
-          value,
-          entry.latin.surname,
-          entry.latin.givenNames,
-        ) === 'compatible'
-      ) {
-        officialCompatibleDistance =
-          officialCompatibleDistance === null
-            ? distance
-            : Math.min(officialCompatibleDistance, distance)
-        continue
-      }
-
-      if (current === 'unknown') {
-        unknownDistance =
-          unknownDistance === null
-            ? distance
-            : Math.min(unknownDistance, distance)
-      }
-    }
-
-    if (standardCompatibleDistance !== null) {
-      compatibility = 'compatible'
-      latinDistance = standardCompatibleDistance
-    } else if (officialCompatibleDistance !== null) {
-      compatibility = 'compatible'
-      latinDistance = officialCompatibleDistance
-      officialVariantPromotion = true
-    } else if (unknownDistance !== null) {
-      compatibility = 'unknown'
-      latinDistance = unknownDistance
-    }
+    const romanization = resolvePermitRawRomanization(
+      value,
+      latinRows.map(entry => ({
+        surname: entry.latin.surname,
+        givenNames: entry.latin.givenNames,
+        distance: Math.abs(index - entry.index),
+      })),
+    )
+    const compatibility = romanization.compatibility
+    const latinDistance = romanization.latinDistance
+    const officialVariantPromotion =
+      romanization.officialVariantPromotion
 
     const labelDistance = labelIndexes.length
       ? Math.min(
