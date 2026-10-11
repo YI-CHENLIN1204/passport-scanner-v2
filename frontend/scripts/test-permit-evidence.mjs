@@ -33,7 +33,7 @@ try {
   rmSync(directory, { recursive: true, force: true })
 }
 
-const { selectPermitNameCandidate, selectPermitSexCandidate, selectPermitMrzVsVisualName } = helpers
+const { selectPermitNameCandidate, selectPermitSexCandidate, selectPermitSexEvidence, selectPermitMrzVsVisualName } = helpers
 const label = { value: '甲乙', score: 0.94, rank: 2.9 }
 const phonetic = { value: '丙丁', score: 0.91, rank: 3.4 }
 assert.equal(selectPermitNameCandidate(label, [], false, false)?.value, '甲乙')
@@ -55,6 +55,24 @@ assert.equal(selectPermitSexCandidate('', false, '', null, ''), '')
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.88, 'F'), 'M')
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.97, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.98, ''), 'M')
+
+assert.equal(selectPermitSexCandidate('M', true, '', null, 'F'), 'F')
+assert.deepEqual(
+  selectPermitSexEvidence('M', true, '', null, 'F'),
+  { value: 'F', source: 'semantic-row' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('F', true, '', null, 'F'),
+  { value: 'F', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('M', true, '', null, ''),
+  { value: 'M', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('', false, '', null, 'F'),
+  { value: 'F', source: 'semantic' },
+)
 
 assert.deepEqual(
   selectPermitMrzVsVisualName('甲乙', '丙丁', 'compatible', '丙丁', 0.93),
@@ -97,4 +115,4 @@ assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0
 assert.equal(shouldUseRetriedPermitName('丙丁', 0.81, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, null), false)
 
-console.log('Passed 35 synthetic permit field, MRZ cross-check and retry guards.')
+console.log('Passed 40 synthetic permit field, MRZ cross-check and retry guards.')
