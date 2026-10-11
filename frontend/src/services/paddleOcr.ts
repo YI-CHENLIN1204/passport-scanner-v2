@@ -1,6 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { enhancePermitNamePixels } from './permitNameEnhancement'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
+import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -5042,7 +5043,10 @@ async function retryPermitChineseName(
   canContinue: () => boolean = () => true,
   diagnostic?: (summary: PermitRetryDetectionSummary) => void,
 ) {
-  const crops: File[] = []
+  const crops: Array<{
+    file: File
+    region: PermitNameRetryRegion
+  }> = []
 
   const anchored = await createPermitNameGroupCrop(
     image,
@@ -5050,7 +5054,7 @@ async function retryPermitChineseName(
   )
 
   if (anchored) {
-    crops.push(anchored)
+    crops.push({ file: anchored, region: 'anchored' })
   }
 
   // Name retry requires legible Han glyphs. The generic relative crop
@@ -5074,28 +5078,33 @@ async function retryPermitChineseName(
     'permit-name-broad.png',
     { type: 'image/png' },
   )
-  crops.push(broadCrop)
+  crops.push({ file: broadCrop, region: 'broad' })
 
   // Add only one enhanced retry path. Prefer the tighter anchored ROI when
   // available; otherwise enhance the broad crop. This targets recognition
   // failures without multiplying every OCR pass.
   const enhancementSource = anchored ?? broadCrop
+  const enhancementRegion: PermitNameRetryRegion =
+    anchored ? 'anchored' : 'broad'
   if (canContinue()) {
-    crops.push(
-      await createPermitNameEnhancedVariant(enhancementSource),
-    )
+    crops.push({
+      file: await createPermitNameEnhancedVariant(enhancementSource),
+      region: enhancementRegion,
+    })
   }
 
-  const candidates: Array<
-    PermitCandidate<string>
-  > = []
+  const candidates: Array<{
+    value: string
+    score: number | null
+    region: PermitNameRetryRegion
+  }> = []
   const observations: Array<{ hasBoxes: boolean; hasCandidate: boolean }> = []
   let completedPasses = 0
 
   for (const crop of crops) {
     if (!canContinue()) break
     const [namePrediction] =
-      await instance.predict(crop)
+      await instance.predict(crop.file)
     completedPasses += 1
 
     const geometries =
@@ -5115,47 +5124,17 @@ async function retryPermitChineseName(
       hasBoxes: geometries.length > 0,
       hasCandidate: candidate !== null,
     })
-    if (candidate) candidates.push(candidate)
+    if (candidate) {
+      candidates.push({
+        value: normalizePermitChineseName(candidate.value),
+        score: candidate.score,
+        region: crop.region,
+      })
+    }
   }
 
   diagnostic?.(summarizePermitRetryDetection(observations))
-  if (!candidates.length) return null
-
-  const grouped = new Map<
-    string,
-    Array<PermitCandidate<string>>
-  >()
-
-  for (const candidate of candidates) {
-    const key = normalizePermitChineseName(
-      candidate.value,
-    )
-    const group = grouped.get(key) ?? []
-    group.push(candidate)
-    grouped.set(key, group)
-  }
-
-  return [...grouped.entries()]
-    .map(([value, group]) => {
-      const bestScore = Math.max(
-        ...group.map((item) => item.score ?? 0),
-      )
-      const consensus = group.length
-      const confidence = Math.min(
-        0.99,
-        bestScore + (consensus >= 2 ? 0.06 : 0),
-      )
-
-      return {
-        value,
-        score: bestScore,
-        rank: consensus * 2 + bestScore,
-        passes: completedPasses,
-        consensus,
-        confidence,
-      }
-    })
-    .sort((a, b) => b.rank - a.rank)[0]
+  return selectPermitRetryWinner(candidates, completedPasses)
 }
 
 export async function recognizeTaiwanCompatriotPermitWithPaddle(
