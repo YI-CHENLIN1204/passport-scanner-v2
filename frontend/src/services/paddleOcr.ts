@@ -1,7 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
-import { selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
+import { isShortExactPermitNameConflict, selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import {
@@ -793,7 +793,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.16'
+  '2026.10.11.17'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3630,6 +3630,8 @@ export interface PermitRawNameEvidenceSummary {
   selectedOfficialVariant: boolean
   joinedTokenCandidateCount: number
   selectedJoinedToken: boolean
+  oneSyllableFallbackEligibleCount: number
+  selectedOneSyllableFallback: boolean
   conflictTokenCountMismatchCandidateCount: number
   conflictOneSyllableMismatchCandidateCount: number
   conflictOtherMismatchCandidateCount: number
@@ -4290,6 +4292,13 @@ function extractPermitChineseNameFromRows(
         ).length,
       selectedJoinedToken:
         selected?.joinedTokenPromotion === true,
+      oneSyllableFallbackEligibleCount:
+        candidates.filter(candidate =>
+          isShortExactPermitNameConflict(candidate) &&
+          candidate.conflictSubtype === 'one-syllable-mismatch'
+        ).length,
+      selectedOneSyllableFallback:
+        selected?.oneSyllableFallbackPromotion === true,
       conflictTokenCountMismatchCandidateCount:
         candidates.filter(
           candidate =>
@@ -4311,16 +4320,7 @@ function extractPermitChineseNameFromRows(
             candidate.conflictSubtype === 'unclassified',
         ).length,
       shortExactConflictCandidateCount:
-        candidates.filter(candidate =>
-          candidate.compatibility === 'conflict' &&
-          candidate.exactRow &&
-          Array.from(
-            candidate.value.replace(/[\s·‧]/g, ''),
-          ).length >= 2 &&
-          Array.from(
-            candidate.value.replace(/[\s·‧]/g, ''),
-          ).length <= 4
-        ).length,
+        candidates.filter(isShortExactPermitNameConflict).length,
       nearestConflictLatinDistance: (() => {
         const distances = candidates
           .filter(candidate =>
