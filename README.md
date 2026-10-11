@@ -163,3 +163,5 @@ PostgreSQL 使用 named volume `passport_scanner_postgres`。一般的 `docker c
 
 
 2026-10-12 實測更新：`.21` 32/32 auto Validation 成功，護照中文姓名及全欄皆 14/19（74%），台胞證全部必要欄位 13/13（100%）。下一步聚焦護照剩餘五張姓名辨識問題。固定 legacy Validation 缺工作輸入影像，不代表新照片泛化準確率；禁止 GitHub Actions。
+
+> 最新候選 .22：護照兩段 crop 分區匿名診斷（無新增 OCR）；最佳已實測 .21，護照 14/19、台胞證 13/13。請以 HANDOFF 頂端為準。
