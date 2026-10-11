@@ -12,27 +12,6 @@ export interface PermitRawNameCandidate {
   officialVariantPromotion?: boolean
 }
 
-function compactHanLength(value: string) {
-  return Array.from(
-    value.replace(/[\s·‧]/g, ''),
-  ).length
-}
-
-export function isConservativeConflictFallback(
-  candidate: PermitRawNameCandidate,
-) {
-  const length = compactHanLength(candidate.value)
-
-  return (
-    candidate.compatibility === 'conflict' &&
-    candidate.exactRow &&
-    candidate.latinDistance !== null &&
-    candidate.latinDistance <= 4 &&
-    length >= 2 &&
-    length <= 4
-  )
-}
-
 function rankAcceptedCandidate(
   candidate: PermitRawNameCandidate,
 ) {
