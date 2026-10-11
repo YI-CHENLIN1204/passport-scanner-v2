@@ -1,6 +1,6 @@
 # Passport Scanner V2
 
-> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md)（目前主線 OCR `2026.10.11.12` 待驗證；最新照片實測 `.11` 無改善，`.10/.11` 台胞證皆低於 `.6`，`.6` 仍是較佳比較基準）、[docs/WORKLOG.md](./docs/WORKLOG.md) 與 [docs/OCR_OPEN_SOURCE_REVIEW.md](./docs/OCR_OPEN_SOURCE_REVIEW.md)。本 README 其餘功能描述是概覽，不代表最新 OCR 實測數據。
+> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md)（目前主線 OCR `2026.10.11.13` 待驗證；最新照片實測 `.12` 仍無改善，`.6` 仍是較佳比較基準）、[docs/WORKLOG.md](./docs/WORKLOG.md) 與 [docs/OCR_OPEN_SOURCE_REVIEW.md](./docs/OCR_OPEN_SOURCE_REVIEW.md)。本 README 其餘功能描述是概覽，不代表最新 OCR 實測數據。
 
 旅行社內部使用的證件掃描與旅客資料整理系統。
 
