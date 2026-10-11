@@ -426,3 +426,24 @@ pipeline metadata 已更新為 `2026.10.11.12`。`.12` 尚未本機 regression/b
 synthetic regression 已覆蓋：唯一 one-syllable 成功、非 exact 拒絕、5 字以上拒絕、存在第二個 short conflict 拒絕、compatible 優先、anchored unknown 優先、token-count conflict 不得誤採。版本 metadata 已更新為 `2026.10.11.17`。
 
 `.17` 尚未在使用者 Windows 本機執行 `npm.cmd run verify:ocr`、Docker frontend rebuild 或 32 張 Validation，不能宣稱達到 13/13。GitHub Actions 仍 workflow_dispatch only，未執行。
+
+
+## 2026-10-12 — `.17` 台胞證中文姓名達 13/13；main 已轉向 `.18` 性別證據修正
+
+使用者完成 `2026.10.11.17` 正式 auto Validation，32/32 成功。護照維持全欄 68%（13/19）、中文姓名 68%。台胞證再提升：全欄 **77%（10/13）**、中文姓名 **100%（13/13）**、出生日期 100%、性別 **77%（10/13）**、證件號碼 100%、有效期限 100%。因此目前台胞證唯一剩餘非滿分欄位就是 sex，且 3 張整張錯誤可由 sex 77% 解釋。
+
+`.17` one-syllable fallback 命中 2 張且實際採用 2 張；BOCA official promotion 4 張、joined-token promotion 2 張仍保留。最終 raw-row 姓名 13/13 都有結果，台胞證中文姓名正式達到 13/13。後續 **不得再調整姓名 selector**，除非新資料證明回歸；`.17` 姓名策略視為目前最佳基準鎖住。
+
+### `.18` main 候選：sex evidence
+
+檢查 `taiwanPermitMrz.ts` 確認 MRZ sex 字元位於 line1 index 22，但 composite checksum 使用 `slice(2,22) + slice(23,30)`，明確跳過 sex。故 `requiredValid=true` 也不能驗證 M/F 是否正確。
+
+舊 `selectPermitSexCandidate()` 只有在 geometry labeled sex 與 semantic sex 同時一致且高分時，才允許覆蓋 MRZ；若 OCR raw row 已直接讀到 `性別女 / Sex F`，但 geometry label 沒抓到，仍會錯誤保留未受 checksum 保護的 MRZ sex。
+
+`.18` 新增 `selectPermitSexEvidence()`：保留既有高分 visual-agreement 優先；若 **同列 strong semantic sex** 與 MRZ 衝突，允許 semantic-row override；沒有 strong semantic 時仍保留 MRZ。semantic parser 已抽成 `permitSexSemantics.ts`，只逐 row 接受同列 `性別男/女`、`男/女性別`、`Sex M/F`，不再把全部 OCR rows 串起來跨列湊字。
+
+Validation 新增匿名 sex evidence：有 MRZ sex、geometry label、same-row semantic 各幾張；MRZ vs semantic conflict 幾張；其中 MRZ 其他 checksum 仍 requiredValid 幾張；最終來源 visual-agreement / semantic-row / MRZ / label / semantic / empty 各幾張。不保存旅客資料。
+
+新增 executable tests：直接驗證 semantic-row 可覆蓋 MRZ、無 semantic 時 MRZ 保留、same-row parser 正負例（跨 row 不得誤判）、sex diagnostics aggregate/UI wiring。`npm.cmd run verify:ocr` 已納入 sex evidence test。pipeline metadata 為 `2026.10.11.18`。
+
+`.18` 尚未在使用者 Windows 本機跑 verify/build 或 32 張 Validation，不能宣稱 sex 13/13。GitHub Actions 維持 workflow_dispatch only、未執行。
