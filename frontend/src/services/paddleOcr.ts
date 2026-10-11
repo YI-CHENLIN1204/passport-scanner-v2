@@ -6,6 +6,7 @@ import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import { extractPermitSemanticSexFromRows } from './permitSexSemantics'
 import { collectStandalonePermitSexEvidence } from './permitStandaloneSexEvidence'
+import { evaluatePassportOneSyllableShadow } from './passportOneSyllableShadow'
 import {
   collectPermitSexRetryEvidence,
   selectPermitSexRetryRegion,
@@ -93,6 +94,8 @@ export interface PassportChineseNameDiagnostic {
   decisionTrace?: PassportNameDecision[]
   shadowOneMismatchName?: string | null
   shadowOfficialName?: string | null
+  strictOneSyllableShadowName?: string | null
+  strictOneSyllableShadowDecision?: string
 }
 
 export interface PaddleBaselineResult {
@@ -330,6 +333,8 @@ function chooseTaiwanChineseName(
     decisions: PassportNameDecision[],
     shadowName: string | null,
     officialName: string | null,
+    strictName: string | null,
+    strictDecision: string,
   ) => void,
 ) {
   const geometries = items
@@ -453,6 +458,43 @@ function chooseTaiwanChineseName(
     return picked.text
   }
 
+  // Read-only conservative policy evaluation, with no dependence on
+  // Validation ground truth and no change to the production return path.
+  const strictShadow = (candidates: Array<{
+    text: string
+    score: number
+    romanizationStatus: RomanizationCompatibility
+    rank: number
+  }>) => {
+    const conflicting = candidates.filter(candidate =>
+      candidate.romanizationStatus === 'conflict'
+    )
+    const evaluated = evaluatePassportOneSyllableShadow(
+      conflicting.map(candidate => ({
+        text: candidate.text,
+        score: candidate.score,
+        rank: candidate.rank,
+        subtype: parsedMrz
+          ? classifyRomanizationConflict(
+              candidate.text,
+              parsedMrz.surname,
+              parsedMrz.givenNames,
+            )
+          : 'unclassified',
+        exactStandalone: geometries.some(item =>
+          item.normalized === candidate.text &&
+          item.rawText.trim() === candidate.text
+        ),
+        anchored: Boolean(nameLabels.length || englishNameAnchors.length),
+      })),
+      candidates.some(candidate =>
+        candidate.romanizationStatus === 'compatible' ||
+        candidate.romanizationStatus === 'unknown'
+      ),
+    )
+    return evaluated
+  }
+
   const directLabelValues = geometries.flatMap((item) => {
     if (!item.rawText.includes('姓名')) return []
 
@@ -527,7 +569,9 @@ function chooseTaiwanChineseName(
                 : undefined,
           }
         }), selectShadow(directLabelValues),
-        selectOfficialShadow(directLabelValues, true))
+        selectOfficialShadow(directLabelValues, true),
+        strictShadow(directLabelValues).text,
+        strictShadow(directLabelValues).decision)
     }
 
     return direct && direct.score >= 0.65
@@ -693,7 +737,9 @@ function chooseTaiwanChineseName(
             : undefined,
       }
     }), selectShadow([...directLabelValues, ...spatialCandidates]),
-      selectOfficialShadow([...directLabelValues, ...spatialCandidates]))
+      selectOfficialShadow([...directLabelValues, ...spatialCandidates]),
+      strictShadow([...directLabelValues, ...spatialCandidates]).text,
+      strictShadow([...directLabelValues, ...spatialCandidates]).decision)
   }
 
   if (!best || best.score < 0.65) {
@@ -3104,10 +3150,12 @@ async function predictOne(
       const vizName = chooseTaiwanChineseName(
         vizItems,
         best.parsedMrz,
-        (decisions, shadowName, officialName) => {
+        (decisions, shadowName, officialName, strictName, strictDecision) => {
           diagnostic.decisionTrace = decisions
           diagnostic.shadowOneMismatchName = shadowName
           diagnostic.shadowOfficialName = officialName
+          diagnostic.strictOneSyllableShadowName = strictName
+          diagnostic.strictOneSyllableShadowDecision = strictDecision
         },
       )
 
