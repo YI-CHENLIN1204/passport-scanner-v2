@@ -198,7 +198,7 @@ for (const secret of ['name', '姓名', 'rawRows', 'sampleId', 'documentNumber']
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
 assert.match(ocr, /extractPermitSemanticSexFromRows\(rawRows\)/)
 assert.match(ocr, /collectStandalonePermitSexEvidence/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.27'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.28'/)
 
 const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
 assert.match(page, /permitSexEvidenceCounts/)
