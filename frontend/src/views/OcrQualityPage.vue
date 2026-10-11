@@ -1215,7 +1215,7 @@ function aggregatePassportCropDiagnostics(
     row.passportNameFailure !== null && row.passportCropDiagnosis !== null
   )
   const count = (
-    source: 'nameField' | 'vizCrop',
+    source: 'nameField' | 'vizCrop' | 'focusedViz',
     value: PassportCropClass,
   ) => wrong.filter(row =>
     row.passportCropDiagnosis?.[source] === value
