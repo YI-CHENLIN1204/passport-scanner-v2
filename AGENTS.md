@@ -86,3 +86,5 @@
 > 2026-10-12 `.24` 實測：32/32 Validation 成功，護照中文姓名 14/19、台胞證全欄 13/13。唯一有正確姓名卻未採用的護照案例原因為 `name-field / romanization:one-syllable-mismatch` 1 張；不可無條件放寬 selector。下一步僅能先做嚴格條件的 shadow / synthetic 驗證；禁止 GitHub Actions。
 
 > `.25` 嚴格護照 one-syllable mismatch 唯讀 shadow 候選已加入，待本機 Validation。已實測最佳 `.24`：護照 14/19、台胞證 13/13。禁止 GitHub Actions。
+
+> 最新 main 候選 `.26`：只修復 read-only shadow 的已接受姓名保護與多 ROI 合併模擬，最佳實測 `.25` 護照 14/19、台胞證 13/13；尚待本機驗證。禁止 GitHub Actions。
