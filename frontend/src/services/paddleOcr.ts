@@ -1,5 +1,6 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { enhancePermitNamePixels } from './permitNameEnhancement'
+import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -5039,6 +5040,7 @@ async function retryPermitChineseName(
   image: File,
   prediction: unknown,
   canContinue: () => boolean = () => true,
+  diagnostic?: (summary: PermitRetryDetectionSummary) => void,
 ) {
   const crops: File[] = []
 
@@ -5087,6 +5089,7 @@ async function retryPermitChineseName(
   const candidates: Array<
     PermitCandidate<string>
   > = []
+  const observations: Array<{ hasBoxes: boolean; hasCandidate: boolean }> = []
   let completedPasses = 0
 
   for (const crop of crops) {
@@ -5108,9 +5111,14 @@ async function retryPermitChineseName(
     const candidate =
       choosePermitChineseName(geometries)
 
+    observations.push({
+      hasBoxes: geometries.length > 0,
+      hasCandidate: candidate !== null,
+    })
     if (candidate) candidates.push(candidate)
   }
 
+  diagnostic?.(summarizePermitRetryDetection(observations))
   if (!candidates.length) return null
 
   const grouped = new Map<
@@ -5156,6 +5164,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     progress: TaiwanCompatriotPermitOcrProgress,
   ) => void,
   experimentalInstance?: ValidationPaddleInstance,
+  retryDiagnostic?: (summary: PermitRetryDetectionSummary) => void,
 ): Promise<TaiwanCompatriotPermitOcrResult> {
   const totalStartedAt = performance.now()
   const softBudgetMs = 9_000
@@ -5359,6 +5368,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       best.predictionImage,
       best.prediction,
       withinBudget,
+      retryDiagnostic,
     )
 
     if (
