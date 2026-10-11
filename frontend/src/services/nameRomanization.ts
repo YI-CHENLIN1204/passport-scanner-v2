@@ -258,6 +258,86 @@ export function compareChineseNameToMrzWithOfficialVariants(
   )
 }
 
+
+/**
+ * Permit-only exact fallback for OCR rows where spaces/hyphens between
+ * romanized syllables disappeared, e.g. WANG I MING -> WANGIMING.
+ * Every Han character must consume exactly one legal Hanyu/common/BOCA alias
+ * and the entire Latin string must be consumed. No fuzzy syllable mismatch.
+ */
+export function matchesChineseNameToJoinedRomanizationWithOfficialVariants(
+  chineseName: string,
+  surname: string,
+  givenNames: string,
+) {
+  const compactChinese = chineseName
+    .replace(/[\s·‧]/g, '')
+    .trim()
+
+  if (
+    !compactChinese ||
+    !/^[\p{Script=Han}]+$/u.test(compactChinese)
+  ) {
+    return false
+  }
+
+  const characters = Array.from(compactChinese)
+  const joinedLatin = splitMrzNameTokens(
+    surname,
+    givenNames,
+  ).join('')
+
+  if (!joinedLatin) return false
+
+  const memo = new Map<string, boolean>()
+
+  const matchesFrom = (
+    characterIndex: number,
+    latinOffset: number,
+  ): boolean => {
+    const key = `${characterIndex}:${latinOffset}`
+    const cached = memo.get(key)
+    if (cached !== undefined) return cached
+
+    if (characterIndex === characters.length) {
+      const complete = latinOffset === joinedLatin.length
+      memo.set(key, complete)
+      return complete
+    }
+
+    const aliases = pinyinAliasesForCharacter(
+      characters[characterIndex],
+      true,
+    )
+
+    for (const alias of aliases) {
+      const end = latinOffset + alias.length
+      if (end > joinedLatin.length) continue
+
+      const segment = joinedLatin.slice(
+        latinOffset,
+        end,
+      )
+
+      if (
+        romanizationTokenMatchesAlias(
+          segment,
+          alias,
+        ) &&
+        matchesFrom(characterIndex + 1, end)
+      ) {
+        memo.set(key, true)
+        return true
+      }
+    }
+
+    memo.set(key, false)
+    return false
+  }
+
+  return matchesFrom(0, 0)
+}
+
 /** Read-only diagnostic for a conflict already reported by the production comparator.
  * Never returns names, MRZ tokens or any other personally identifying content.
  */
