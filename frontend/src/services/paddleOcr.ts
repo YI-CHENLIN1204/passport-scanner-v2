@@ -30,8 +30,9 @@ import {
 } from './permitNameRetryPolicy'
 import {
   selectPermitNameCandidate,
-  selectPermitSexCandidate,
+  selectPermitSexEvidence,
   selectPermitMrzVsVisualName,
+  type PermitSexEvidenceSource,
 } from './permitFieldEvidence'
 import {
   parseTaiwanPermitMrz,
@@ -793,7 +794,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.17'
+  '2026.10.11.18'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3670,6 +3671,14 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNameConsensus: number
   nameRetryApplied: boolean
   rawNameEvidence: PermitRawNameEvidenceSummary
+  sexEvidence: {
+    mrzSex: PermitSex
+    mrzRequiredValid: boolean
+    labeledSex: PermitSex
+    labeledScore: number | null
+    semanticSex: PermitSex
+    selectedSource: PermitSexEvidenceSource
+  }
   chineseNameConfidence: number | null
   textHorizontalScore: number
   uprightSemanticScore: number
@@ -4156,25 +4165,26 @@ function extractPermitExpiryFromRows(
 function extractPermitSexFromRows(
   rows: string[],
 ): PermitSex | null {
-  const compact = rows
-    .join('')
-    .replace(/\s+/g, '')
-    .toUpperCase()
+  for (const row of rows) {
+    const compact = row
+      .replace(/\s+/g, '')
+      .toUpperCase()
 
-  if (
-    /女(?:性别|性別)/.test(compact) ||
-    /(?:性别|性別)[:：]?女/.test(compact) ||
-    /(?:SEX)[:：]?F/.test(compact)
-  ) {
-    return 'F'
-  }
+    if (
+      /女(?:性别|性別)/.test(compact) ||
+      /(?:性别|性別)[:：]?女/.test(compact) ||
+      /(?:SEX)[:：]?F(?:$|[^A-Z])/.test(compact)
+    ) {
+      return 'F'
+    }
 
-  if (
-    /男(?:性别|性別)/.test(compact) ||
-    /(?:性别|性別)[:：]?男/.test(compact) ||
-    /(?:SEX)[:：]?M/.test(compact)
-  ) {
-    return 'M'
+    if (
+      /男(?:性别|性別)/.test(compact) ||
+      /(?:性别|性別)[:：]?男/.test(compact) ||
+      /(?:SEX)[:：]?M(?:$|[^A-Z])/.test(compact)
+    ) {
+      return 'M'
+    }
   }
 
   return null
@@ -4586,13 +4596,14 @@ function buildTaiwanCompatriotPermitResult(
     inferredBirth?.value ||
     ''
 
-  const finalSex = selectPermitSexCandidate(
+  const sexEvidence = selectPermitSexEvidence(
     parsedMrz?.sex ?? '',
     parsedMrz?.validation.requiredValid === true,
     sex?.value ?? '',
     sex?.score ?? null,
     semanticSex ?? '',
   )
+  const finalSex = sexEvidence.value
 
   const finalExpiryDate =
     parsedMrz?.expiryDate ||
@@ -4647,6 +4658,15 @@ function buildTaiwanCompatriotPermitResult(
         : 0,
     nameRetryApplied: false,
     rawNameEvidence: rawNameSelection.diagnostic,
+    sexEvidence: {
+      mrzSex: parsedMrz?.sex ?? '',
+      mrzRequiredValid:
+        parsedMrz?.validation.requiredValid === true,
+      labeledSex: sex?.value ?? '',
+      labeledScore: sex?.score ?? null,
+      semanticSex: semanticSex ?? '',
+      selectedSource: sexEvidence.source,
+    },
     chineseNameConfidence:
       nameEvidence.source === 'visual-agreement'
         ? Math.min(0.97, name?.score ?? 0.9)
