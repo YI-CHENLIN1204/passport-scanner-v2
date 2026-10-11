@@ -574,3 +574,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 **尚未驗證 .25 真實照片或 Windows build；準確率不可宣稱提升，最佳已實測 .24：護照 14/19、台胞證 13/13。** 下一步集中本機 `npm.cmd run verify:ocr`、Docker frontend rebuild 及同一組 32 張 auto Validation；根據匿名 strict shadow 的 rescued/regressed/decision 件數決定是否值得下一輪受限正式採用。凍結台胞證 BOCA、joined-token、unique one-syllable、standalone sex、focused retry。禁止 GitHub Actions、不得上傳任何個資，legacy Validation 缺原始工作輸入影像。
 
+## 2026-10-12 — .25 正式 Validation：嚴格 one-syllable shadow 未證實改善
+
+使用者本機完成 pipeline 2026.10.11.25 的固定 32 張 auto Validation，32/32 完成、失敗 0。護照中文姓名及全欄 14/19（74%），其餘七欄 19/19；台胞證全欄及五個必要欄位 13/13（100%），與 .24 持平。護照 OCR 中位數約 1.2 秒、P90 約 2.3 秒。
+
+新的嚴格 one-syllable shadow：潛在改善 0、潛在退步 0、維持正確 14、維持錯誤 5。匿名 eligibility 理由統計：existing-accepted 9、eligible 6、ambiguous 3、wrong-subtype 1。這些分類不等同於樣本正確率，eligible 6 並不代表六張能救回。原有單音節放寬 shadow（不同的較寬鬆反事實規則）仍顯示潛在改善 1、退步 0，但不能據此認定適合正式採用。
+
+重要決策：.25 嚴格政策沒有展現淨改善，**不得直接採用為正式護照姓名 selector**；保留為只讀研究診斷。特別要先查證 shadow 對多裁切區域的合併順序、既有 accepted-name gate 與實際覆寫策略是否一致，不能再只憑 eligible 計數前進。唯一已完整辨識到的正確姓名候選仍是 name-field / romanization:one-syllable-mismatch，未改正式欄位。正式最佳實測準確率仍護照 14/19、台胞證 13/13。32 張 legacy Validation 均缺原始 OCR 工作輸入照片，不代表正式上傳新照片的準確率。禁止 GitHub Actions，不上傳敏感個資。
+
