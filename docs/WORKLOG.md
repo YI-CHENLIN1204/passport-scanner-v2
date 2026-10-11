@@ -221,3 +221,7 @@ GitHub Actions 保持手動但不啟動，本 PR 的原始碼和測試腳本尚�
 ### PR #33 測試品質補強（GitHub 端原始碼檢查，尚待本機執行）
 
 將姓名重讀診斷中的布林觀察轉為 `permitRetryDetection.ts` 純函式，集中處理每張 cropped OCR 計數及跨 Validation 樣本的匿名彙總。`test-permit-retry-detection.mjs` 已改為實際載入並測試 TypeScript 函式、空資料／有框無姓名／候選與隱私輸出，並保留正式 OCR `predictionImage` 來源匹配檢查。已在 GitHub 端核對函式與前端引用路徑，但**尚未在使用者本機執行 npm test/build**；不應聲稱合成測試通過。診斷不改 OCR 模型、選擇規則、正式版本 `.8`，不新增個資持久化與 GitHub Actions 執行。
+
+### 診斷批次補強：中文姓名錯誤子群的 OCR 框件數
+
+Validation 額外顯示中文姓名 exact 錯誤子群中的重讀樣本數、裁切次數、得到 OCR 幾何框次數、取得合格候選次數，避免只有全體彙總而無法觀察 7 張錯誤的失敗階段。資料只存在於匿名計數；未存個資、沒有判斷 Detection 原因，也不干預正式 OCR。結構測試新增子群計數引用守衛。仍須本機 `test:permit-retry-detection` 和 `build` 後才可合併；Actions 繼續停用。
