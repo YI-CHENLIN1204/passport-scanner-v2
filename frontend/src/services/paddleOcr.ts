@@ -1,7 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
-import { selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
+import { isConservativeConflictFallback, selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import {
   isPlausibleTd3Line1,
@@ -3625,6 +3625,7 @@ export interface PermitRawNameEvidenceSummary {
   compatibleCandidateCount: number
   unknownCandidateCount: number
   conflictCandidateCount: number
+  eligibleConflictFallbackCount: number
   selectedCompatibility: PermitRawNameCompatibility | null
 }
 
@@ -4285,6 +4286,10 @@ function extractPermitChineseNameFromRows(
         candidates.filter(
           candidate =>
             candidate.compatibility === 'conflict',
+        ).length,
+      eligibleConflictFallbackCount:
+        candidates.filter(
+          isConservativeConflictFallback,
         ).length,
       selectedCompatibility:
         selected?.compatibility ?? null,
