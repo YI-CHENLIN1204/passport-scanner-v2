@@ -3628,6 +3628,10 @@ export interface PermitRawNameEvidenceSummary {
   conflictCandidateCount: number
   officialVariantCandidateCount: number
   selectedOfficialVariant: boolean
+  conflictTokenCountMismatchCandidateCount: number
+  conflictOneSyllableMismatchCandidateCount: number
+  conflictOtherMismatchCandidateCount: number
+  conflictUnclassifiedCandidateCount: number
   shortExactConflictCandidateCount: number
   nearestConflictLatinDistance: number | null
   selectedCompatibility: PermitRawNameCompatibility | null
@@ -4234,6 +4238,7 @@ function extractPermitChineseNameFromRows(
       labelDistance,
       exactRow: compactRow === value,
       officialVariantPromotion,
+      conflictSubtype: romanization.conflictSubtype,
     }]
   })
 
@@ -4273,6 +4278,26 @@ function extractPermitChineseNameFromRows(
         ).length,
       selectedOfficialVariant:
         selected?.officialVariantPromotion === true,
+      conflictTokenCountMismatchCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.conflictSubtype === 'token-count-mismatch',
+        ).length,
+      conflictOneSyllableMismatchCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.conflictSubtype === 'one-syllable-mismatch',
+        ).length,
+      conflictOtherMismatchCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.conflictSubtype === 'other-mismatch',
+        ).length,
+      conflictUnclassifiedCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.conflictSubtype === 'unclassified',
+        ).length,
       shortExactConflictCandidateCount:
         candidates.filter(candidate =>
           candidate.compatibility === 'conflict' &&
