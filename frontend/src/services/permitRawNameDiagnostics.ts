@@ -7,6 +7,10 @@ export interface PermitRawNameEvidenceLike {
   conflictCandidateCount: number
   officialVariantCandidateCount: number
   selectedOfficialVariant: boolean
+  conflictTokenCountMismatchCandidateCount: number
+  conflictOneSyllableMismatchCandidateCount: number
+  conflictOtherMismatchCandidateCount: number
+  conflictUnclassifiedCandidateCount: number
   shortExactConflictCandidateCount: number
   nearestConflictLatinDistance: number | null
   selectedCompatibility: 'compatible' | 'unknown' | 'conflict' | null
@@ -30,6 +34,14 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => (row?.officialVariantCandidateCount ?? 0) > 0).length,
     selectedOfficialVariant:
       rows.filter(row => row?.selectedOfficialVariant === true).length,
+    samplesWithConflictTokenCountMismatch:
+      rows.filter(row => (row?.conflictTokenCountMismatchCandidateCount ?? 0) > 0).length,
+    samplesWithConflictOneSyllableMismatch:
+      rows.filter(row => (row?.conflictOneSyllableMismatchCandidateCount ?? 0) > 0).length,
+    samplesWithConflictOtherMismatch:
+      rows.filter(row => (row?.conflictOtherMismatchCandidateCount ?? 0) > 0).length,
+    samplesWithConflictUnclassified:
+      rows.filter(row => (row?.conflictUnclassifiedCandidateCount ?? 0) > 0).length,
     samplesWithShortExactConflictCandidate:
       rows.filter(row => (row?.shortExactConflictCandidateCount ?? 0) > 0).length,
     samplesConflictDistanceLe2:
