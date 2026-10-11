@@ -3618,6 +3618,16 @@ export async function recognizePassportsWithPaddle(
 
 export type PermitSex = '' | 'M' | 'F' | 'X'
 
+export interface PermitRawNameEvidenceSummary {
+  latinRowCount: number
+  labelRowCount: number
+  candidateCount: number
+  compatibleCandidateCount: number
+  unknownCandidateCount: number
+  conflictCandidateCount: number
+  selectedCompatibility: PermitRawNameCompatibility | null
+}
+
 export interface TaiwanCompatriotPermitOcrResult {
   initializationMs: number
   predictMs: number
@@ -3646,6 +3656,7 @@ export interface TaiwanCompatriotPermitOcrResult {
   chineseNamePasses: number
   chineseNameConsensus: number
   nameRetryApplied: boolean
+  rawNameEvidence: PermitRawNameEvidenceSummary
   chineseNameConfidence: number | null
   textHorizontalScore: number
   uprightSemanticScore: number
@@ -4249,12 +4260,36 @@ function extractPermitChineseNameFromRows(
   const selected =
     selectPermitRawNameCandidate(candidates)
 
-  return selected
-    ? {
-        value: selected.value,
-        compatibility: selected.compatibility,
-      }
-    : null
+  return {
+    selected: selected
+      ? {
+          value: selected.value,
+          compatibility: selected.compatibility,
+        }
+      : null,
+    diagnostic: {
+      latinRowCount: latinRows.length,
+      labelRowCount: labelIndexes.length,
+      candidateCount: candidates.length,
+      compatibleCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.compatibility === 'compatible',
+        ).length,
+      unknownCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.compatibility === 'unknown',
+        ).length,
+      conflictCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.compatibility === 'conflict',
+        ).length,
+      selectedCompatibility:
+        selected?.compatibility ?? null,
+    },
+  }
 }
 
 function buildTaiwanCompatriotPermitResult(
@@ -4280,8 +4315,9 @@ function buildTaiwanCompatriotPermitResult(
   const rawRows = buildTextRows(items)
   const parsedMrz = parseTaiwanPermitMrz(rawRows)
 
-  const rowName =
+  const rawNameSelection =
     extractPermitChineseNameFromRows(rawRows)
+  const rowName = rawNameSelection.selected
 
   const name = choosePermitChineseName(geometries)
 
@@ -4564,6 +4600,7 @@ function buildTaiwanCompatriotPermitResult(
         ? 1
         : 0,
     nameRetryApplied: false,
+    rawNameEvidence: rawNameSelection.diagnostic,
     chineseNameConfidence:
       nameEvidence.source === 'visual-agreement'
         ? Math.min(0.97, name?.score ?? 0.9)
