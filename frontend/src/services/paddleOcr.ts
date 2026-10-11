@@ -88,7 +88,7 @@ export interface PassportNameDecision {
 }
 
 export interface PassportChineseNameDiagnostic {
-  source: 'name-field' | 'viz-crop'
+  source: 'name-field' | 'viz-crop' | 'focused-viz'
   rawTexts: string[]
   candidateTexts: string[]
   decisionTrace?: PassportNameDecision[]
@@ -854,7 +854,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.26'
+  '2026.10.11.27'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -1525,6 +1525,23 @@ async function createRelativeCrop(
       }
     }, 'image/png')
   })
+}
+
+async function createTaiwanFocusedVizCrop(image: File) {
+  // Single narrow follow-up only after prior name crops have not produced
+  // a romanization-compatible result. Avoid another full-page inference.
+  const bitmap = await createImageBitmap(image)
+  const width = bitmap.width
+  const height = bitmap.height
+  bitmap.close()
+  return createPixelCrop(
+    image,
+    width * 0.24,
+    height * 0.12,
+    width * 0.60,
+    height * 0.34,
+    1500,
+  )
 }
 
 async function createTaiwanVizCrop(image: File) {
@@ -3088,7 +3105,7 @@ async function predictOne(
   if (isTaiwanPassport) {
     const crops: Array<{
       blob: Blob
-      source: 'name-field' | 'viz-crop'
+      source: 'name-field' | 'viz-crop' | 'focused-viz'
     }> = []
 
     const anchoredCrop = await createTaiwanNameFieldCrop(
@@ -3115,6 +3132,13 @@ async function predictOne(
     // This prevents an unknown name-field guess from prematurely skipping
     // the already existing broad VIZ crop.
     let provisionalName: ReturnType<typeof chooseTaiwanChineseName> = null
+    // A third ROI is queued only for an unresolved result. It does not
+    // affect already compatible passport names or any permit OCR.
+    crops.push({
+      blob: await createTaiwanFocusedVizCrop(image),
+      source: 'focused-viz',
+    })
+
     for (const crop of crops) {
       const vizStartedAt = performance.now()
       const [vizPrediction] = await instance.predict(crop.blob)
@@ -3191,7 +3215,7 @@ async function predictOne(
         }
       }
 
-      if (crop.source === 'viz-crop') break
+      if (crop.source === 'focused-viz') break
     }
   }
 
