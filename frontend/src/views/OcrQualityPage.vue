@@ -450,7 +450,7 @@ async function currentFieldsForSample(
       permitRetryDetection: retryDetection,
       permitSource: {
         distanceCropUsed: result.distanceCropUsed,
-        nameRetryPasses: result.chineseNamePasses,
+        nameRetryApplied: result.nameRetryApplied,
         nameRetryConsensus: result.chineseNameConsensus,
         mrzUsed: result.mrzUsed,
       },
@@ -2258,8 +2258,8 @@ onMounted(load)
             >
               台胞證選中來源（匿名件數）：放大距離裁切
               {{ result.permitSourceCounts.distanceCropUsed }}；
-              姓名重讀候選已採用
-              {{ result.permitSourceCounts.nameRetryAccepted }}；
+              姓名重讀實際覆寫
+              {{ result.permitSourceCounts.nameRetryApplied }}；
               重讀雙區域有一致候選
               {{ result.permitSourceCounts.nameRetryConsensus }}；
               MRZ 曾提供欄位
