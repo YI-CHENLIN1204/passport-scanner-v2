@@ -4999,10 +4999,59 @@ async function createPermitNameGroupCrop(
   )
 }
 
+async function createPermitNameEnhancedVariant(
+  image: File,
+) {
+  const bitmap = await createImageBitmap(image)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) {
+    bitmap.close()
+    throw new Error('無法建立台胞證姓名增強 Canvas。')
+  }
+  context.drawImage(bitmap, 0, 0)
+  bitmap.close()
+
+  const frame = context.getImageData(0, 0, canvas.width, canvas.height)
+  const pixels = frame.data
+  const contrast = 1.25
+  for (let index = 0; index < pixels.length; index += 4) {
+    const luminance =
+      pixels[index] * 0.299 +
+      pixels[index + 1] * 0.587 +
+      pixels[index + 2] * 0.114
+    const adjusted = Math.max(
+      0,
+      Math.min(255, (luminance - 128) * contrast + 128),
+    )
+    pixels[index] = adjusted
+    pixels[index + 1] = adjusted
+    pixels[index + 2] = adjusted
+  }
+  context.putImageData(frame, 0, 0)
+
+  return new Promise<File>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('無法建立台胞證姓名增強圖片。'))
+        return
+      }
+      resolve(new File(
+        [blob],
+        'permit-name-enhanced.png',
+        { type: 'image/png' },
+      ))
+    }, 'image/png')
+  })
+}
+
 async function retryPermitChineseName(
   instance: PaddleInstance,
   image: File,
   prediction: unknown,
+  canContinue: () => boolean = () => true,
 ) {
   const crops: File[] = []
 
@@ -5031,19 +5080,29 @@ async function retryPermitChineseName(
     1500,
   )
 
-  crops.push(
-    new File(
-      [broadBlob],
-      'permit-name-broad.png',
-      { type: 'image/png' },
-    ),
+  const broadCrop = new File(
+    [broadBlob],
+    'permit-name-broad.png',
+    { type: 'image/png' },
   )
+  crops.push(broadCrop)
+
+  // Add only one enhanced retry path. Prefer the tighter anchored ROI when
+  // available; otherwise enhance the broad crop. This targets recognition
+  // failures without multiplying every OCR pass.
+  const enhancementSource = anchored ?? broadCrop
+  if (canContinue()) {
+    crops.push(
+      await createPermitNameEnhancedVariant(enhancementSource),
+    )
+  }
 
   const candidates: Array<
     PermitCandidate<string>
   > = []
 
   for (const crop of crops) {
+    if (!canContinue()) break
     const [namePrediction] =
       await instance.predict(crop)
 
@@ -5310,6 +5369,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       instance,
       best.predictionImage,
       best.prediction,
+      withinBudget,
     )
 
     if (
