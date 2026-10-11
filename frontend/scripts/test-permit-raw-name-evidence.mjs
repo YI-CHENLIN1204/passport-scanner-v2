@@ -79,4 +79,14 @@ assert.equal(
 )
 
 assert.equal(select([]), null)
-console.log('Permit raw-row name evidence ranking tests passed')
+
+const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
+const rowSelectorStart = ocr.indexOf('function extractPermitChineseNameFromRows(')
+const rowSelectorEnd = ocr.indexOf('function buildTaiwanCompatriotPermitResult(', rowSelectorStart)
+assert.ok(rowSelectorStart >= 0 && rowSelectorEnd > rowSelectorStart)
+const rowSelector = ocr.slice(rowSelectorStart, rowSelectorEnd)
+assert.match(rowSelector, /selectPermitRawNameCandidate\(candidates\)/)
+assert.doesNotMatch(rowSelector, /offset <= 2/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.11'/)
+
+console.log('Permit raw-row name evidence ranking and wiring tests passed')
