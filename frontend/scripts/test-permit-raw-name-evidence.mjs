@@ -149,7 +149,20 @@ assert.equal(
     {
       value: '甲乙丙',
       compatibility: 'conflict',
-      latinDistance: 3,
+      latinDistance: 4,
+      labelDistance: null,
+      exactRow: true,
+    },
+  ])?.value,
+  '甲乙丙',
+)
+
+assert.equal(
+  select([
+    {
+      value: '甲乙丙',
+      compatibility: 'conflict',
+      latinDistance: 5,
       labelDistance: null,
       exactRow: true,
     },
@@ -179,6 +192,6 @@ assert.ok(rowSelectorStart >= 0 && rowSelectorEnd > rowSelectorStart)
 const rowSelector = ocr.slice(rowSelectorStart, rowSelectorEnd)
 assert.match(rowSelector, /selectPermitRawNameCandidate\(candidates\)/)
 assert.doesNotMatch(rowSelector, /offset <= 2/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.13'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.14'/)
 
 console.log('Permit raw-row name evidence ranking and wiring tests passed')
