@@ -2298,6 +2298,10 @@ onMounted(load)
               {{ result.permitSexEvidenceCounts.samplesWithLabeledSex }} 張；
               同列 Sex／性別語意證據
               {{ result.permitSexEvidenceCounts.samplesWithSemanticSex }} 張；
+              有唯一 standalone 男／女／M／F token
+              {{ result.permitSexEvidenceCounts.samplesWithStandaloneSexToken }} 張；
+              standalone token 有 M/F 衝突
+              {{ result.permitSexEvidenceCounts.samplesWithStandaloneTokenConflict }} 張；
               MRZ 與同列語意衝突
               {{ result.permitSexEvidenceCounts.mrzSemanticConflict }} 張；
               其中 MRZ 其他 checksum 仍全數有效
@@ -2309,6 +2313,8 @@ onMounted(load)
               MRZ {{ result.permitSexEvidenceCounts.selectedMrz }}；
               label {{ result.permitSexEvidenceCounts.selectedLabel }}；
               semantic fallback {{ result.permitSexEvidenceCounts.selectedSemantic }}；
+              standalone-token fallback
+              {{ result.permitSexEvidenceCounts.selectedStandaloneToken }}；
               empty {{ result.permitSexEvidenceCounts.selectedEmpty }}。
               MRZ 的 sex 字元不在現有 checksum 驗證範圍內；此處僅為匿名來源診斷。
             </p>
