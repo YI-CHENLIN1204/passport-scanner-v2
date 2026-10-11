@@ -1,7 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
-import { enhancePermitNamePixels } from './permitNameEnhancement'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
+import { selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -791,7 +791,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.10'
+  '2026.10.11.11'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4240,41 +4240,102 @@ function extractPermitSexFromRows(
 function extractPermitChineseNameFromRows(
   rows: string[],
 ) {
-  for (let index = 0; index < rows.length; index += 1) {
-    const latin = extractPermitLatinName(rows[index])
-    if (!latin) continue
+  const latinRows = rows
+    .map((row, index) => ({
+      index,
+      latin: extractPermitLatinName(row),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        index: number
+        latin: PermitLatinName
+      } => entry.latin !== null,
+    )
 
-    for (
-      let offset = 1;
-      offset <= 2 && index - offset >= 0;
-      offset += 1
-    ) {
-      const candidate =
-        extractHanNameFromPermitText(
-          rows[index - offset],
-        )
+  const labelIndexes = rows
+    .map((row, index) => ({
+      index,
+      matches: permitLabelMatches(
+        row,
+        ['姓名', 'Name'],
+      ),
+    }))
+    .filter(entry => entry.matches)
+    .map(entry => entry.index)
 
-      if (!candidate) continue
+  const candidates = rows.flatMap((row, index) => {
+    const value = extractHanNameFromPermitText(row)
+    if (!value) return []
 
-      const compatibility =
+    let compatibility: PermitRawNameCompatibility =
+      latinRows.length ? 'conflict' : 'unknown'
+    let latinDistance: number | null = null
+
+    for (const entry of latinRows) {
+      const current =
         compareChineseNameToMrzRomanization(
-          candidate,
-          latin.surname,
-          latin.givenNames,
+          value,
+          entry.latin.surname,
+          entry.latin.givenNames,
         )
+      const distance = Math.abs(index - entry.index)
 
-      if (compatibility === 'conflict') {
+      if (current === 'compatible') {
+        if (
+          compatibility !== 'compatible' ||
+          latinDistance === null ||
+          distance < latinDistance
+        ) {
+          compatibility = 'compatible'
+          latinDistance = distance
+        }
         continue
       }
 
-      return {
-        value: candidate,
-        compatibility,
+      if (
+        current === 'unknown' &&
+        compatibility !== 'compatible' &&
+        (
+          compatibility === 'conflict' ||
+          latinDistance === null ||
+          distance < latinDistance
+        )
+      ) {
+        compatibility = 'unknown'
+        latinDistance = distance
       }
     }
-  }
 
-  return null
+    const labelDistance = labelIndexes.length
+      ? Math.min(
+          ...labelIndexes.map(labelIndex =>
+            Math.abs(index - labelIndex),
+          ),
+        )
+      : null
+
+    const compactRow = normalizePermitChineseName(row)
+
+    return [{
+      value,
+      compatibility,
+      latinDistance,
+      labelDistance,
+      exactRow: compactRow === value,
+    }]
+  })
+
+  const selected =
+    selectPermitRawNameCandidate(candidates)
+
+  return selected
+    ? {
+        value: selected.value,
+        compatibility: selected.compatibility,
+      }
+    : null
 }
 
 function buildTaiwanCompatriotPermitResult(
@@ -5002,40 +5063,6 @@ async function createPermitNameGroupCrop(
   )
 }
 
-async function createPermitNameEnhancedVariant(
-  image: File,
-) {
-  const bitmap = await createImageBitmap(image)
-  const canvas = document.createElement('canvas')
-  canvas.width = bitmap.width
-  canvas.height = bitmap.height
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) {
-    bitmap.close()
-    throw new Error('無法建立台胞證姓名增強 Canvas。')
-  }
-  context.drawImage(bitmap, 0, 0)
-  bitmap.close()
-
-  const frame = context.getImageData(0, 0, canvas.width, canvas.height)
-  enhancePermitNamePixels(frame.data)
-  context.putImageData(frame, 0, 0)
-
-  return new Promise<File>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('無法建立台胞證姓名增強圖片。'))
-        return
-      }
-      resolve(new File(
-        [blob],
-        'permit-name-enhanced.png',
-        { type: 'image/png' },
-      ))
-    }, 'image/png')
-  })
-}
-
 async function retryPermitChineseName(
   instance: PaddleInstance,
   image: File,
@@ -5079,19 +5106,6 @@ async function retryPermitChineseName(
     { type: 'image/png' },
   )
   crops.push({ file: broadCrop, region: 'broad' })
-
-  // Add only one enhanced retry path. Prefer the tighter anchored ROI when
-  // available; otherwise enhance the broad crop. This targets recognition
-  // failures without multiplying every OCR pass.
-  const enhancementSource = anchored ?? broadCrop
-  const enhancementRegion: PermitNameRetryRegion =
-    anchored ? 'anchored' : 'broad'
-  if (canContinue()) {
-    crops.push({
-      file: await createPermitNameEnhancedVariant(enhancementSource),
-      region: enhancementRegion,
-    })
-  }
 
   const candidates: Array<{
     value: string
