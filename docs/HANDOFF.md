@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .25 護照 one-syllable mismatch 嚴格 shadow（待本機驗證）
+
+基線：.24 32/32 固定 Validation 已完成，護照中文姓名 14/19、台胞證全欄 13/13。唯一「已 OCR 到正確姓名但未採用」的護照診斷是 `name-field / romanization:one-syllable-mismatch` 1 張；不能將所有一個音節差異視作可信。
+
+候選 `2026.10.11.25` 實作獨立 `passportOneSyllableShadow.ts` 嚴格政策：不得覆蓋既有 accepted name，要求唯一不同姓名候選、所有候選 subtype 僅 one-syllable-mismatch、完整獨立漢字 OCR box、存在姓名 label 或 MRZ 英文姓名錨點、至少一個候選 score >= 0.78 且 rank >= 1.35。拒絕 ambiguous、wrong-subtype、not-standalone、unanchored、weak-evidence 與 existing-accepted。候選從現有護照姓名 selector 產生的決策資料進入 **read-only shadow**；Validation UI 只統計匿名 eligible/reject 原因及 shadow 相較正式輸出的 rescued/regressed/unchanged 件數，不存姓名、raw OCR、影像、sample id，也不修改正式姓名輸出。新增 synthetic `test-passport-one-syllable-shadow.mjs` 並納入 `verify:ocr`，同批版本 source guard 更新。
+
+**尚未驗證 .25 真實照片或 Windows build；準確率不可宣稱提升，最佳已實測 .24：護照 14/19、台胞證 13/13。** 下一步集中本機 `npm.cmd run verify:ocr`、Docker frontend rebuild 及同一組 32 張 auto Validation；根據匿名 strict shadow 的 rescued/regressed/decision 件數決定是否值得下一輪受限正式採用。凍結台胞證 BOCA、joined-token、unique one-syllable、standalone sex、focused retry。禁止 GitHub Actions、不得上傳任何個資，legacy Validation 缺原始工作輸入影像。
+
+
 ## 2026-10-12 — .24 正式 Validation：護照 14/19，唯一正確候選被 one-syllable mismatch 擋住
 
 使用者在 Windows 本機完成 pipeline 2026.10.11.24 固定 auto Validation：32/32 完成、0 失敗；護照全欄及中文姓名 14/19（74%），其餘七欄 19/19；台胞證全部五欄及全欄 13/13（100%）。與 .23 持平，無回歸。
