@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const source = readFileSync('src/services/paddleOcr.ts','utf8')
 const page = readFileSync('src/views/OcrQualityPage.vue','utf8')
+const reviewModel = readFileSync('src/models/passportReview.ts','utf8')
+assert.match(reviewModel, /chineseNameSource: 'name-field' \| 'viz-crop' \| 'focused-viz' \| null/)
 const from=source.indexOf('async function createTaiwanFocusedVizCrop(')
 const to=source.indexOf('async function createTaiwanVizCrop(',from)
 assert.ok(from>=0 && to>from)
