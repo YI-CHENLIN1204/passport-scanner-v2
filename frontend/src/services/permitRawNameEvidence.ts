@@ -11,12 +11,31 @@ export interface PermitRawNameCandidate {
   exactRow: boolean
   officialVariantPromotion?: boolean
   joinedTokenPromotion?: boolean
+  oneSyllableFallbackPromotion?: boolean
   conflictSubtype?:
     | 'token-count-mismatch'
     | 'one-syllable-mismatch'
     | 'other-mismatch'
     | 'unclassified'
     | null
+}
+
+function compactHanLength(value: string) {
+  return Array.from(
+    value.replace(/[\s·‧]/g, ''),
+  ).length
+}
+
+export function isShortExactPermitNameConflict(
+  candidate: PermitRawNameCandidate,
+) {
+  const length = compactHanLength(candidate.value)
+  return (
+    candidate.compatibility === 'conflict' &&
+    candidate.exactRow &&
+    length >= 2 &&
+    length <= 4
+  )
 }
 
 function rankAcceptedCandidate(
@@ -71,5 +90,20 @@ export function selectPermitRawNameCandidate(
     )
     .sort((a, b) => b.rank - a.rank)[0]
 
-  return accepted?.candidate ?? null
+  if (accepted) return accepted.candidate
+
+  const shortExactConflicts =
+    candidates.filter(isShortExactPermitNameConflict)
+
+  if (
+    shortExactConflicts.length === 1 &&
+    shortExactConflicts[0].conflictSubtype === 'one-syllable-mismatch'
+  ) {
+    return {
+      ...shortExactConflicts[0],
+      oneSyllableFallbackPromotion: true,
+    }
+  }
+
+  return null
 }
