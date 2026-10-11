@@ -1,4 +1,5 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
+import { enhancePermitNamePixels } from './permitNameEnhancement'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -5015,21 +5016,7 @@ async function createPermitNameEnhancedVariant(
   bitmap.close()
 
   const frame = context.getImageData(0, 0, canvas.width, canvas.height)
-  const pixels = frame.data
-  const contrast = 1.25
-  for (let index = 0; index < pixels.length; index += 4) {
-    const luminance =
-      pixels[index] * 0.299 +
-      pixels[index + 1] * 0.587 +
-      pixels[index + 2] * 0.114
-    const adjusted = Math.max(
-      0,
-      Math.min(255, (luminance - 128) * contrast + 128),
-    )
-    pixels[index] = adjusted
-    pixels[index + 1] = adjusted
-    pixels[index + 2] = adjusted
-  }
+  enhancePermitNamePixels(frame.data)
   context.putImageData(frame, 0, 0)
 
   return new Promise<File>((resolve, reject) => {
@@ -5100,11 +5087,13 @@ async function retryPermitChineseName(
   const candidates: Array<
     PermitCandidate<string>
   > = []
+  let completedPasses = 0
 
   for (const crop of crops) {
     if (!canContinue()) break
     const [namePrediction] =
       await instance.predict(crop)
+    completedPasses += 1
 
     const geometries =
       predictionItems(namePrediction)
@@ -5153,7 +5142,7 @@ async function retryPermitChineseName(
         value,
         score: bestScore,
         rank: consensus * 2 + bestScore,
-        passes: crops.length,
+        passes: completedPasses,
         consensus,
         confidence,
       }
