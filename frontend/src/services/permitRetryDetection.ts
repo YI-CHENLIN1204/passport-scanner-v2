@@ -11,7 +11,7 @@ export function summarizePermitRetryDetection(
   return {
     attemptedCrops: observations.length,
     cropsWithTextBoxes: observations.filter(row => row.hasBoxes).length,
-    cropsWithNameCandidates: observations.filter(row => row.hasCandidate).length,
+    cropsWithNameCandidates: observations.filter(row => row.hasBoxes && row.hasCandidate).length,
   }
 }
 export function aggregatePermitRetryDetection(
