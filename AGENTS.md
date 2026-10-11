@@ -31,7 +31,7 @@
 
 ## 目前開發優先順序
 
-- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前 main OCR pipeline 候選為 `2026.10.11.20`，尚待本機驗證；最新照片實測仍是 `.19`：護照 13/19 全欄、台胞證 12/13 全欄、中文姓名 13/13、性別 12/13；以 `docs/HANDOFF.md` 最上方最新段落為權威。
+- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前最佳實測 OCR pipeline 為 `2026.10.11.20`：護照 13/19 全欄、台胞證全欄 13/13、中文姓名 13/13、性別 13/13；以 `docs/HANDOFF.md` 最上方最新段落為權威。
 - 使用者**已明確要求加速推進 OCR 精準度改善**。必須集中有依據的修改、自動化回歸，並以一次 Validation 檢驗淨改善／退步；不得擅自改固定 Test split 或把未實測 PR 說成精準率提升。
 - 不要把固定 Test 圖片加入 Train；Train / Validation / Test 仍以 Traveler group 切分，避免同人資料洩漏。
 - 現階段優先完成 V2 系統本體：團別收件、批次掃描生命週期、人工審核、Traveler / DocumentVersion、人物合併、資料一致性、production photo retention、Training Dataset 管理、CSV 匯出與備份／還原。
@@ -61,3 +61,8 @@
 - 全自動無人工審核。
 - 複雜 RBAC 權限。
 - 把三類證件的所有可見欄位全部 OCR / 儲存。
+
+
+## 2026-10-12 — .20 正式 Validation：台胞證全欄 13/13
+
+2026.10.11.20 固定 auto Validation 32/32 完成、失敗 0。護照全欄和中文姓名 13/19，其餘七欄 19/19；台胞證全欄、中文姓名、出生日期、性別、證件號碼、有效期限全部 13/13。相較 .19，台胞證性別與全欄各新增 1 張正確，護照未退步。Focused sex retry 匿名診斷：started 1、label ROI 1、fixed ROI 0、detected text 1、candidate 1、conflict 0、applied 1、still empty 0。standalone-token 仍補回 2 張，姓名 selector 維持 13/13。此為 legacy 固定照片 Validation，32 張皆缺當時 OCR 工作輸入圖，不代表對新照片泛化達 100%。正式最佳實測為 .20；下一主要目標護照中文姓名 13/19。禁止 GitHub Actions，保留成功台胞證路徑。
