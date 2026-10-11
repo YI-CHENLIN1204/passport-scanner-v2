@@ -547,3 +547,7 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 新增 `permitSexRetry.ts` 與 `test-permit-sex-retry.mjs`，並納入 `npm.cmd run verify:ocr`；既有 sex diagnostics regression 同步擴充。台胞證姓名 selector、BOCA official、joined-token、unique one-syllable 路徑完全未改；row-distance fallback、MRZ sex override 假設亦未恢復。
 
 下一個驗證點只有一次：使用者本機 `npm.cmd run verify:ocr` → Docker frontend rebuild → 確認頁面 pipeline `2026.10.11.20` → 同一組 32 張正式 auto Validation。若台胞證達 13/13 全欄，下一主要工作再轉回護照中文姓名 13/19。
+
+## 2026-10-12 — .20 正式 Validation：台胞證全欄 13/13
+
+2026.10.11.20 固定 auto Validation 32/32 完成、失敗 0。護照全欄和中文姓名 13/19，其餘七欄 19/19；台胞證全欄、中文姓名、出生日期、性別、證件號碼、有效期限全部 13/13。相較 .19，台胞證性別與全欄各新增 1 張正確，護照未退步。Focused sex retry 匿名診斷：started 1、label ROI 1、fixed ROI 0、detected text 1、candidate 1、conflict 0、applied 1、still empty 0。standalone-token 仍補回 2 張，姓名 selector 維持 13/13。此為 legacy 固定照片 Validation，32 張皆缺當時 OCR 工作輸入圖，不代表對新照片泛化達 100%。正式最佳實測為 .20；下一主要目標護照中文姓名 13/19。禁止 GitHub Actions，保留成功台胞證路徑。
