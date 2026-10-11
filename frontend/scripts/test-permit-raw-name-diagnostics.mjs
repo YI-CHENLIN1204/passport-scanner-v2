@@ -76,7 +76,7 @@ const rows = [
     shortExactConflictCandidateCount: 0,
     nearestConflictLatinDistance: null,
     selectedCompatibility: 'unknown',
-  },,
+  },
   {
     latinRowCount: 1,
     labelRowCount: 0,
