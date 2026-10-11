@@ -26,6 +26,7 @@ import {
   getValidationPaddleRuntimeSummary,
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
+  type PermitRetryDetectionSummary,
 } from '../services/paddleOcr'
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
@@ -426,11 +427,13 @@ async function currentFieldsForSample(
     sample.documentType ===
     'TAIWAN_COMPATRIOT_PERMIT'
   ) {
+    let retryDetection: PermitRetryDetectionSummary | null = null
     const result =
       await recognizeTaiwanCompatriotPermitWithPaddle(
         file,
         undefined,
         experimentalInstance,
+        summary => { retryDetection = summary },
       )
 
     return {
@@ -444,6 +447,7 @@ async function currentFieldsForSample(
       } as Record<string, string | null>,
       passportNameDiagnostics: [],
       permitRawRows: result.rawRows,
+      permitRetryDetection: retryDetection,
       permitSource: {
         distanceCropUsed: result.distanceCropUsed,
         nameRetryPasses: result.chineseNamePasses,
@@ -979,6 +983,7 @@ interface ValidationProfileSample {
   permitScriptEquivalentOnly: boolean
   permitNameRawFailure: PermitNameRawFailureBucket | null
   permitSource: PermitSourceEvidence | null
+  permitRetryDetection: PermitRetryDetectionSummary | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -1013,6 +1018,12 @@ interface ValidationProfileDocument {
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
+  permitRetryDetectionCounts: {
+    attemptedCrops: number
+    cropsWithTextBoxes: number
+    cropsWithNameCandidates: number
+    scansWithRetry: number
+  } | null
   failedCount: number
 }
 
@@ -1351,6 +1362,9 @@ async function profileValidationOnly() {
           permitSource: 'permitSource' in prediction
             ? (prediction.permitSource ?? null)
             : null,
+          permitRetryDetection: 'permitRetryDetection' in prediction
+            ? (prediction.permitRetryDetection ?? null)
+            : null,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1438,6 +1452,15 @@ async function profileValidationOnly() {
                   regressed: rows.filter(row => row.passportOfficialShadow === 'regressed').length,
                   'unchanged-correct': rows.filter(row => row.passportOfficialShadow === 'unchanged-correct').length,
                   'unchanged-wrong': rows.filter(row => row.passportOfficialShadow === 'unchanged-wrong').length,
+                }
+              : null,
+          permitRetryDetectionCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? {
+                  attemptedCrops: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.attemptedCrops ?? 0), 0),
+                  cropsWithTextBoxes: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.cropsWithTextBoxes ?? 0), 0),
+                  cropsWithNameCandidates: rows.reduce((sum, row) => sum + (row.permitRetryDetection?.cropsWithNameCandidates ?? 0), 0),
+                  scansWithRetry: rows.filter(row => (row.permitRetryDetection?.attemptedCrops ?? 0) > 0).length,
                 }
               : null,
           permitSourceCounts:
@@ -2197,6 +2220,17 @@ onMounted(load)
               {{ result.permitScriptEquivalentCount }} 張。
               僅供分析；簡繁對照可能合併不同字義，
               不計入正確率，也不會自動修改姓名。
+            </p>
+            <p
+              v-if="result.permitRetryDetectionCounts"
+              class="validation-legacy-note"
+            >
+              姓名重讀偵測概況（匿名）：啟動重讀
+              {{ result.permitRetryDetectionCounts.scansWithRetry }} 張；
+              進行 {{ result.permitRetryDetectionCounts.attemptedCrops }} 次裁切辨識；
+              有文字框 {{ result.permitRetryDetectionCounts.cropsWithTextBoxes }} 次；
+              有符合目前姓名候選規則 {{ result.permitRetryDetectionCounts.cropsWithNameCandidates }} 次。
+              不能據此直接認定文字偵測與文字辨識哪一段出錯。
             </p>
             <p
               v-if="result.permitSourceCounts"
