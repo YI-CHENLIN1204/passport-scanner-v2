@@ -7,6 +7,8 @@ export interface PermitRawNameEvidenceLike {
   conflictCandidateCount: number
   officialVariantCandidateCount: number
   selectedOfficialVariant: boolean
+  joinedTokenCandidateCount: number
+  selectedJoinedToken: boolean
   conflictTokenCountMismatchCandidateCount: number
   conflictOneSyllableMismatchCandidateCount: number
   conflictOtherMismatchCandidateCount: number
@@ -34,6 +36,10 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => (row?.officialVariantCandidateCount ?? 0) > 0).length,
     selectedOfficialVariant:
       rows.filter(row => row?.selectedOfficialVariant === true).length,
+    samplesWithJoinedTokenCandidate:
+      rows.filter(row => (row?.joinedTokenCandidateCount ?? 0) > 0).length,
+    selectedJoinedToken:
+      rows.filter(row => row?.selectedJoinedToken === true).length,
     samplesWithConflictTokenCountMismatch:
       rows.filter(row => (row?.conflictTokenCountMismatchCandidateCount ?? 0) > 0).length,
     samplesWithConflictOneSyllableMismatch:
