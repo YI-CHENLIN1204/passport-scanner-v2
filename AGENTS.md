@@ -78,3 +78,5 @@
 2026-10-12 實測：`.22` auto Validation 32/32 完成、失敗 0，護照 14/19、台胞證 13/13，與 `.21` 準確率相同。護照 5 張錯誤中，name-field 正確候選 1、錯誤候選 2、未執行 2；broad VIZ 正確候選 0、錯誤候選 2、未執行 3。這是匿名分區診斷，並非 selector 可安全改善的證據。下一輪先調查未執行與候選拒絕原因；不得啟動 GitHub Actions。
 
 > `.23` 待驗證候選：護照 name-field unknown 時保留 provisional 並讓 broad VIZ 尋找 compatible，未證實提昇。最佳已實測 `.22`：護照 14/19、台胞證 13/13；禁止 GitHub Actions。
+
+> .23 已正式 Validation：護照 14/19、台胞證 13/13，與 .22 持平；broad VIZ 正確候選 0→1，但未提升最終姓名。下一步追查候選拒絕原因；禁止 GitHub Actions。
