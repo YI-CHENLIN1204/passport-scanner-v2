@@ -90,16 +90,12 @@ export function selectPermitRawNameCandidate(
   // only a short, standalone Han row near a parsed
   // Latin name may survive a phonetic conflict. This never outranks a
   // compatible/unknown candidate.
-  return candidates
-    .filter(isConservativeConflictFallback)
-    .sort((a, b) => {
-      const distance =
-        (a.latinDistance ?? Number.POSITIVE_INFINITY) -
-        (b.latinDistance ?? Number.POSITIVE_INFINITY)
-      if (distance !== 0) return distance
+  const fallbackCandidates =
+    candidates.filter(isConservativeConflictFallback)
 
-      const aLength = compactHanLength(a.value)
-      const bLength = compactHanLength(b.value)
-      return Math.abs(aLength - 3) - Math.abs(bLength - 3)
-    })[0] ?? null
+  if (fallbackCandidates.length !== 1) {
+    return null
+  }
+
+  return fallbackCandidates[0]
 }
