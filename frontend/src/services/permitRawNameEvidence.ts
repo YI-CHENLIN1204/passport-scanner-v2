@@ -10,6 +10,12 @@ export interface PermitRawNameCandidate {
   labelDistance: number | null
   exactRow: boolean
   officialVariantPromotion?: boolean
+  conflictSubtype?:
+    | 'token-count-mismatch'
+    | 'one-syllable-mismatch'
+    | 'other-mismatch'
+    | 'unclassified'
+    | null
 }
 
 function rankAcceptedCandidate(
