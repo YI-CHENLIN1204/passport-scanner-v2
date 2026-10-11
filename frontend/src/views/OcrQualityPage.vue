@@ -32,6 +32,7 @@ import { convertTraditionalNameToSimplified } from '../services/nameScriptConver
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
 import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../services/permitSourceEvidence'
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
+import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -450,6 +451,7 @@ async function currentFieldsForSample(
       permitRawRows: result.rawRows,
       permitRetryDetection: retryDetection,
       permitRawNameEvidence: result.rawNameEvidence,
+      permitSexEvidence: result.sexEvidence,
       permitSource: {
         distanceCropUsed: result.distanceCropUsed,
         nameRetryApplied: result.nameRetryApplied,
@@ -986,6 +988,7 @@ interface ValidationProfileSample {
   permitNameRawFailure: PermitNameRawFailureBucket | null
   permitSource: PermitSourceEvidence | null
   permitRawNameEvidence: PermitRawNameEvidenceLike | null
+  permitSexEvidence: PermitSexEvidenceLike | null
   permitRetryDetection: PermitRetryDetectionSummary | null
   fieldExact: Record<string, boolean>
   fetchMs: number
@@ -1022,6 +1025,7 @@ interface ValidationProfileDocument {
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
   permitRawNameEvidenceCounts: ReturnType<typeof aggregatePermitRawNameEvidence> | null
+  permitSexEvidenceCounts: ReturnType<typeof aggregatePermitSexEvidence> | null
   permitRetryDetectionCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
   permitRetryWrongNameCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
   failedCount: number
@@ -1368,6 +1372,9 @@ async function profileValidationOnly() {
           permitRawNameEvidence: 'permitRawNameEvidence' in prediction
             ? (prediction.permitRawNameEvidence ?? null)
             : null,
+          permitSexEvidence: 'permitSexEvidence' in prediction
+            ? (prediction.permitSexEvidence ?? null)
+            : null,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1475,6 +1482,10 @@ async function profileValidationOnly() {
           permitRawNameEvidenceCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
               ? aggregatePermitRawNameEvidence(rows.map(row => row.permitRawNameEvidence))
+              : null,
+          permitSexEvidenceCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? aggregatePermitSexEvidence(rows.map(row => row.permitSexEvidence))
               : null,
           permitNameRawFailureCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
@@ -2276,6 +2287,30 @@ onMounted(load)
               MRZ 曾提供欄位
               {{ result.permitSourceCounts.mrzUsed }}。
               僅為診斷計數，不是準確率改善證據。
+            </p>
+            <p
+              v-if="result.permitSexEvidenceCounts"
+              class="validation-legacy-note"
+            >
+              台胞證性別證據（匿名件數）：MRZ 有性別
+              {{ result.permitSexEvidenceCounts.samplesWithMrzSex }} 張；
+              geometry label 有性別
+              {{ result.permitSexEvidenceCounts.samplesWithLabeledSex }} 張；
+              同列 Sex／性別語意證據
+              {{ result.permitSexEvidenceCounts.samplesWithSemanticSex }} 張；
+              MRZ 與同列語意衝突
+              {{ result.permitSexEvidenceCounts.mrzSemanticConflict }} 張；
+              其中 MRZ 其他 checksum 仍全數有效
+              {{ result.permitSexEvidenceCounts.requiredValidMrzSemanticConflict }} 張。
+              最終來源：visual-agreement
+              {{ result.permitSexEvidenceCounts.selectedVisualAgreement }}；
+              semantic-row override
+              {{ result.permitSexEvidenceCounts.selectedSemanticRow }}；
+              MRZ {{ result.permitSexEvidenceCounts.selectedMrz }}；
+              label {{ result.permitSexEvidenceCounts.selectedLabel }}；
+              semantic fallback {{ result.permitSexEvidenceCounts.selectedSemantic }}；
+              empty {{ result.permitSexEvidenceCounts.selectedEmpty }}。
+              MRZ 的 sex 字元不在現有 checksum 驗證範圍內；此處僅為匿名來源診斷。
             </p>
             <p
               v-if="result.permitRawNameEvidenceCounts"
