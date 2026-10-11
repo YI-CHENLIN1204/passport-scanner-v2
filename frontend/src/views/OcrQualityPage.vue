@@ -443,6 +443,12 @@ async function currentFieldsForSample(
       } as Record<string, string | null>,
       passportNameDiagnostics: [],
       permitRawRows: result.rawRows,
+      permitSource: {
+        distanceCropUsed: result.distanceCropUsed,
+        nameRetryPasses: result.chineseNamePasses,
+        nameRetryConsensus: result.chineseNameConsensus,
+        mrzUsed: result.mrzUsed,
+      },
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -971,6 +977,12 @@ interface ValidationProfileSample {
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   permitScriptEquivalentOnly: boolean
   permitNameRawFailure: PermitNameRawFailureBucket | null
+  permitSource: {
+    distanceCropUsed: boolean
+    nameRetryPasses: number
+    nameRetryConsensus: number
+    mrzUsed: boolean
+  } | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -1004,6 +1016,12 @@ interface ValidationProfileDocument {
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
+  permitSourceCounts: {
+    distanceCropUsed: number
+    nameRetryAttempted: number
+    nameRetryConsensus: number
+    mrzUsed: number
+  } | null
   failedCount: number
 }
 
@@ -1339,6 +1357,9 @@ async function profileValidationOnly() {
           passportOfficialShadow,
           permitScriptEquivalentOnly,
           permitNameRawFailure,
+          permitSource: 'permitSource' in prediction
+            ? (prediction.permitSource ?? null)
+            : null,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1426,6 +1447,15 @@ async function profileValidationOnly() {
                   regressed: rows.filter(row => row.passportOfficialShadow === 'regressed').length,
                   'unchanged-correct': rows.filter(row => row.passportOfficialShadow === 'unchanged-correct').length,
                   'unchanged-wrong': rows.filter(row => row.passportOfficialShadow === 'unchanged-wrong').length,
+                }
+              : null,
+          permitSourceCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? {
+                  distanceCropUsed: rows.filter(row => row.permitSource?.distanceCropUsed).length,
+                  nameRetryAttempted: rows.filter(row => (row.permitSource?.nameRetryPasses ?? 0) > 0).length,
+                  nameRetryConsensus: rows.filter(row => (row.permitSource?.nameRetryConsensus ?? 0) >= 2).length,
+                  mrzUsed: rows.filter(row => row.permitSource?.mrzUsed).length,
                 }
               : null,
           permitNameRawFailureCounts:
@@ -2181,6 +2211,20 @@ onMounted(load)
               {{ result.permitScriptEquivalentCount }} 張。
               僅供分析；簡繁對照可能合併不同字義，
               不計入正確率，也不會自動修改姓名。
+            </p>
+            <p
+              v-if="result.permitSourceCounts"
+              class="validation-legacy-note"
+            >
+              台胞證選中來源（匿名件數）：放大距離裁切
+              {{ result.permitSourceCounts.distanceCropUsed }}；
+              姓名雙區域重讀已產生候選
+              {{ result.permitSourceCounts.nameRetryAttempted }}；
+              重讀雙區域有一致候選
+              {{ result.permitSourceCounts.nameRetryConsensus }}；
+              MRZ 曾提供欄位
+              {{ result.permitSourceCounts.mrzUsed }}。
+              僅為診斷計數，不是準確率改善證據。
             </p>
             <p
               v-if="result.permitNameRawFailureCounts"
