@@ -70,6 +70,15 @@ for (const entry of cases) {
   )
 }
 console.log('Passed ' + cases.length + ' synthetic romanization cases.')
+const joined = imported.matchesChineseNameToJoinedRomanizationWithOfficialVariants
+assert.equal(joined('王一明', 'WANG', 'IMING'), true)
+assert.equal(joined('王石明', 'WANG', 'SHIHMING'), true)
+assert.equal(joined('王建明', 'WANG', 'CHIENMING'), true)
+assert.equal(joined('王一明', 'WANG', 'I MING'), true)
+assert.equal(joined('王英明', 'WANG', 'YINMING'), false)
+assert.equal(joined('王一明', 'WANG', 'IMIN'), false)
+console.log('Passed exact joined-token romanization positive/negative checks.')
+
 
 const mrz = { surname: 'WANG', givenNames: 'I MING' }
 const confident = {
