@@ -2285,8 +2285,10 @@ onMounted(load)
               {{ result.permitRawNameEvidenceCounts.samplesWithLatinRows }} 張；
               有姓名標籤列 {{ result.permitRawNameEvidenceCounts.samplesWithLabelRows }} 張；
               有拼音相容中文候選 {{ result.permitRawNameEvidenceCounts.samplesWithCompatibleCandidate }} 張；
+              有拼音衝突中文候選 {{ result.permitRawNameEvidenceCounts.samplesWithConflictCandidate }} 張；
               最終選到拼音相容 {{ result.permitRawNameEvidenceCounts.selectedCompatible }} 張；
               最終選到 unknown {{ result.permitRawNameEvidenceCounts.selectedUnknown }} 張；
+              最終使用近英文姓名列的 conflict fallback {{ result.permitRawNameEvidenceCounts.selectedConflictFallback }} 張；
               沒選到 raw-row 姓名 {{ result.permitRawNameEvidenceCounts.selectedNone }} 張。
               僅為匿名 selector 診斷，不保存姓名或逐張資料。
             </p>
