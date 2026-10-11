@@ -266,3 +266,7 @@ GitHub Actions 因額度限制維持 `workflow_dispatch` 且不得執行。此�
 同一輪瀏覽器 Validation 畫面底部仍顯示 `版本 2026.10.11.6`，且結果與舊基準完全相同（護照全欄 68%、台胞證全欄 38%、台胞證中文姓名 46%）。這**不是 `.10` 的照片實測結果**。專案的日常整合環境由 Docker `frontend` Nginx 提供；直接在 host 執行 `npm run build` 只更新 host `frontend/dist`，不會把既有 container 中 `/usr/share/nginx/html` 的舊 bundle 換掉。要驗證新 main，需在 repo 根目錄重建並 recreate frontend container，例如：`docker compose up -d --no-deps --build frontend`，再瀏覽器強制重新整理。不要執行 `docker compose down -v`。
 
 因此最後有效照片準確率仍是 `.6`，`.10` 目前只有程式 regression/build 證據；待 Docker frontend 更新後才跑一次固定 32 張 auto Validation。
+
+### Validation 舊版本防誤判
+
+Validation 歷史結果若 `pipelineVersion !== OCR_PIPELINE_VERSION`，頁面現在會直接警告「這是舊 OCR 版本結果」，並顯示目前頁面 pipeline 版本。目的在避免 host 已更新、Docker frontend 仍舊 bundle 時，把 `.6` 歷史結果誤認為 `.10` 新實測。此 UI 改動將由下一次 `docker compose up -d --no-deps --build frontend` 內的 Docker `npm run build` 一併驗證。
