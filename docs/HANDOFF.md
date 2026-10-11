@@ -1,5 +1,13 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 — `.10` 本機程式驗證已通過；Docker 舊前端造成 Validation 仍顯示 `.6`
+
+使用者於 Windows `main` 執行 `npm.cmd run verify:ocr`，畫面確認完整 OCR regression 全部通過，包含 8 個 romanization cases、6 個 review suggestion checks、35 個 permit field/MRZ/retry guards、selected-image/rotation、raw-row bucket、ROI coordinate source、Chinese label anchor、anonymous source evidence、broad-name crop、name enhancement、retry detection、independent-region evidence；其後 `vue-tsc --noEmit && vite build` 成功，Vite 共轉換 106 modules。黃色 externalized module/chunk size 訊息為 warning，不是 build failure。
+
+同一輪瀏覽器 Validation 畫面底部仍顯示 `版本 2026.10.11.6`，且結果與舊基準完全相同（護照全欄 68%、台胞證全欄 38%、台胞證中文姓名 46%）。這**不是 `.10` 的照片實測結果**。專案的日常整合環境由 Docker `frontend` Nginx 提供；直接在 host 執行 `npm run build` 只更新 host `frontend/dist`，不會把既有 container 中 `/usr/share/nginx/html` 的舊 bundle 換掉。要驗證新 main，需在 repo 根目錄重建並 recreate frontend container，例如：`docker compose up -d --no-deps --build frontend`，再瀏覽器強制重新整理。不要執行 `docker compose down -v`。
+
+因此最後有效照片準確率仍是 `.6`，`.10` 目前只有程式 regression/build 證據；待 Docker frontend 更新後才跑一次固定 32 張 auto Validation。
+
 ## 2026-10-11 — OCR 2026.10.11.10 main 批次候選（已完成程式，待一次本機＋照片驗證）
 
 本批依單人 main-first 流程直接累積於 `main`，不再拆小 PR；舊 PR #33 的匿名診斷能力已安全搬回 main，PR #33 已關閉且未合併，避免舊分支覆蓋新版。
