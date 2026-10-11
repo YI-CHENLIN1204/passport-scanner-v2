@@ -18,6 +18,7 @@ import {
   type RomanizationCompatibility,
 } from './nameRomanization'
 import { guardedOfficialNameSuggestion } from './officialNameSuggestion'
+import { choosePermitNameCropAnchor } from './permitNameCropAnchor'
 import {
   shouldRetryUncertainPermitName,
   shouldUseRetriedPermitName,
@@ -787,7 +788,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.7'
+  '2026.10.11.8'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -4946,41 +4947,10 @@ async function createPermitNameGroupCrop(
         item !== null && item.height > 0,
     )
 
-  const latinAnchors = geometries
-    .map((item) => ({
-      item,
-      parsed: extractPermitLatinName(item.text),
-    }))
-    .filter(
-      (
-        entry,
-      ): entry is {
-        item: PaddleItemGeometry
-        parsed: PermitLatinName
-      } => entry.parsed !== null,
-    )
-    .sort(
-      (a, b) =>
-        (b.item.score ?? 0) - (a.item.score ?? 0),
-    )
-
-  const labelAnchors = geometries
-    .filter((item) =>
-      permitLabelMatches(item.text, ['姓名', 'Name']),
-    )
-    .sort(
-      (a, b) =>
-        (b.score ?? 0) - (a.score ?? 0),
-    )
-
-  // Prefer the explicit printed Chinese-name label over a romanized
-  // name line: a high-scoring unrelated Latin field can otherwise steer
-  // the zoomed OCR crop away from the holder's name. Keep Latin fallback
-  // only when the document's name label was not detected.
-  const anchor =
-    labelAnchors[0] ??
-    latinAnchors[0]?.item ??
-    null
+  const anchor = choosePermitNameCropAnchor(
+    geometries,
+    (text) => extractPermitLatinName(text) !== null,
+  )
 
   if (!anchor) return null
 

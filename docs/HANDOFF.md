@@ -1,5 +1,9 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 — 候選 .8：台胞證姓名二次裁切標籤信任順序（未實測）
+
+程式檢查發現：目前 `createPermitNameGroupCrop()` 同時將「姓名」及 `Name` 放在同一組 label anchors，以 confidence 排序，會讓較高分的英文 Name 標籤擠掉真實中文字樣。候選版 `.8` 只改 **name retry ROI anchor**：先找中文「姓名」，缺失才用英文 Name，仍找不到才以拉丁姓名為錨點。保留 .7 的 `predictionImage` 同座標來源、既有姓名共識檢查與人工審核；不改固定 Test、照片保留或旅客正式資料。加入 `npm.cmd run test:permit-name-roi` 的結構性來源防退步測試，但 GitHub Actions 額度保護仍有效且不會觸發。**這是推定具風險的選錨行為修正，沒有真實影像驗證，不能宣稱準確率提升或新版本成功。** 待本機 test + build 後才合併，之後與其他有效批次一次 Validation。仍優先取得真正工作影像與 Detection/Recognition 的可用證據。
+
 ## 2026-10-11 — GitHub Actions 額度保護（最新操作規範）
 
 GitHub 寄送已用 2,700 / 3,000 included Actions 分鐘（90%）通知；使用者明確要求**停止使用 GitHub Actions 額度**。因此在 main commit `fdea84db799c9b6a19f1ac7bca2f15b68763e5ca`，將唯一 `.github/workflows/ci.yml` workflow 由 push + pull_request 自動觸發改成 **workflow_dispatch 手動觸發**，以免每輪提交或 PR 自動跑昂貴的 Docker smoke test。**嚴禁自行手動觸發 workflow 或恢復自動 CI**，除非使用者明確同意。
