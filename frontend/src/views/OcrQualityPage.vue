@@ -1461,8 +1461,14 @@ async function profileValidationOnly() {
         const strictShadowNames = prediction.passportNameDiagnostics
           .map(item => item.strictOneSyllableShadowName)
           .filter((name): name is string => Boolean(name))
-        const strictCandidate = strictShadowNames.length === 1
-          ? strictShadowNames[0]
+        // Simulate one final decision across all attempted crops. A shadow
+        // must never overwrite an accepted official name merely because a
+        // different crop produced an eligible value. Multiple distinct ROI
+        // suggestions are ambiguous, not a first-crop-wins selection.
+        const uniqueStrictNames = [...new Set(strictShadowNames)]
+        const strictCandidate = !prediction.fields.nameZh &&
+          uniqueStrictNames.length === 1
+          ? uniqueStrictNames[0]
           : null
         const strictCorrect = strictCandidate
           ? evalFieldEquals('nameZh', strictCandidate, truth.nameZh)
