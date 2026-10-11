@@ -542,3 +542,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 **.23 尚未跑 Windows verify/build 或 32 張固定 auto Validation，不得宣稱精準率提升；正式最佳實測仍是 .22 的 14/19 與 13/13。** 待集中本機驗證後，將匿名結果寫回文件。所有 legacy 32 張缺少真正 OCR 工作輸入圖像，不代表對新照片的泛化準確率。GitHub Actions 禁止執行，真實證件照片、姓名、號碼、raw OCR 個資不可上傳 GitHub。
 
+## 2026-10-12 — .23 正式 Validation：護照 14/19 持平，VIZ 出現新正確候選
+
+使用者本機完成 pipeline 2026.10.11.23 固定 auto Validation：32/32 完成、失敗 0。護照全欄與中文姓名仍 14/19（74%），其餘七欄 19/19；台胞證所有必要欄位及整張 13/13（100%），無回歸。護照 OCR 中位數約 1.2 秒、P90 2.3 秒。
+
+護照剩餘 5 張錯誤的匿名裁切分區診斷：name-field 正確候選 1、其他候選 2、無候選 0、未執行 2；broad VIZ 正確候選 1、其他候選 2、無候選 0、未執行 2。兩區都只有錯誤候選 0；「正確候選僅在 VIZ 出現」0。全局失敗分類完整正確候選 1、其他候選內容不符 4、raw 完整吻合 0、raw 子字串 0、無可用候選 0。比 .22，VIZ 正確候選 0→1、未執行 3→2，但護照整張仍 14/19，故 .23 只能視為證據覆蓋增加，不能宣稱準確率提高。
+
+下一步應針對正確候選與最終選擇之落差補充匿名決策歸因，特別是不同 ROI 的 decisionTrace、當次候選是否被拼音衝突或 rank/confidence gate 擋住，以及選定 orientation/attempt 與來源不一致的可能性；不直接把 shadow one-syllable suggestion 自動採用。台胞證已成功 BOCA / joined-token / one-syllable / standalone / focused-sex 路徑凍結。32 張 legacy Validation 均缺當年 OCR 工作輸入，不能推論新照片 production 100%。不啟動 GitHub Actions、不提交個資。
+
