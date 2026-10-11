@@ -1270,8 +1270,10 @@ async function createPixelCrop(
 ) {
   const bitmap = await createImageBitmap(image)
 
-  const x = Math.max(0, Math.floor(sourceX))
-  const y = Math.max(0, Math.floor(sourceY))
+  // Clamp source origins before computing remaining width/height.
+  // Some weak OCR anchors can be just outside the decoded bitmap.
+  const x = Math.max(0, Math.min(bitmap.width - 1, Math.floor(sourceX)))
+  const y = Math.max(0, Math.min(bitmap.height - 1, Math.floor(sourceY)))
   const width = Math.max(
     1,
     Math.min(bitmap.width - x, Math.floor(sourceWidth)),
