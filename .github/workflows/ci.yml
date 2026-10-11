@@ -1,10 +1,10 @@
 name: CI
 
+# GitHub Actions minutes budget safeguard (2026-10-11).
+# Never execute on push or PR. Run only when explicitly re-enabled/requested.
+# Development checks now run locally; do not treat a green PR as implied.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   backend:
