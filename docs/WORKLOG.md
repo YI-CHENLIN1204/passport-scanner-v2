@@ -510,3 +510,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 新增 `frontend/scripts/test-passport-viz-crop.mjs` 靜態防退步測試，加入 `verify:ocr`；既有來源版本守衛同步調整為 `.21`。**候選尚未完成本機測試和 32 張 Validation，不能宣稱準確率提升。** 最佳已實測仍為 `2026.10.11.20`（護照 13/19、台胞證 13/13）。下一步集中跑 Windows `npm.cmd run verify:ocr` + Docker frontend rebuild + 32 張固定 Validation，比對護照中文姓名與台胞證是否回歸。不得上傳個資或執行 GitHub Actions。
 
+## 2026-10-12 — .21 正式 Validation：護照中文姓名 14/19（74%）
+
+使用者已在 Windows 本機完成 pipeline 2026.10.11.21 固定 32 張 auto Validation，32/32 完成、失敗 0。護照全欄正確 14/19（74%），中文姓名 14/19（74%），英文姓名、出生日期、性別、國籍、證件號碼、簽發國、有效期限皆 19/19。相較 .20 的 13/19，護照全欄與中文姓名各新增 1 張正確；護照 OCR 中位數約 1.3 秒、P90 約 2.4 秒。剩 5 張護照中文姓名錯誤，候選文字完整吻合 1 張、其他候選內容不符 4 張、原始 OCR 行完整吻合 0 張、較長文字內出現姓名 0 張。外交通行的拼音 shadow 改善 0 張；one-syllable shadow 潛在改善 1 張，尚未採用為正式 selector。
+
+台胞證整張全欄、中文姓名、出生日期、性別、證件號碼、有效期限仍全數 13/13（100%）；focused sex retry 啟動 1、label ROI 1、候選 1、實際補值 1、仍空白 0。台胞證 OCR 中位數約 0.5 秒、P90 約 2.8 秒。
+
+結論：.21 broad VIZ bounded-upscale 有固定 legacy Validation 淨改善，列為目前最佳已實測 pipeline。繼續護照中文姓名 recognition / ROI 方向，但不能推定對新照片泛化改善，也不可直接依 shadow 提示自動放寬姓名 selector。全部 32 張仍缺原始 OCR 工作輸入影像。保留台胞證 BOCA、joined-token、unique one-syllable、standalone sex、focused retry 已成功路徑。禁止 GitHub Actions，不上傳個資。
+
