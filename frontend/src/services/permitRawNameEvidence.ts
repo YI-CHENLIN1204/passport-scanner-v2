@@ -85,18 +85,5 @@ export function selectPermitRawNameCandidate(
     )
     .sort((a, b) => b.rank - a.rank)[0]
 
-  if (accepted) return accepted.candidate
-
-  // Last-resort visual fallback for legacy/non-standard romanization:
-  // only a short, standalone Han row near a parsed
-  // Latin name may survive a phonetic conflict. This never outranks a
-  // compatible/unknown candidate.
-  const fallbackCandidates =
-    candidates.filter(isConservativeConflictFallback)
-
-  if (fallbackCandidates.length !== 1) {
-    return null
-  }
-
-  return fallbackCandidates[0]
+  return accepted?.candidate ?? null
 }
