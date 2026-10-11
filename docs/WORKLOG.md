@@ -205,3 +205,9 @@
 ## 2026-10-11 — PR #31 品質加固：姓名 ROI 錨點純函式與實際合成測試
 
 將台胞證 ROI 錨點選擇抽出成 `frontend/src/services/permitNameCropAnchor.ts`，讓 `createPermitNameGroupCrop` 使用同一實作，不再僅以程式原始文字比對作測試。`test-permit-name-roi-priority.mjs` 使用 TypeScript transpile 後直接測試：中文標籤優先英文標籤、中文標籤信心排序、英文 fallback、Latin fallback、非姓名欄位拒絕、無欄位時 null。只影響姓名重辨識裁切錨點，不觸及正式欄位審核。**尚未完成使用者本機測試／真實照片 Validation；準確率不作提升宣稱。** Actions 維持手動觸發且不執行；合併前請本機一次跑 `npm.cmd run test:permit-name-roi`、`npm.cmd run test:permit-roi`、`npm.cmd run test:permit-evidence`、`npm.cmd run build`。如全部通過才合併 PR #31。
+
+## 2026-10-11 — 台胞證 OCR 匿名來源統計（待本機驗證）
+
+延續 `.8` 主線，只增加 Validation 的可觀察性，不更改 OCR 判斷／模型／輸出或版本號。利用現有 `distanceCropUsed`、`chineseNamePasses`、`chineseNameConsensus`、`mrzUsed`，在每張 Evaluation 的記憶體內做匿名彙總，僅報告「選用放大距離裁切」「姓名重讀候選已採用」「雙區域一致候選」「MRZ 提供過欄位」四項件數。程式抽出 `permitSourceEvidence.ts`，新增 synthetic `test:permit-source` 驗證計數與無個資輸出。與既有「7 張姓名錯誤未在選中 rawRows 中出現」分類搭配，僅可縮小研究範圍；**不能確定 Detection/Recognition 因果，也沒有修正 OCR 精準率**。沒有個人名字、原始 OCR 文字、sample ID、工作影像或逐張資料保存到結果或 GitHub。
+
+GitHub Actions 因額度限制維持 `workflow_dispatch` 且不得執行。此批在 GitHub Connector 完成原始碼和文檔更新，尚無本機 Build／照片 Validation 證據；等本批整理完成再讓使用者一次執行。正式 `.8` 與最後實際 `.6` 精準度請區分；fixed Test 不變。
