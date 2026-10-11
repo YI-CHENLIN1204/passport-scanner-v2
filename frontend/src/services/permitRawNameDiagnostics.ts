@@ -5,6 +5,7 @@ export interface PermitRawNameEvidenceLike {
   compatibleCandidateCount: number
   unknownCandidateCount: number
   conflictCandidateCount: number
+  eligibleConflictFallbackCount: number
   selectedCompatibility: 'compatible' | 'unknown' | 'conflict' | null
 }
 
@@ -22,6 +23,8 @@ export function aggregatePermitRawNameEvidence(
       rows.filter(row => (row?.unknownCandidateCount ?? 0) > 0).length,
     samplesWithConflictCandidate:
       rows.filter(row => (row?.conflictCandidateCount ?? 0) > 0).length,
+    samplesWithEligibleConflictFallback:
+      rows.filter(row => (row?.eligibleConflictFallbackCount ?? 0) > 0).length,
     totalCandidates:
       rows.reduce((sum, row) => sum + (row?.candidateCount ?? 0), 0),
     selectedCompatible:
