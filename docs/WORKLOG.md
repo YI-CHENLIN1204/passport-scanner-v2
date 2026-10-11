@@ -197,3 +197,7 @@
 ## 2026-10-11 — OCR .7 ROI 修正本機測試
 
 使用者於 PR #29 分支本機執行 `npm.cmd run test:permit-roi` 與 `npm.cmd run build` 均成功。PR #29 文件與 main 產生合併衝突，已由最新 main 建立本整合分支保留測試過的程式修改。修正台胞證 OCR crop prediction 座標與姓名 retry 所用影像來源不一致；`predictionImage` 維持相同座標系，人工覆核仍用完整圖。**僅代表測試守衛及建置成功，未有 .7 照片 Validation，不能宣稱精準率提升。** Actions 停用，固定 Test 不動。
+
+## 2026-10-11 — 候選 .8：台胞證姓名二次裁切標籤信任順序（未實測）
+
+程式檢查發現：目前 `createPermitNameGroupCrop()` 同時將「姓名」及 `Name` 放在同一組 label anchors，以 confidence 排序，會讓較高分的英文 Name 標籤擠掉真實中文字樣。候選版 `.8` 只改 **name retry ROI anchor**：先找中文「姓名」，缺失才用英文 Name，仍找不到才以拉丁姓名為錨點。保留 .7 的 `predictionImage` 同座標來源、既有姓名共識檢查與人工審核；不改固定 Test、照片保留或旅客正式資料。加入 `npm.cmd run test:permit-name-roi` 的結構性來源防退步測試，但 GitHub Actions 額度保護仍有效且不會觸發。**這是推定具風險的選錨行為修正，沒有真實影像驗證，不能宣稱準確率提升或新版本成功。** 待本機 test + build 後才合併，之後與其他有效批次一次 Validation。仍優先取得真正工作影像與 Detection/Recognition 的可用證據。
