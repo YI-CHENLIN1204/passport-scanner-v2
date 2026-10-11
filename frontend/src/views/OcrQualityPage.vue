@@ -2295,6 +2295,11 @@ onMounted(load)
               {{ result.permitRawNameEvidenceCounts.samplesWithOfficialVariantCandidate }} 張；
               最終實際選到官方拼音升級候選
               {{ result.permitRawNameEvidenceCounts.selectedOfficialVariant }} 張；
+              剩餘 conflict 類型（匿名樣本數）：
+              token-count {{ result.permitRawNameEvidenceCounts.samplesWithConflictTokenCountMismatch }}；
+              one-syllable {{ result.permitRawNameEvidenceCounts.samplesWithConflictOneSyllableMismatch }}；
+              other {{ result.permitRawNameEvidenceCounts.samplesWithConflictOtherMismatch }}；
+              unclassified {{ result.permitRawNameEvidenceCounts.samplesWithConflictUnclassified }}。
               最終選到拼音相容 {{ result.permitRawNameEvidenceCounts.selectedCompatible }} 張；
               最終選到 unknown {{ result.permitRawNameEvidenceCounts.selectedUnknown }} 張；
               沒選到 raw-row 姓名 {{ result.permitRawNameEvidenceCounts.selectedNone }} 張。
