@@ -33,6 +33,7 @@ import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '.
 import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../services/permitSourceEvidence'
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
+import { mergePassportStrictShadow } from '../services/passportShadowMerge'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -1465,11 +1466,11 @@ async function profileValidationOnly() {
         // must never overwrite an accepted official name merely because a
         // different crop produced an eligible value. Multiple distinct ROI
         // suggestions are ambiguous, not a first-crop-wins selection.
-        const uniqueStrictNames = [...new Set(strictShadowNames)]
-        const strictCandidate = !prediction.fields.nameZh &&
-          uniqueStrictNames.length === 1
-          ? uniqueStrictNames[0]
-          : null
+        const strictMerge = mergePassportStrictShadow(
+          prediction.fields.nameZh,
+          strictShadowNames,
+        )
+        const strictCandidate = strictMerge.value
         const strictCorrect = strictCandidate
           ? evalFieldEquals('nameZh', strictCandidate, truth.nameZh)
           : baselineNameCorrect
