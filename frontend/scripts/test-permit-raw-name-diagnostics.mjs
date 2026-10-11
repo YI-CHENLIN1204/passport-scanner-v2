@@ -68,6 +68,8 @@ assert.deepEqual(aggregate(rows), {
   samplesConflictDistance3To4: 0,
   samplesConflictDistance5Plus: 0,
   samplesWithEligibleConflictFallback: 1,
+  samplesWithUniqueEligibleConflictFallback: 1,
+  samplesWithAmbiguousEligibleConflictFallback: 0,
   totalCandidates: 4,
   selectedCompatible: 1,
   selectedUnknown: 1,
