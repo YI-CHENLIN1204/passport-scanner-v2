@@ -131,6 +131,6 @@ assert.doesNotMatch(
   readFileSync('src/services/permitRawNameEvidence.ts', 'utf8'),
   /fallbackCandidates|isConservativeConflictFallback/,
 )
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.15'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.16'/)
 
 console.log('Permit raw-row selector .15 policy and wiring tests passed')
