@@ -81,6 +81,46 @@ assert.equal(
 assert.equal(
   select([
     {
+      value: '正確相容',
+      compatibility: 'compatible',
+      latinDistance: 4,
+      labelDistance: null,
+      exactRow: true,
+    },
+    {
+      value: '近但衝突',
+      compatibility: 'conflict',
+      latinDistance: 1,
+      labelDistance: null,
+      exactRow: true,
+    },
+  ])?.value,
+  '正確相容',
+)
+
+assert.equal(
+  select([
+    {
+      value: '近未知',
+      compatibility: 'unknown',
+      latinDistance: 1,
+      labelDistance: null,
+      exactRow: true,
+    },
+    {
+      value: '近但衝突',
+      compatibility: 'conflict',
+      latinDistance: 1,
+      labelDistance: null,
+      exactRow: true,
+    },
+  ])?.value,
+  '近未知',
+)
+
+assert.equal(
+  select([
+    {
       value: '甲乙丙',
       compatibility: 'conflict',
       latinDistance: 1,
