@@ -18,6 +18,7 @@ import {
   type RomanizationCompatibility,
 } from './nameRomanization'
 import { guardedOfficialNameSuggestion } from './officialNameSuggestion'
+import { choosePermitNameCropAnchor } from './permitNameCropAnchor'
 import {
   shouldRetryUncertainPermitName,
   shouldUseRetriedPermitName,
@@ -4946,41 +4947,10 @@ async function createPermitNameGroupCrop(
         item !== null && item.height > 0,
     )
 
-  const latinAnchors = geometries
-    .map((item) => ({
-      item,
-      parsed: extractPermitLatinName(item.text),
-    }))
-    .filter(
-      (
-        entry,
-      ): entry is {
-        item: PaddleItemGeometry
-        parsed: PermitLatinName
-      } => entry.parsed !== null,
-    )
-    .sort(
-      (a, b) =>
-        (b.item.score ?? 0) - (a.item.score ?? 0),
-    )
-
-  // Do not let an unrelated, high-confidence English "Name" label
-  // displace an actual printed Chinese 姓名 anchor on the permit.
-  const chineseLabelAnchors = geometries
-    .filter((item) => item.text.replace(/\s+/g, '').includes('姓名'))
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-
-  const englishLabelAnchors = geometries
-    .filter((item) => permitLabelMatches(item.text, ['Name']))
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-
-  // This affects only the ROI source of a guarded name reread, never
-  // the parsed permit fields or already-reviewed documents.
-  const anchor =
-    chineseLabelAnchors[0] ??
-    englishLabelAnchors[0] ??
-    latinAnchors[0]?.item ??
-    null
+  const anchor = choosePermitNameCropAnchor(
+    geometries,
+    (text) => extractPermitLatinName(text) !== null,
+  )
 
   if (!anchor) return null
 
