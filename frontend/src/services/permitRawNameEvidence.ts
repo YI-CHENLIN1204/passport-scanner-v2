@@ -10,6 +10,7 @@ export interface PermitRawNameCandidate {
   labelDistance: number | null
   exactRow: boolean
   officialVariantPromotion?: boolean
+  joinedTokenPromotion?: boolean
   conflictSubtype?:
     | 'token-count-mismatch'
     | 'one-syllable-mismatch'
