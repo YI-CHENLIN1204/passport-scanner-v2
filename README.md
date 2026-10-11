@@ -173,3 +173,5 @@ PostgreSQL 使用 named volume `passport_scanner_postgres`。一般的 `docker c
 > .23 已正式 Validation：護照 14/19、台胞證 13/13，與 .22 持平；broad VIZ 正確候選 0→1，但未提升最終姓名。下一步追查候選拒絕原因；禁止 GitHub Actions。
 
 > 2026-10-12：main `.24` 只增加護照正確候選 source × rejection reason 的匿名診斷，待本機測試。最佳已實測 `.23` 護照 14/19、台胞證 13/13。禁止 GitHub Actions。
+
+> 2026-10-12 `.24` 實測：32/32 Validation 成功，護照中文姓名 14/19、台胞證全欄 13/13。唯一有正確姓名卻未採用的護照案例原因為 `name-field / romanization:one-syllable-mismatch` 1 張；不可無條件放寬 selector。下一步僅能先做嚴格條件的 shadow / synthetic 驗證；禁止 GitHub Actions。
