@@ -1,5 +1,15 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — `.16` 再次實質提升；main 下一步聚焦唯一 one-syllable mismatch
+
+使用者完成 `2026.10.11.16` 正式 auto Validation，32/32 成功。護照維持：全欄 68%（13/19）、中文姓名 68%、其餘評估欄位 100%。台胞證再提升：全欄 **69%（9/13）**，中文姓名 **85%（11/13）**；出生日期 100%、性別 77%、證件號碼 100%、有效期限 100%。相較 `.15`，台胞證全欄 7/13→9/13，中文姓名 9/13→11/13；護照無退步。
+
+`.16` joined-token Romanization 路徑已被實測證明有效：有 exact joined-token promotion candidate 2 張，最終實際選中 2 張；BOCA official promotion 仍維持 4 張、實際選中 4 張。最終 compatible 共 11 張，unknown 0，raw-row none 2。這與中文姓名 11/13 正確率一致。
+
+剩餘 conflict subtype 匿名樣本數：token-count mismatch 5、one-syllable mismatch 2、other 0、unclassified 0。這些計數可重疊；但只剩 2 張最終沒有 raw-row 姓名，而既有 ground-truth 對照顯示這 2 張中文姓名錯誤樣本的正確姓名 **2/2 仍完整存在 raw row**。下一步應只針對最保守的 one-syllable 唯一候選條件，不再放寬 token segmentation、row distance 或任意 fuzzy spelling。
+
+`.16` 已成為目前最佳基準：護照全欄 13/19；台胞證全欄 9/13、中文姓名 11/13。任何後續版本必須至少維持此基準。
+
 ## 2026-10-12 — `.15` 首次大幅提升；main 已進入 `.16` exact joined-token Romanization
 
 `.15` 正式 auto Validation 已確認有效：32/32 成功；護照全欄維持 68%（13/19）、中文姓名 68%。台胞證全欄提升到 **54%（7/13）**，中文姓名提升到 **69%（9/13）**；出生日期 100%、性別 77%、證件號碼 100%、有效期限 100%。這是自 `.6` 之後第一個明確超越舊基準的台胞證姓名版本。
