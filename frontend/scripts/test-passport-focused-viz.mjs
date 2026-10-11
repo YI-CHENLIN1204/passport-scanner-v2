@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const source = readFileSync('src/services/paddleOcr.ts','utf8')
+const page = readFileSync('src/views/OcrQualityPage.vue','utf8')
+const from=source.indexOf('async function createTaiwanFocusedVizCrop(')
+const to=source.indexOf('async function createTaiwanVizCrop(',from)
+assert.ok(from>=0 && to>from)
+const section=source.slice(from,to)
+for(const token of ['width * 0.24','height * 0.12','width * 0.60','height * 0.34','1500,']) assert.ok(section.includes(token))
+const start=source.indexOf('async function predictOne(')
+const end=source.indexOf('async function predictPassportWithDistanceFallback(',start)
+const predict=source.slice(start,end)
+assert.match(predict,/source: 'focused-viz'/)
+assert.match(predict,/if \(vizName\.romanizationStatus === 'compatible'\) \{[\s\S]*?break/)
+assert.match(predict,/if \(crop\.source === 'focused-viz'\) break/)
+for(const token of ['focusedExact','focusedOther','focusedNone','focusedNotRun']) assert.ok(page.includes(token))
+assert.match(source,/OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.27'/)
+console.log('Passport focused-viz fallback and anonymous diagnostics guards passed')
