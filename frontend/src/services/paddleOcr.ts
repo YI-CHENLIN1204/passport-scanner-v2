@@ -1,3 +1,4 @@
+import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import {
   isPlausibleTd3Line1,
@@ -4995,12 +4996,6 @@ async function createPermitNameGroupCrop(
   )
 }
 
-export interface PermitRetryDetectionSummary {
-  attemptedCrops: number
-  cropsWithTextBoxes: number
-  cropsWithNameCandidates: number
-}
-
 async function retryPermitChineseName(
   instance: PaddleInstance,
   image: File,
@@ -5037,11 +5032,7 @@ async function retryPermitChineseName(
   const candidates: Array<
     PermitCandidate<string>
   > = []
-  const summary: PermitRetryDetectionSummary = {
-    attemptedCrops: 0,
-    cropsWithTextBoxes: 0,
-    cropsWithNameCandidates: 0,
-  }
+  const observations: Array<{ hasBoxes: boolean; hasCandidate: boolean }> = []
 
   for (const crop of crops) {
     const [namePrediction] =
@@ -5060,16 +5051,15 @@ async function retryPermitChineseName(
     const candidate =
       choosePermitChineseName(geometries)
 
-    summary.attemptedCrops += 1
-    if (geometries.length > 0) summary.cropsWithTextBoxes += 1
-    if (candidate) {
-      summary.cropsWithNameCandidates += 1
-      candidates.push(candidate)
-    }
+    observations.push({
+      hasBoxes: geometries.length > 0,
+      hasCandidate: candidate !== null,
+    })
+    if (candidate) candidates.push(candidate)
   }
 
   // Report only aggregate shape, never the detected text, identity or crop.
-  diagnostic?.(summary)
+  diagnostic?.(summarizePermitRetryDetection(observations))
   if (!candidates.length) return null
 
   const grouped = new Map<
