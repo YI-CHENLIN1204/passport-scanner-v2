@@ -104,6 +104,8 @@ interface PassportNameDiagnosticSnapshot {
   }>
   shadowOneMismatchName?: string | null
   shadowOfficialName?: string | null
+  strictOneSyllableShadowName?: string | null
+  strictOneSyllableShadowDecision?: string
 }
 
 interface RetestSampleOutcome {
@@ -420,6 +422,8 @@ async function currentFieldsForSample(
           decisionTrace: item.decisionTrace,
           shadowOneMismatchName: item.shadowOneMismatchName,
           shadowOfficialName: item.shadowOfficialName,
+          strictOneSyllableShadowName: item.strictOneSyllableShadowName,
+          strictOneSyllableShadowDecision: item.strictOneSyllableShadowDecision,
         })),
       totalMs: result.totalMs,
       orientationAttempts:
@@ -988,6 +992,8 @@ interface ValidationProfileSample {
   passportExactDecisionSource: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
+  passportStrictShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
+  passportStrictDecision: string | null
   permitScriptEquivalentOnly: boolean
   permitNameRawFailure: PermitNameRawFailureBucket | null
   permitSource: PermitSourceEvidence | null
@@ -1027,6 +1033,8 @@ interface ValidationProfileDocument {
   passportDecisionSourceCounts: Array<{ source: string; reason: string; count: number }>
   passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
+  passportStrictCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
+  passportStrictDecisionCounts: Array<{ reason: string; count: number }>
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
@@ -1450,6 +1458,26 @@ async function profileValidationOnly() {
             ? officialCorrect ? 'unchanged-correct' : 'regressed'
             : officialCorrect ? 'rescued' : 'unchanged-wrong'
 
+        const strictShadowNames = prediction.passportNameDiagnostics
+          .map(item => item.strictOneSyllableShadowName)
+          .filter((name): name is string => Boolean(name))
+        const strictCandidate = strictShadowNames.length === 1
+          ? strictShadowNames[0]
+          : null
+        const strictCorrect = strictCandidate
+          ? evalFieldEquals('nameZh', strictCandidate, truth.nameZh)
+          : baselineNameCorrect
+        const passportStrictShadow = sample.documentType !== 'PASSPORT'
+          ? null
+          : baselineNameCorrect
+            ? strictCorrect ? 'unchanged-correct' : 'regressed'
+            : strictCorrect ? 'rescued' : 'unchanged-wrong'
+        const passportStrictDecision = sample.documentType === 'PASSPORT'
+          ? prediction.passportNameDiagnostics
+              .map(item => item.strictOneSyllableShadowDecision)
+              .find(Boolean) ?? 'not-evaluated'
+          : null
+
         const actualName = normalizeEvalValue('nameZh', prediction.fields.nameZh)
         const truthName = normalizeEvalValue('nameZh', truth.nameZh)
         // Script equivalence is not proof of identity; distinct traditional
@@ -1471,6 +1499,8 @@ async function profileValidationOnly() {
           passportExactDecisionSource,
           passportShadow,
           passportOfficialShadow,
+          passportStrictShadow,
+          passportStrictDecision,
           permitScriptEquivalentOnly,
           permitNameRawFailure,
           permitSource: 'permitSource' in prediction
@@ -1565,6 +1595,27 @@ async function profileValidationOnly() {
                 row => row.orientationAttempts > 1,
               ).length / rows.length
             : 0,
+          passportStrictDecisionCounts:
+            documentType === 'PASSPORT'
+              ? Array.from(new Set(rows.map(row =>
+                  row.passportStrictDecision,
+                ).filter((reason): reason is string => Boolean(reason))))
+                .map(reason => ({
+                  reason,
+                  count: rows.filter(row =>
+                    row.passportStrictDecision === reason,
+                  ).length,
+                }))
+              : [],
+          passportStrictCounts:
+            documentType === 'PASSPORT'
+              ? {
+                  rescued: rows.filter(row => row.passportStrictShadow === 'rescued').length,
+                  regressed: rows.filter(row => row.passportStrictShadow === 'regressed').length,
+                  'unchanged-correct': rows.filter(row => row.passportStrictShadow === 'unchanged-correct').length,
+                  'unchanged-wrong': rows.filter(row => row.passportStrictShadow === 'unchanged-wrong').length,
+                }
+              : null,
           passportOfficialCounts:
             documentType === 'PASSPORT'
               ? {
@@ -2576,6 +2627,17 @@ onMounted(load)
                 {{ item.source }} / {{ item.reason }} {{ item.count }} 張；
               </span>
               只保留來源與分類，不儲存候選姓名或證件資料。
+            </p>
+            <p v-if="result.passportStrictCounts" class="validation-legacy-note">
+              嚴格單音節候選 shadow（唯讀，非正式輸出）：
+              潛在改善 {{ result.passportStrictCounts.rescued }} 張；
+              潛在退步 {{ result.passportStrictCounts.regressed }} 張；
+              維持正確 {{ result.passportStrictCounts['unchanged-correct'] }} 張；
+              維持錯誤 {{ result.passportStrictCounts['unchanged-wrong'] }} 張。
+              <span v-for="item in result.passportStrictDecisionCounts" :key="item.reason">
+                {{ item.reason }} {{ item.count }} 張；
+              </span>
+              此處只記匿名類別；正式 OCR 姓名不受 shadow 影響。
             </p>
             <p v-if="result.passportOfficialCounts" class="validation-legacy-note">
               外交部護照拼音對照表候選（只讀，非正式輸出）：
