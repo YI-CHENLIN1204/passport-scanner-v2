@@ -31,6 +31,7 @@ import { aggregatePermitRetryDetection, type PermitRetryDetectionSummary } from 
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
 import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../services/permitSourceEvidence'
+import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -448,6 +449,7 @@ async function currentFieldsForSample(
       passportNameDiagnostics: [],
       permitRawRows: result.rawRows,
       permitRetryDetection: retryDetection,
+      permitRawNameEvidence: result.rawNameEvidence,
       permitSource: {
         distanceCropUsed: result.distanceCropUsed,
         nameRetryApplied: result.nameRetryApplied,
@@ -983,6 +985,7 @@ interface ValidationProfileSample {
   permitScriptEquivalentOnly: boolean
   permitNameRawFailure: PermitNameRawFailureBucket | null
   permitSource: PermitSourceEvidence | null
+  permitRawNameEvidence: PermitRawNameEvidenceLike | null
   permitRetryDetection: PermitRetryDetectionSummary | null
   fieldExact: Record<string, boolean>
   fetchMs: number
@@ -1018,6 +1021,7 @@ interface ValidationProfileDocument {
   permitScriptEquivalentCount: number | null
   permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   permitSourceCounts: ReturnType<typeof aggregatePermitSourceEvidence> | null
+  permitRawNameEvidenceCounts: ReturnType<typeof aggregatePermitRawNameEvidence> | null
   permitRetryDetectionCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
   permitRetryWrongNameCounts: ReturnType<typeof aggregatePermitRetryDetection> | null
   failedCount: number
@@ -1361,6 +1365,9 @@ async function profileValidationOnly() {
           permitRetryDetection: 'permitRetryDetection' in prediction
             ? (prediction.permitRetryDetection ?? null)
             : null,
+          permitRawNameEvidence: 'permitRawNameEvidence' in prediction
+            ? (prediction.permitRawNameEvidence ?? null)
+            : null,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1464,6 +1471,10 @@ async function profileValidationOnly() {
           permitSourceCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
               ? aggregatePermitSourceEvidence(rows.map(row => row.permitSource))
+              : null,
+          permitRawNameEvidenceCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? aggregatePermitRawNameEvidence(rows.map(row => row.permitRawNameEvidence))
               : null,
           permitNameRawFailureCounts:
             documentType === 'TAIWAN_COMPATRIOT_PERMIT'
@@ -2265,6 +2276,19 @@ onMounted(load)
               MRZ 曾提供欄位
               {{ result.permitSourceCounts.mrzUsed }}。
               僅為診斷計數，不是準確率改善證據。
+            </p>
+            <p
+              v-if="result.permitRawNameEvidenceCounts"
+              class="validation-legacy-note"
+            >
+              台胞證 raw-row 姓名選擇器（匿名）：有英文姓名列
+              {{ result.permitRawNameEvidenceCounts.samplesWithLatinRows }} 張；
+              有姓名標籤列 {{ result.permitRawNameEvidenceCounts.samplesWithLabelRows }} 張；
+              有拼音相容中文候選 {{ result.permitRawNameEvidenceCounts.samplesWithCompatibleCandidate }} 張；
+              最終選到拼音相容 {{ result.permitRawNameEvidenceCounts.selectedCompatible }} 張；
+              最終選到 unknown {{ result.permitRawNameEvidenceCounts.selectedUnknown }} 張；
+              沒選到 raw-row 姓名 {{ result.permitRawNameEvidenceCounts.selectedNone }} 張。
+              僅為匿名 selector 診斷，不保存姓名或逐張資料。
             </p>
             <p
               v-if="result.permitNameRawFailureCounts"
