@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .23 正式 Validation：護照 14/19 持平，VIZ 出現新正確候選
+
+使用者本機完成 pipeline 2026.10.11.23 固定 auto Validation：32/32 完成、失敗 0。護照全欄與中文姓名仍 14/19（74%），其餘七欄 19/19；台胞證所有必要欄位及整張 13/13（100%），無回歸。護照 OCR 中位數約 1.2 秒、P90 2.3 秒。
+
+護照剩餘 5 張錯誤的匿名裁切分區診斷：name-field 正確候選 1、其他候選 2、無候選 0、未執行 2；broad VIZ 正確候選 1、其他候選 2、無候選 0、未執行 2。兩區都只有錯誤候選 0；「正確候選僅在 VIZ 出現」0。全局失敗分類完整正確候選 1、其他候選內容不符 4、raw 完整吻合 0、raw 子字串 0、無可用候選 0。比 .22，VIZ 正確候選 0→1、未執行 3→2，但護照整張仍 14/19，故 .23 只能視為證據覆蓋增加，不能宣稱準確率提高。
+
+下一步應針對正確候選與最終選擇之落差補充匿名決策歸因，特別是不同 ROI 的 decisionTrace、當次候選是否被拼音衝突或 rank/confidence gate 擋住，以及選定 orientation/attempt 與來源不一致的可能性；不直接把 shadow one-syllable suggestion 自動採用。台胞證已成功 BOCA / joined-token / one-syllable / standalone / focused-sex 路徑凍結。32 張 legacy Validation 均缺當年 OCR 工作輸入，不能推論新照片 production 100%。不啟動 GitHub Actions、不提交個資。
+
+
 ## 2026-10-12 — .23 護照 unknown-name VIZ 確認候選（待本機 Validation）
 
 正式已實測基準 .22：護照中文姓名 14/19、台胞證全欄 13/13。分區診斷指出剩餘 5 張錯誤：name-field 完整正確候選 1、錯誤候選 2、未執行 2；broad VIZ 正確候選 0、錯誤候選 2、未執行 3。.22 完整輸出未執行不一定是 detection failure：程式 `predictOne()` 在 name-field 找到任一合格姓名時即 break，即使 romanizationStatus=unknown 也阻止 broad VIZ 嘗試。
