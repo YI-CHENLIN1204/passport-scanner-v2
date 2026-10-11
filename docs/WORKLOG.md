@@ -184,3 +184,9 @@
 ## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
 
 在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。
+
+## 2026-10-11 — 台胞證局部姓名重辨識 ROI 座標來源修復（候選 .7；未經本機驗收）
+
+原始碼確認 `predictPermit()` 若因低品質完整影像而切換至 `createDistanceOcrCrops()` 的放大裁切結果，會將 `cropPrediction` 選作 `bestPrediction`；但後續 `retryPermitChineseName()` 卻以完整旋轉照片 `best.image` 搭配 **裁切圖座標** 選擇姓名區域。不同座標系可能令重讀 ROI 偏移。現在回傳 `predictionImage`（預設整圖，選中距離 crop 時為 `crop.file`），在原始與 deskew 路徑傳遞此來源，局部重讀改用 `best.predictionImage` + `best.prediction` 同一影像座標；供人工審核的 `best.image` 則保持完整圖，不改資料模型、OCR 模型或人工覆核。版本候選 `2026.10.11.7`。
+
+新增 `frontend/scripts/test-permit-roi-source.mjs` 結構性防退步腳本，使用本機 `cd frontend && npm run test:permit-roi && npm run build` 驗證（**GitHub Connector 無法直接執行本機測試，目前未執行**）。GitHub Actions 因額度將盡，**禁止自動及手動觸發**；本 PR 不以 CI 成功為合併門檻，也不虛稱通過。此為實際 OCR 來源／ROI 錯位的程式缺陷修復，但尚未有照片實測及提升數字，固定 Test 不可調參。後續繼續聚焦真實 OCR 工作圖來源，最終集中一次 Validation。
