@@ -1255,7 +1255,7 @@ async function profileValidationOnly() {
           ? classifyPermitNameRawFailure(
               prediction.fields.nameZh,
               truth.nameZh,
-              'permitRawRows' in prediction ? prediction.permitRawRows : [],
+              'permitRawRows' in prediction ? (prediction.permitRawRows ?? []) : [],
             )
           : null
 
