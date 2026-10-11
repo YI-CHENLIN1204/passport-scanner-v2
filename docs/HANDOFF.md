@@ -1,5 +1,9 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-11 main OCR .9 裁切防退步修正（待一次集中本機驗證）
+
+在 `createPixelCrop` 讀取 bitmap 後先將 x/y 限制於有效畫素起點 `0..width-1` / `0..height-1`，防止來源 OCR anchor 略為超出影像邊界，導致無效 Canvas 來源裁切。修正 `test:permit-broad-crop` 新腳本最初不正確的雙重 regex escape，現在以來源守衛檢查邊界、2.5x 上限、1800px 上限與廣域重讀流程；**測試尚未在用戶 Windows 本機真正執行**。這是健全性修正，非實測辨識準確率提升。沿用 main-first，不新增 PR，不跑 GitHub Actions。舊 PR #33 尚未合併，須後續成批處理且不能直接覆蓋 main .9。
+
 ## 2026-10-11 main OCR .9 第二批：限制小圖片不合理放大（未本機驗證）
 
 延續 main 的姓名重讀 ROI 改動，`createPixelCrop` 由一律填補到至少 1200/1500px 改成最多放大 2.5 倍、整體 1800px 上限：例如 300px 裁切最多 750px，600px 可到 1500px，避免低解析裁切被過度插值、大型 Canvas 占用瀏覽器資源。新增 `test:permit-broad-crop` 的邊界案例。此函式也用於其他姓名 crop，故須整批執行既有測試及 Build，並在正式照片 Validation 檢查準確率和時間是否退步。**沒有實測證據，不宣稱提升**。GitHub Actions 禁止執行，PR #33 仍獨立待本機測試與合併。後續盡量維持 main，勿再為每個小修改建立 PR。
