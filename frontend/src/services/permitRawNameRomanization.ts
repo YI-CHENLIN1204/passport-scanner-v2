@@ -1,6 +1,7 @@
 import {
   compareChineseNameToMrzRomanization,
   compareChineseNameToMrzWithOfficialVariants,
+  classifyRomanizationConflict,
 } from './nameRomanization'
 import type { PermitRawNameCompatibility } from './permitRawNameEvidence'
 
@@ -14,6 +15,12 @@ export interface PermitRawRomanizationResolution {
   compatibility: PermitRawNameCompatibility
   latinDistance: number | null
   officialVariantPromotion: boolean
+  conflictSubtype:
+    | 'token-count-mismatch'
+    | 'one-syllable-mismatch'
+    | 'other-mismatch'
+    | 'unclassified'
+    | null
 }
 
 export function resolvePermitRawRomanization(
@@ -25,6 +32,7 @@ export function resolvePermitRawRomanization(
       compatibility: 'unknown',
       latinDistance: null,
       officialVariantPromotion: false,
+      conflictSubtype: null,
     }
   }
 
@@ -75,6 +83,7 @@ export function resolvePermitRawRomanization(
       compatibility: 'compatible',
       latinDistance: standardCompatibleDistance,
       officialVariantPromotion: false,
+      conflictSubtype: null,
     }
   }
 
@@ -83,6 +92,7 @@ export function resolvePermitRawRomanization(
       compatibility: 'compatible',
       latinDistance: officialCompatibleDistance,
       officialVariantPromotion: true,
+      conflictSubtype: null,
     }
   }
 
@@ -91,14 +101,23 @@ export function resolvePermitRawRomanization(
       compatibility: 'unknown',
       latinDistance: unknownDistance,
       officialVariantPromotion: false,
+      conflictSubtype: null,
     }
   }
 
+  const nearest = [...anchors]
+    .sort((a, b) => a.distance - b.distance)[0]
+
   return {
     compatibility: 'conflict',
-    latinDistance: Math.min(
-      ...anchors.map(anchor => anchor.distance),
-    ),
+    latinDistance: nearest?.distance ?? null,
     officialVariantPromotion: false,
+    conflictSubtype: nearest
+      ? classifyRomanizationConflict(
+          value,
+          nearest.surname,
+          nearest.givenNames,
+        )
+      : null,
   }
 }
