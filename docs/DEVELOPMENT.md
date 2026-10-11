@@ -61,6 +61,14 @@ docker compose down
 docker compose up -d --build
 ```
 
+如果這次只改 frontend，且 backend / database 已在正常執行，可只 rebuild/recreate frontend，較快且不碰資料庫：
+
+```powershell
+docker compose up -d --no-deps --build frontend
+```
+
+注意：`cd frontend && npm run build` 只建立 host 的 `frontend/dist`。Docker frontend 使用 Nginx image 內建的 `/usr/share/nginx/html`，**不會因 host dist 更新而自動換版**。如果 Validation 頁底版本仍是舊 OCR pipeline，先 rebuild frontend container，再 `Ctrl+F5` 強制重新整理；不要把舊 container 跑出的結果當成新版驗證。
+
 即可 rebuild image 並 recreate 需要更新的 container。
 
 > 不要隨便執行 `docker compose down -v`。  
