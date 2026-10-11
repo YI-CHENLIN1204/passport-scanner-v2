@@ -1,7 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
-import { isConservativeConflictFallback, selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
+import { selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import {
@@ -3630,7 +3630,6 @@ export interface PermitRawNameEvidenceSummary {
   selectedOfficialVariant: boolean
   shortExactConflictCandidateCount: number
   nearestConflictLatinDistance: number | null
-  eligibleConflictFallbackCount: number
   selectedCompatibility: PermitRawNameCompatibility | null
 }
 
@@ -4296,10 +4295,6 @@ function extractPermitChineseNameFromRows(
           ? Math.min(...distances)
           : null
       })(),
-      eligibleConflictFallbackCount:
-        candidates.filter(
-          isConservativeConflictFallback,
-        ).length,
       selectedCompatibility:
         selected?.compatibility ?? null,
     },
