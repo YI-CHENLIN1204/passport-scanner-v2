@@ -94,6 +94,7 @@ const fieldsByDocumentType: Record<string, string[]> = {
 }
 
 interface PassportNameDiagnosticSnapshot {
+  source: 'name-field' | 'viz-crop'
   rawTexts: string[]
   candidateTexts: string[]
   decisionTrace?: Array<{
@@ -413,6 +414,7 @@ async function currentFieldsForSample(
       } as Record<string, string | null>,
       passportNameDiagnostics:
         result.chineseNameDiagnostics.map(item => ({
+          source: item.source,
           rawTexts: item.rawTexts,
           candidateTexts: item.candidateTexts,
           decisionTrace: item.decisionTrace,
@@ -981,6 +983,7 @@ interface ValidationProfileSample {
   hasExactOcrInput: boolean
   fullExact: boolean
   passportNameFailure: ValidationPassportNameFailure | null
+  passportCropDiagnosis: PassportCropDiagnosis | null
   passportExactDecision: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
@@ -1015,6 +1018,7 @@ interface ValidationProfileDocument {
   orientationRetryRate: number
   passportNameFailures:
     ValidationPassportNameFailureSummary | null
+  passportCropDiagnosisCounts: PassportCropDiagnosisCounts | null
   passportDecisionReasons: Array<{
     reason: string
     count: number
@@ -1135,6 +1139,89 @@ function categorizeValidationPassportNameFailure(
   return normalizedCandidates.length > 0
     ? 'wrong-candidate'
     : 'no-candidate'
+}
+
+type PassportCropClass = 'exact' | 'other' | 'none' | 'not-run'
+interface PassportCropDiagnosis {
+  nameField: PassportCropClass
+  vizCrop: PassportCropClass
+}
+interface PassportCropDiagnosisCounts {
+  incorrectSamples: number
+  nameFieldExact: number
+  nameFieldOther: number
+  nameFieldNone: number
+  nameFieldNotRun: number
+  vizExact: number
+  vizOther: number
+  vizNone: number
+  vizNotRun: number
+  bothWrong: number
+  vizRescuedExact: number
+}
+
+// Anonymous per-region classification, only for wrong final passport names.
+// Raw OCR strings and ground truth are used transiently, never persisted.
+function classifyPassportCrop(
+  expected: string,
+  diagnostic: PassportNameDiagnosticSnapshot | undefined,
+): PassportCropClass {
+  if (!diagnostic) return 'not-run'
+  const candidates = diagnostic.candidateTexts.map(value =>
+    normalizeEvalValue('nameZh', value),
+  )
+  const raws = diagnostic.rawTexts.map(value =>
+    normalizeEvalValue('nameZh', value),
+  )
+  if (expected && (
+    candidates.includes(expected) || raws.includes(expected)
+  )) return 'exact'
+  return candidates.length ? 'other' : 'none'
+}
+
+function diagnosePassportCrops(
+  expected: string,
+  diagnostics: PassportNameDiagnosticSnapshot[],
+): PassportCropDiagnosis {
+  const get = (source: 'name-field' | 'viz-crop') =>
+    diagnostics.find(item => item.source === source)
+  return {
+    nameField: classifyPassportCrop(expected, get('name-field')),
+    vizCrop: classifyPassportCrop(expected, get('viz-crop')),
+  }
+}
+
+function aggregatePassportCropDiagnostics(
+  rows: readonly ValidationProfileSample[],
+): PassportCropDiagnosisCounts {
+  const wrong = rows.filter(row =>
+    row.passportNameFailure !== null && row.passportCropDiagnosis !== null
+  )
+  const count = (
+    source: 'nameField' | 'vizCrop',
+    value: PassportCropClass,
+  ) => wrong.filter(row =>
+    row.passportCropDiagnosis?.[source] === value
+  ).length
+  return {
+    incorrectSamples: wrong.length,
+    nameFieldExact: count('nameField', 'exact'),
+    nameFieldOther: count('nameField', 'other'),
+    nameFieldNone: count('nameField', 'none'),
+    nameFieldNotRun: count('nameField', 'not-run'),
+    vizExact: count('vizCrop', 'exact'),
+    vizOther: count('vizCrop', 'other'),
+    vizNone: count('vizCrop', 'none'),
+    vizNotRun: count('vizCrop', 'not-run'),
+    bothWrong: wrong.filter(row =>
+      row.passportCropDiagnosis?.nameField === 'other' &&
+      row.passportCropDiagnosis?.vizCrop === 'other'
+    ).length,
+    vizRescuedExact: wrong.filter(row =>
+      row.passportCropDiagnosis?.nameField !== 'exact' &&
+      row.passportCropDiagnosis?.vizCrop === 'exact'
+    ).length,
+  }
 }
 
 function requestStopValidation() {
@@ -1295,6 +1382,14 @@ async function profileValidationOnly() {
         const expectedName = normalizeEvalValue(
           'nameZh', truth.nameZh,
         )
+        const passportCropDiagnosis =
+          sample.documentType === 'PASSPORT' &&
+          passportNameFailure !== null
+            ? diagnosePassportCrops(
+                expectedName,
+                prediction.passportNameDiagnostics,
+              )
+            : null
         const exactDecisions = sample.documentType === 'PASSPORT' &&
           passportNameFailure === 'exact-candidate'
           ? prediction.passportNameDiagnostics.flatMap(
@@ -1358,6 +1453,7 @@ async function profileValidationOnly() {
           hasExactOcrInput:
             sample.hasExactOcrInput,
           passportNameFailure,
+          passportCropDiagnosis,
           passportExactDecision,
           passportShadow,
           passportOfficialShadow,
@@ -1529,6 +1625,10 @@ async function profileValidationOnly() {
                   ).length,
                 })).filter(item => item.count > 0)
               : [],
+          passportCropDiagnosisCounts:
+            documentType === 'PASSPORT'
+              ? aggregatePassportCropDiagnostics(rows)
+              : null,
           passportNameFailures:
             documentType === 'PASSPORT'
               ? {
@@ -2399,6 +2499,25 @@ onMounted(load)
               {{ result.passportNameFailures.notDetectedCount }} 張。
               候選文字完整吻合也不代表符合實際版面與拼音篩選條件；
               這是匿名近似分類，不可直接視為選擇器可修復張數。
+            </p>
+            <p
+              v-if="result.passportCropDiagnosisCounts?.incorrectSamples"
+              class="validation-legacy-note"
+            >
+              護照中文姓名失敗的裁切分區診斷（僅匿名件數）：
+              錯誤樣本 {{ result.passportCropDiagnosisCounts.incorrectSamples }}；
+              name-field：正確候選 {{ result.passportCropDiagnosisCounts.nameFieldExact }}、
+              其他候選 {{ result.passportCropDiagnosisCounts.nameFieldOther }}、
+              無候選 {{ result.passportCropDiagnosisCounts.nameFieldNone }}、
+              未執行 {{ result.passportCropDiagnosisCounts.nameFieldNotRun }}；
+              broad VIZ：正確候選 {{ result.passportCropDiagnosisCounts.vizExact }}、
+              其他候選 {{ result.passportCropDiagnosisCounts.vizOther }}、
+              無候選 {{ result.passportCropDiagnosisCounts.vizNone }}、
+              未執行 {{ result.passportCropDiagnosisCounts.vizNotRun }}；
+              兩區都只有錯誤候選 {{ result.passportCropDiagnosisCounts.bothWrong }}；
+              正確候選只在 VIZ 出現 {{ result.passportCropDiagnosisCounts.vizRescuedExact }}。
+              只反映既有裁切輸出，不新增 OCR、不記錄真實姓名或圖片；
+              完整候選不代表一定符合 selector 條件。
             </p>
             <p
               v-if="result.passportDecisionReasons.length"
