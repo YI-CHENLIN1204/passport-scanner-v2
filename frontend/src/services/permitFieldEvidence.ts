@@ -32,6 +32,7 @@ export type PermitSexEvidenceSource =
   | 'mrz'
   | 'label'
   | 'semantic'
+  | 'standalone-token'
   | 'empty'
 
 export function selectPermitSexEvidence(
@@ -40,6 +41,7 @@ export function selectPermitSexEvidence(
   labeledSex: PermitEvidenceSex,
   labeledScore: number | null,
   semanticSex: PermitEvidenceSex,
+  standaloneSex: PermitEvidenceSex = '',
 ): {
   value: PermitEvidenceSex
   source: PermitSexEvidenceSource
@@ -91,6 +93,13 @@ export function selectPermitSexEvidence(
     }
   }
 
+  if (standaloneSex) {
+    return {
+      value: standaloneSex,
+      source: 'standalone-token',
+    }
+  }
+
   return {
     value: '',
     source: 'empty',
@@ -103,6 +112,7 @@ export function selectPermitSexCandidate(
   labeledSex: PermitEvidenceSex,
   labeledScore: number | null,
   semanticSex: PermitEvidenceSex,
+  standaloneSex: PermitEvidenceSex = '',
 ): PermitEvidenceSex {
   return selectPermitSexEvidence(
     mrzSex,
@@ -110,6 +120,7 @@ export function selectPermitSexCandidate(
     labeledSex,
     labeledScore,
     semanticSex,
+    standaloneSex,
   ).value
 }
 
