@@ -584,3 +584,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 觀察：不能再盲目加寬 broad VIZ；其在剩餘錯誤樣本中沒有完整正確候選，而 name-field 至少有 1 個正確候選但 selector 未採用。下一步先檢查未執行 crop 為何缺席（包含其他旋轉嘗試與合併結果的診斷），以及現有正確候選為何被拒絕；仍須避免直接放寬拼音衝突條件。最佳已實測 pipeline 為 .22（辨識準確率與 .21 相同）。所有 32 張 legacy Validation 缺少真正 OCR 工作輸入，不代表真實新照片泛化準確率。禁止 GitHub Actions，不得提交證件影像、真實姓名或 OCR raw 個資。
 
+## 2026-10-12 — .23 護照 unknown-name VIZ 確認候選（待本機 Validation）
+
+正式已實測基準 .22：護照中文姓名 14/19、台胞證全欄 13/13。分區診斷指出剩餘 5 張錯誤：name-field 完整正確候選 1、錯誤候選 2、未執行 2；broad VIZ 正確候選 0、錯誤候選 2、未執行 3。.22 完整輸出未執行不一定是 detection failure：程式 `predictOne()` 在 name-field 找到任一合格姓名時即 break，即使 romanizationStatus=unknown 也阻止 broad VIZ 嘗試。
+
+.23 最小保守修正：若 name-field 選到明確 compatible 姓名，維持既有立即採用且不增加 OCR；若只選到 unknown，先保留其內容及來源作為人工審核候選，繼續執行原本已存在的 broad VIZ OCR；只有第二次 VIZ 選到 **明確 compatible** 姓名才覆寫 provisional 值，若仍 unknown／無候選則維持第一個姓名，不猜、不放寬 romanization selector。如此僅可能增加原本因 unknown 提前停止的護照 VIZ OCR，不更動台胞證任何已驗證路徑。新增 `test-passport-unknown-viz.mjs` 靜態守衛並加入 `verify:ocr`，pipeline 候選更新為 2026.10.11.23。
+
+**.23 尚未跑 Windows verify/build 或 32 張固定 auto Validation，不得宣稱精準率提升；正式最佳實測仍是 .22 的 14/19 與 13/13。** 待集中本機驗證後，將匿名結果寫回文件。所有 legacy 32 張缺少真正 OCR 工作輸入圖像，不代表對新照片的泛化準確率。GitHub Actions 禁止執行，真實證件照片、姓名、號碼、raw OCR 個資不可上傳 GitHub。
+
