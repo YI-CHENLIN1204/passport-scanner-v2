@@ -31,7 +31,7 @@
 
 ## 目前開發優先順序
 
-- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前 main OCR pipeline 為 `2026.10.11.19`；最新照片實測 `.19`：護照 13/19 全欄、台胞證 12/13 全欄、中文姓名 13/13、性別 12/13；以 `docs/HANDOFF.md` 最上方最新段落為權威。
+- **固定 Test baseline** `2026.10.09.1` 凍結、不得反覆調參；**它不是目前正式 OCR 程式版本**。目前 main OCR pipeline 候選為 `2026.10.11.20`，尚待本機驗證；最新照片實測仍是 `.19`：護照 13/19 全欄、台胞證 12/13 全欄、中文姓名 13/13、性別 12/13；以 `docs/HANDOFF.md` 最上方最新段落為權威。
 - 使用者**已明確要求加速推進 OCR 精準度改善**。必須集中有依據的修改、自動化回歸，並以一次 Validation 檢驗淨改善／退步；不得擅自改固定 Test split 或把未實測 PR 說成精準率提升。
 - 不要把固定 Test 圖片加入 Train；Train / Validation / Test 仍以 Traveler group 切分，避免同人資料洩漏。
 - 現階段優先完成 V2 系統本體：團別收件、批次掃描生命週期、人工審核、Traveler / DocumentVersion、人物合併、資料一致性、production photo retention、Training Dataset 管理、CSV 匯出與備份／還原。

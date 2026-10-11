@@ -1,6 +1,6 @@
 # Passport Scanner V2
 
-> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md) 與 [docs/NEXT_CHAT_HANDOFF.md](./docs/NEXT_CHAT_HANDOFF.md)（目前正式最佳實測 `2026.10.11.19`：護照全欄 13/19；台胞證全欄 12/13、中文姓名 13/13、性別 12/13；下一步 `.20` 只處理最後 1 張 sex empty 的 focused retry）。
+> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md) 與 [docs/NEXT_CHAT_HANDOFF.md](./docs/NEXT_CHAT_HANDOFF.md)（main 已完成 `2026.10.11.20` focused-sex-retry 候選、待本機驗證；目前正式最佳實測仍是 `.19`：護照全欄 13/19；台胞證全欄 12/13、中文姓名 13/13、性別 12/13）。
 
 旅行社內部使用的證件掃描與旅客資料整理系統。
 

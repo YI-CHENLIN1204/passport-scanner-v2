@@ -7,6 +7,11 @@ import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import { extractPermitSemanticSexFromRows } from './permitSexSemantics'
 import { collectStandalonePermitSexEvidence } from './permitStandaloneSexEvidence'
 import {
+  collectPermitSexRetryEvidence,
+  selectPermitSexRetryRegion,
+  type PermitSexRetryRegionSource,
+} from './permitSexRetry'
+import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
   normalizeTd3Line1,
@@ -796,7 +801,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.19'
+  '2026.10.11.20'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3683,6 +3688,12 @@ export interface TaiwanCompatriotPermitOcrResult {
     standaloneTokenCount: number
     standaloneTokenConflict: boolean
     selectedSource: PermitSexEvidenceSource
+    retryAttempted: boolean
+    retryRegion: PermitSexRetryRegionSource | null
+    retryDetectedBoxes: number
+    retryHadCandidate: boolean
+    retryConflict: boolean
+    retryApplied: boolean
   }
   chineseNameConfidence: number | null
   textHorizontalScore: number
@@ -3696,6 +3707,7 @@ export interface TaiwanCompatriotPermitOcrProgress {
     | 'initializing'
     | 'orientation'
     | 'deskew'
+    | 'sex-retry'
     | 'name-retry'
     | 'completed'
   progress: number
@@ -4654,6 +4666,12 @@ function buildTaiwanCompatriotPermitResult(
       standaloneTokenConflict:
         standaloneSexEvidence.conflicting,
       selectedSource: sexEvidence.source,
+      retryAttempted: false,
+      retryRegion: null,
+      retryDetectedBoxes: 0,
+      retryHadCandidate: false,
+      retryConflict: false,
+      retryApplied: false,
     },
     chineseNameConfidence:
       nameEvidence.source === 'visual-agreement'
@@ -5162,6 +5180,90 @@ async function retryPermitChineseName(
   return selectPermitRetryWinner(candidates, completedPasses)
 }
 
+
+async function createPermitSexRetryCrop(
+  image: File,
+  prediction: unknown,
+) {
+  const bitmap = await createImageBitmap(image)
+  const imageWidth = bitmap.width
+  const imageHeight = bitmap.height
+  bitmap.close()
+
+  const geometries = predictionItems(prediction)
+    .map(toGeometry)
+    .filter(
+      (item): item is PaddleItemGeometry =>
+        item !== null && item.height > 0,
+    )
+
+  const region = selectPermitSexRetryRegion(
+    imageWidth,
+    imageHeight,
+    geometries,
+  )
+  if (!region) return null
+
+  const blob = await createPixelCrop(
+    image,
+    region.x,
+    region.y,
+    region.width,
+    region.height,
+    900,
+  )
+
+  return {
+    file: new File(
+      [blob],
+      `permit-sex-${region.source}.png`,
+      { type: 'image/png' },
+    ),
+    region: region.source,
+  }
+}
+
+async function retryPermitSex(
+  instance: PaddleInstance,
+  image: File,
+  prediction: unknown,
+) {
+  const crop = await createPermitSexRetryCrop(
+    image,
+    prediction,
+  )
+
+  if (!crop) {
+    return {
+      value: '' as PermitSex,
+      region: null as PermitSexRetryRegionSource | null,
+      detectedBoxes: 0,
+      hadCandidate: false,
+      conflicting: false,
+    }
+  }
+
+  // Exactly one focused OCR pass. If Sex/性別 geometry exists the crop is
+  // anchored to it; otherwise selectPermitSexRetryRegion returns one
+  // conservative fixed-layout crop. We never run both for the same sample.
+  const [retryPrediction] =
+    await instance.predict(crop.file)
+  const items = predictionItems(retryPrediction)
+  const rawRows = buildTextRows(items)
+  const evidence = collectPermitSexRetryEvidence(
+    rawRows,
+    items.map(item => item.text ?? ''),
+  )
+
+  return {
+    value: evidence.value as PermitSex,
+    region: crop.region,
+    detectedBoxes: items.length,
+    hadCandidate: evidence.candidateCount > 0,
+    conflicting: evidence.conflicting,
+  }
+}
+
 export async function recognizeTaiwanCompatriotPermitWithPaddle(
   image: File,
   onProgress?: (
@@ -5339,6 +5441,64 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   // presented as if it generated the retained recognition result.
   const reviewImage = best.image
   const reviewRotation = best.rotation
+
+  // .20: only the final empty-sex permit gets one focused ROI re-OCR.
+  // Existing 12/13 successful sex results do not enter this block.
+  if (best.result.sex === '') {
+    best.result.sexEvidence.retryAttempted = true
+
+    onProgress?.({
+      stage: 'sex-retry',
+      progress: 0.86,
+      message: '性別尚未取得，正在重讀性別小區域…',
+    })
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    )
+
+    try {
+      const retriedSex = await retryPermitSex(
+        instance,
+        best.predictionImage,
+        best.prediction,
+      )
+
+      best.result.sexEvidence.retryRegion =
+        retriedSex.region
+      best.result.sexEvidence.retryDetectedBoxes =
+        retriedSex.detectedBoxes
+      best.result.sexEvidence.retryHadCandidate =
+        retriedSex.hadCandidate
+      best.result.sexEvidence.retryConflict =
+        retriedSex.conflicting
+
+      if (
+        retriedSex.value &&
+        !retriedSex.conflicting
+      ) {
+        best.result.sex = retriedSex.value
+        best.result.fieldScores.sex = null
+        best.result.sexEvidence.selectedSource =
+          'focused-retry'
+        best.result.sexEvidence.retryApplied = true
+        best.result.extractedFieldCount = [
+          best.result.chineseName,
+          best.result.permitNumber,
+          best.result.birthDate,
+          best.result.sex,
+          best.result.expiryDate,
+        ].filter(Boolean).length
+      }
+    } catch (error) {
+      // Primary OCR already succeeded; leave sex empty for manual review
+      // instead of failing the whole scan because an optional retry failed.
+      console.warn(
+        '台胞證性別小區域重讀失敗，保留空白供人工覆核。',
+        error,
+      )
+    }
+  }
 
   // A nonempty but uncertain name can be wrong. Retry the name region
   // only under the existing time budget, and never override validated MRZ.

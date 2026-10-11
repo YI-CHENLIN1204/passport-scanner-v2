@@ -2315,8 +2315,26 @@ onMounted(load)
               semantic fallback {{ result.permitSexEvidenceCounts.selectedSemantic }}；
               standalone-token fallback
               {{ result.permitSexEvidenceCounts.selectedStandaloneToken }}；
+              focused-retry
+              {{ result.permitSexEvidenceCounts.selectedFocusedRetry }}；
               empty {{ result.permitSexEvidenceCounts.selectedEmpty }}。
-              MRZ 的 sex 字元不在現有 checksum 驗證範圍內；此處僅為匿名來源診斷。
+              focused sex retry：啟動
+              {{ result.permitSexEvidenceCounts.retryStarted }} 張；
+              label ROI
+              {{ result.permitSexEvidenceCounts.retryUsedLabelRoi }} 張；
+              fixed-layout ROI
+              {{ result.permitSexEvidenceCounts.retryUsedFixedRoi }} 張；
+              有文字框
+              {{ result.permitSexEvidenceCounts.retryWithTextBoxes }} 張；
+              有候選
+              {{ result.permitSexEvidenceCounts.retryWithCandidate }} 張；
+              候選衝突
+              {{ result.permitSexEvidenceCounts.retryConflict }} 張；
+              實際補值
+              {{ result.permitSexEvidenceCounts.retryApplied }} 張；
+              retry 後仍 empty
+              {{ result.permitSexEvidenceCounts.retryStillEmpty }} 張。
+              MRZ 的 sex 字元不在現有 checksum 驗證範圍內；所有 retry 指標只保存匿名件數。
             </p>
             <p
               v-if="result.permitRawNameEvidenceCounts"

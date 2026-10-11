@@ -3,13 +3,19 @@
 > 此文件是給下一個 ChatGPT 對話直接接手用的。
 > **不要重新設計系統、不要重新跑過去已證明失敗的 OCR 嘗試、不要重新啟用 GitHub Actions。**
 
+## 0. 最新狀態：`.20` 已實作，下一步只需集中本機驗證
+
+main 已完成 focused sex retry `2026.10.11.20` 候選：只對 `sex === ''` 的台胞證做一次小 ROI OCR；label geometry 優先，沒有 label 才 fixed-layout crop；只接受男/女/M/F 或同列 Sex/性別語意，衝突維持 empty。匿名 retry diagnostics 與 regression tests 已接入 `verify:ocr`。
+
+**尚未有 `.20` 真實 Validation 結果。** 最佳已實測仍是 `.19`：護照 13/19、台胞證全欄 12/13、姓名 13/13、sex 12/13。下一步不要再改程式，先在 Windows 本機跑 `npm.cmd run verify:ocr`、Docker frontend rebuild、確認頁面 `.20`，再跑 32 張 auto Validation，將結果寫回文件。
+
 ## 1. Repository / current state
 
 Repository：
 
 `YI-CHENLIN1204/passport-scanner-v2`
 
-目前正式 OCR pipeline：`2026.10.11.19`。
+目前 main OCR pipeline 候選：`2026.10.11.20`（待本機驗證）；目前正式最佳真實 Validation 仍為 `2026.10.11.19`。
 
 目前沒有 open PR。近期已改成**直接在 main 集中開發、集中驗證**，不要再為每個小修改開 branch / PR。
 

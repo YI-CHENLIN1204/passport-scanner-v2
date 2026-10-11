@@ -7,6 +7,7 @@ export type PermitSexDiagnosticSource =
   | 'label'
   | 'semantic'
   | 'standalone-token'
+  | 'focused-retry'
   | 'empty'
 
 export interface PermitSexEvidenceLike {
@@ -19,6 +20,12 @@ export interface PermitSexEvidenceLike {
   standaloneTokenCount: number
   standaloneTokenConflict: boolean
   selectedSource: PermitSexDiagnosticSource
+  retryAttempted?: boolean
+  retryRegion?: 'label' | 'fixed' | null
+  retryDetectedBoxes?: number
+  retryHadCandidate?: boolean
+  retryConflict?: boolean
+  retryApplied?: boolean
 }
 
 export function aggregatePermitSexEvidence(
@@ -64,7 +71,28 @@ export function aggregatePermitSexEvidence(
       rows.filter(row => row?.selectedSource === 'semantic').length,
     selectedStandaloneToken:
       rows.filter(row => row?.selectedSource === 'standalone-token').length,
+    selectedFocusedRetry:
+      rows.filter(row => row?.selectedSource === 'focused-retry').length,
     selectedEmpty:
       rows.filter(row => row?.selectedSource === 'empty').length,
+    retryStarted:
+      rows.filter(row => row?.retryAttempted === true).length,
+    retryUsedLabelRoi:
+      rows.filter(row => row?.retryRegion === 'label').length,
+    retryUsedFixedRoi:
+      rows.filter(row => row?.retryRegion === 'fixed').length,
+    retryWithTextBoxes:
+      rows.filter(row => (row?.retryDetectedBoxes ?? 0) > 0).length,
+    retryWithCandidate:
+      rows.filter(row => row?.retryHadCandidate === true).length,
+    retryConflict:
+      rows.filter(row => row?.retryConflict === true).length,
+    retryApplied:
+      rows.filter(row => row?.retryApplied === true).length,
+    retryStillEmpty:
+      rows.filter(row =>
+        row?.retryAttempted === true &&
+        row.selectedSource === 'empty'
+      ).length,
   }
 }

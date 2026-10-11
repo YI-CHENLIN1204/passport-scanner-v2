@@ -141,10 +141,56 @@ assert.deepEqual(aggregate(rows), {
   selectedLabel: 0,
   selectedSemantic: 1,
   selectedStandaloneToken: 1,
+  selectedFocusedRetry: 0,
   selectedEmpty: 0,
+  retryStarted: 0,
+  retryUsedLabelRoi: 0,
+  retryUsedFixedRoi: 0,
+  retryWithTextBoxes: 0,
+  retryWithCandidate: 0,
+  retryConflict: 0,
+  retryApplied: 0,
+  retryStillEmpty: 0,
 })
 
-const safe = JSON.stringify(aggregate(rows))
+const focused = {
+  mrzSex: '',
+  mrzRequiredValid: false,
+  labeledSex: '',
+  labeledScore: null,
+  semanticSex: '',
+  standaloneSex: '',
+  standaloneTokenCount: 0,
+  standaloneTokenConflict: false,
+  selectedSource: 'focused-retry',
+  retryAttempted: true,
+  retryRegion: 'label',
+  retryDetectedBoxes: 2,
+  retryHadCandidate: true,
+  retryConflict: false,
+  retryApplied: true,
+}
+const unresolved = {
+  ...focused,
+  selectedSource: 'empty',
+  retryRegion: 'fixed',
+  retryDetectedBoxes: 1,
+  retryHadCandidate: false,
+  retryApplied: false,
+}
+const retryAggregate = aggregate([focused, unresolved])
+assert.equal(retryAggregate.selectedFocusedRetry, 1)
+assert.equal(retryAggregate.selectedEmpty, 1)
+assert.equal(retryAggregate.retryStarted, 2)
+assert.equal(retryAggregate.retryUsedLabelRoi, 1)
+assert.equal(retryAggregate.retryUsedFixedRoi, 1)
+assert.equal(retryAggregate.retryWithTextBoxes, 2)
+assert.equal(retryAggregate.retryWithCandidate, 1)
+assert.equal(retryAggregate.retryConflict, 0)
+assert.equal(retryAggregate.retryApplied, 1)
+assert.equal(retryAggregate.retryStillEmpty, 1)
+
+const safe = JSON.stringify(retryAggregate)
 for (const secret of ['name', '姓名', 'rawRows', 'sampleId', 'documentNumber']) {
   assert.equal(safe.includes(secret), false)
 }
@@ -152,12 +198,15 @@ for (const secret of ['name', '姓名', 'rawRows', 'sampleId', 'documentNumber']
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
 assert.match(ocr, /extractPermitSemanticSexFromRows\(rawRows\)/)
 assert.match(ocr, /collectStandalonePermitSexEvidence/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.19'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.20'/)
 
 const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
 assert.match(page, /permitSexEvidenceCounts/)
 assert.match(page, /selectedSemanticRow/)
 assert.match(page, /selectedStandaloneToken/)
+assert.match(page, /selectedFocusedRetry/)
+assert.match(page, /retryStarted/)
+assert.match(page, /retryStillEmpty/)
 assert.match(page, /mrzSemanticConflict/)
 
-console.log('Permit same-row sex semantics, selector diagnostics and Validation wiring tests passed')
+console.log('Permit same-row/standalone/focused-retry sex diagnostics and Validation wiring tests passed')

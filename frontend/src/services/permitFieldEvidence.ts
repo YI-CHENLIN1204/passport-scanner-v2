@@ -33,6 +33,7 @@ export type PermitSexEvidenceSource =
   | 'label'
   | 'semantic'
   | 'standalone-token'
+  | 'focused-retry'
   | 'empty'
 
 export function selectPermitSexEvidence(
