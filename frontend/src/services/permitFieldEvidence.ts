@@ -26,6 +26,77 @@ export function selectPermitNameCandidate(
 
 export type PermitEvidenceSex = '' | 'M' | 'F' | 'X'
 
+export type PermitSexEvidenceSource =
+  | 'visual-agreement'
+  | 'semantic-row'
+  | 'mrz'
+  | 'label'
+  | 'semantic'
+  | 'empty'
+
+export function selectPermitSexEvidence(
+  mrzSex: PermitEvidenceSex,
+  mrzRequiredValid: boolean,
+  labeledSex: PermitEvidenceSex,
+  labeledScore: number | null,
+  semanticSex: PermitEvidenceSex,
+): {
+  value: PermitEvidenceSex
+  source: PermitSexEvidenceSource
+} {
+  // Taiwan permit MRZ validation explicitly skips the sex character.
+  // Therefore requiredValid=true does not validate M/F. When a same-row
+  // printed Sex/性別 label gives direct semantic evidence, it may safely
+  // override a conflicting MRZ character.
+  if (
+    labeledSex &&
+    labeledSex === semanticSex &&
+    (labeledScore ?? 0) >= (mrzRequiredValid ? 0.9 : 0.8)
+  ) {
+    return {
+      value: labeledSex,
+      source: 'visual-agreement',
+    }
+  }
+
+  if (
+    semanticSex &&
+    mrzSex &&
+    semanticSex !== mrzSex
+  ) {
+    return {
+      value: semanticSex,
+      source: 'semantic-row',
+    }
+  }
+
+  if (mrzSex) {
+    return {
+      value: mrzSex,
+      source: 'mrz',
+    }
+  }
+
+  if (labeledSex) {
+    return {
+      value: labeledSex,
+      source: 'label',
+    }
+  }
+
+  if (semanticSex) {
+    return {
+      value: semanticSex,
+      source: 'semantic',
+    }
+  }
+
+  return {
+    value: '',
+    source: 'empty',
+  }
+}
+
 export function selectPermitSexCandidate(
   mrzSex: PermitEvidenceSex,
   mrzRequiredValid: boolean,
@@ -33,18 +104,13 @@ export function selectPermitSexCandidate(
   labeledScore: number | null,
   semanticSex: PermitEvidenceSex,
 ): PermitEvidenceSex {
-  // Taiwan permit MRZ's existing checksum computation does not include
-  // the sex character, even when requiredValid=true. Strong, matching
-  // visual evidence is allowed to contradict it. Lower-quality visual
-  // evidence remains subordinate to MRZ, to prevent noisy false flips.
-  if (
-    labeledSex &&
-    labeledSex === semanticSex &&
-    (labeledScore ?? 0) >= (mrzRequiredValid ? 0.9 : 0.8)
-  ) return labeledSex
-
-  if (mrzSex) return mrzSex
-  return labeledSex || semanticSex || ''
+  return selectPermitSexEvidence(
+    mrzSex,
+    mrzRequiredValid,
+    labeledSex,
+    labeledScore,
+    semanticSex,
+  ).value
 }
 
 /** Permit MRZ composite check digit does not verify GBK name bytes.
