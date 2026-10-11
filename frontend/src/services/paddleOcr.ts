@@ -5,6 +5,7 @@ import { isShortExactPermitNameConflict, selectPermitRawNameCandidate, type Perm
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import { resolvePermitRawRomanization } from './permitRawNameRomanization'
 import { extractPermitSemanticSexFromRows } from './permitSexSemantics'
+import { collectStandalonePermitSexEvidence } from './permitStandaloneSexEvidence'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -795,7 +796,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.18'
+  '2026.10.11.19'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3678,6 +3679,9 @@ export interface TaiwanCompatriotPermitOcrResult {
     labeledSex: PermitSex
     labeledScore: number | null
     semanticSex: PermitSex
+    standaloneSex: PermitSex
+    standaloneTokenCount: number
+    standaloneTokenConflict: boolean
     selectedSource: PermitSexEvidenceSource
   }
   chineseNameConfidence: number | null
@@ -4372,6 +4376,11 @@ function buildTaiwanCompatriotPermitResult(
   const semanticSex =
     extractPermitSemanticSexFromRows(rawRows)
 
+  const standaloneSexEvidence =
+    collectStandalonePermitSexEvidence(
+      geometries.map(item => item.text),
+    )
+
   const birthDate = findLabelAnchoredCandidate(
     geometries,
     [
@@ -4575,6 +4584,7 @@ function buildTaiwanCompatriotPermitResult(
     sex?.value ?? '',
     sex?.score ?? null,
     semanticSex ?? '',
+    standaloneSexEvidence.value,
   )
   const finalSex = sexEvidence.value
 
@@ -4638,6 +4648,11 @@ function buildTaiwanCompatriotPermitResult(
       labeledSex: sex?.value ?? '',
       labeledScore: sex?.score ?? null,
       semanticSex: semanticSex ?? '',
+      standaloneSex: standaloneSexEvidence.value,
+      standaloneTokenCount:
+        standaloneSexEvidence.tokenCount,
+      standaloneTokenConflict:
+        standaloneSexEvidence.conflicting,
       selectedSource: sexEvidence.source,
     },
     chineseNameConfidence:
