@@ -2,6 +2,7 @@ import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import { summarizePermitRetryDetection, type PermitRetryDetectionSummary } from './permitRetryDetection'
 import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNameRetryEvidence'
 import { selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
+import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -791,7 +792,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.11'
+  '2026.10.11.12'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3869,89 +3870,6 @@ function extractHanNameFromPermitText(text: string) {
       .map(normalizePermitChineseName)
       .find(isPlausiblePermitChineseName) ?? null
   )
-}
-
-interface PermitLatinName {
-  surname: string
-  givenNames: string
-}
-
-const permitEnglishStopWords = new Set([
-  'TAIWAN',
-  'RESIDENT',
-  'MAINLAND',
-  'TRAVEL',
-  'PERMIT',
-  'HOLDER',
-  'PEOPLES',
-  'REPUBLIC',
-  'CHINA',
-  'NAME',
-  'SEX',
-  'DATE',
-  'BIRTH',
-  'VALID',
-  'EXPIRY',
-  'AUTHORITY',
-  'ISSUE',
-  'NUMBER',
-])
-
-function extractPermitLatinName(
-  text: string,
-): PermitLatinName | null {
-  const upper = text
-    .toUpperCase()
-    .replace(/[0-9]/g, ' ')
-    .replace(/[^A-Z,\- ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (!upper || upper.length < 5 || upper.length > 45) {
-    return null
-  }
-
-  const tokens = upper
-    .replace(/,/g, ' ')
-    .split(/[\s\-]+/)
-    .filter(Boolean)
-
-  if (tokens.length < 2 || tokens.length > 5) {
-    return null
-  }
-
-  if (
-    tokens.some((token) =>
-      permitEnglishStopWords.has(token),
-    )
-  ) {
-    return null
-  }
-
-  if (!tokens.every((token) => token.length >= 2)) {
-    return null
-  }
-
-  const commaIndex = upper.indexOf(',')
-
-  if (commaIndex >= 0) {
-    const surname = upper
-      .slice(0, commaIndex)
-      .replace(/[^A-Z]/g, '')
-    const givenNames = upper
-      .slice(commaIndex + 1)
-      .replace(/[^A-Z\- ]/g, '')
-      .trim()
-
-    return surname && givenNames
-      ? { surname, givenNames }
-      : null
-  }
-
-  return {
-    surname: tokens[0],
-    givenNames: tokens.slice(1).join(' '),
-  }
 }
 
 function choosePermitChineseName(
