@@ -792,7 +792,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.14'
+  '2026.10.11.15'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -3625,6 +3625,8 @@ export interface PermitRawNameEvidenceSummary {
   compatibleCandidateCount: number
   unknownCandidateCount: number
   conflictCandidateCount: number
+  officialVariantCandidateCount: number
+  selectedOfficialVariant: boolean
   shortExactConflictCandidateCount: number
   nearestConflictLatinDistance: number | null
   eligibleConflictFallbackCount: number
@@ -4205,6 +4207,10 @@ function extractPermitChineseNameFromRows(
     let compatibility: PermitRawNameCompatibility =
       latinRows.length ? 'conflict' : 'unknown'
     let latinDistance: number | null = null
+    let officialVariantPromotion = false
+    let standardCompatibleDistance: number | null = null
+    let officialCompatibleDistance: number | null = null
+    let unknownDistance: number | null = null
 
     for (const entry of latinRows) {
       const current =
@@ -4216,29 +4222,46 @@ function extractPermitChineseNameFromRows(
       const distance = Math.abs(index - entry.index)
 
       if (current === 'compatible') {
-        if (
-          compatibility !== 'compatible' ||
-          latinDistance === null ||
-          distance < latinDistance
-        ) {
-          compatibility = 'compatible'
-          latinDistance = distance
-        }
+        standardCompatibleDistance =
+          standardCompatibleDistance === null
+            ? distance
+            : Math.min(standardCompatibleDistance, distance)
         continue
       }
 
       if (
-        current === 'unknown' &&
-        compatibility !== 'compatible' &&
-        (
-          compatibility === 'conflict' ||
-          latinDistance === null ||
-          distance < latinDistance
-        )
+        current === 'conflict' &&
+        compareChineseNameToMrzWithOfficialVariants(
+          value,
+          entry.latin.surname,
+          entry.latin.givenNames,
+        ) === 'compatible'
       ) {
-        compatibility = 'unknown'
-        latinDistance = distance
+        officialCompatibleDistance =
+          officialCompatibleDistance === null
+            ? distance
+            : Math.min(officialCompatibleDistance, distance)
+        continue
       }
+
+      if (current === 'unknown') {
+        unknownDistance =
+          unknownDistance === null
+            ? distance
+            : Math.min(unknownDistance, distance)
+      }
+    }
+
+    if (standardCompatibleDistance !== null) {
+      compatibility = 'compatible'
+      latinDistance = standardCompatibleDistance
+    } else if (officialCompatibleDistance !== null) {
+      compatibility = 'compatible'
+      latinDistance = officialCompatibleDistance
+      officialVariantPromotion = true
+    } else if (unknownDistance !== null) {
+      compatibility = 'unknown'
+      latinDistance = unknownDistance
     }
 
     const labelDistance = labelIndexes.length
@@ -4257,6 +4280,7 @@ function extractPermitChineseNameFromRows(
       latinDistance,
       labelDistance,
       exactRow: compactRow === value,
+      officialVariantPromotion,
     }]
   })
 
@@ -4289,6 +4313,13 @@ function extractPermitChineseNameFromRows(
           candidate =>
             candidate.compatibility === 'conflict',
         ).length,
+      officialVariantCandidateCount:
+        candidates.filter(
+          candidate =>
+            candidate.officialVariantPromotion === true,
+        ).length,
+      selectedOfficialVariant:
+        selected?.officialVariantPromotion === true,
       shortExactConflictCandidateCount:
         candidates.filter(candidate =>
           candidate.compatibility === 'conflict' &&
