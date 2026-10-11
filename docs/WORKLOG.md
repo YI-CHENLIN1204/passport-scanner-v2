@@ -252,3 +252,8 @@ GitHub Actions 因額度限制維持 `workflow_dispatch` 且不得執行。此�
 ### 驗證標準
 
 最後有照片實測證據的仍是 `.6`：護照全欄 13/19、台胞證全欄 5/13；台胞證中文姓名 6/13。`.10` 尚未照片驗證，絕不可先宣稱提升。下一次應只做一次集中驗證：本機 regression + build 通過後，再跑既有 32 張 auto Validation，比較 `.10` 對 `.6` 的淨改善、退步及耗時。固定 Test 不變，不把 Test 圖加入 Train。
+
+
+### `.10` 單一驗證入口
+
+新增 `npm.cmd run verify:ocr`，一次串接完整 OCR regression 與 `npm run build`，避免使用者逐條重複執行。此命令尚待使用者 Windows 本機執行；GitHub Actions 不啟動。
