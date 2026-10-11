@@ -2,6 +2,7 @@ import {
   compareChineseNameToMrzRomanization,
   compareChineseNameToMrzWithOfficialVariants,
   classifyRomanizationConflict,
+  matchesChineseNameToJoinedRomanizationWithOfficialVariants,
 } from './nameRomanization'
 import type { PermitRawNameCompatibility } from './permitRawNameEvidence'
 
@@ -15,6 +16,7 @@ export interface PermitRawRomanizationResolution {
   compatibility: PermitRawNameCompatibility
   latinDistance: number | null
   officialVariantPromotion: boolean
+  joinedTokenPromotion: boolean
   conflictSubtype:
     | 'token-count-mismatch'
     | 'one-syllable-mismatch'
@@ -32,12 +34,14 @@ export function resolvePermitRawRomanization(
       compatibility: 'unknown',
       latinDistance: null,
       officialVariantPromotion: false,
+      joinedTokenPromotion: false,
       conflictSubtype: null,
     }
   }
 
   let standardCompatibleDistance: number | null = null
   let officialCompatibleDistance: number | null = null
+  let joinedTokenCompatibleDistance: number | null = null
   let unknownDistance: number | null = null
 
   for (const anchor of anchors) {
@@ -55,19 +59,39 @@ export function resolvePermitRawRomanization(
       continue
     }
 
-    if (
-      standard === 'conflict' &&
-      compareChineseNameToMrzWithOfficialVariants(
-        value,
-        anchor.surname,
-        anchor.givenNames,
-      ) === 'compatible'
-    ) {
-      officialCompatibleDistance =
-        officialCompatibleDistance === null
-          ? anchor.distance
-          : Math.min(officialCompatibleDistance, anchor.distance)
-      continue
+    if (standard === 'conflict') {
+      if (
+        compareChineseNameToMrzWithOfficialVariants(
+          value,
+          anchor.surname,
+          anchor.givenNames,
+        ) === 'compatible'
+      ) {
+        officialCompatibleDistance =
+          officialCompatibleDistance === null
+            ? anchor.distance
+            : Math.min(officialCompatibleDistance, anchor.distance)
+        continue
+      }
+
+      if (
+        classifyRomanizationConflict(
+          value,
+          anchor.surname,
+          anchor.givenNames,
+        ) === 'token-count-mismatch' &&
+        matchesChineseNameToJoinedRomanizationWithOfficialVariants(
+          value,
+          anchor.surname,
+          anchor.givenNames,
+        )
+      ) {
+        joinedTokenCompatibleDistance =
+          joinedTokenCompatibleDistance === null
+            ? anchor.distance
+            : Math.min(joinedTokenCompatibleDistance, anchor.distance)
+        continue
+      }
     }
 
     if (standard === 'unknown') {
@@ -83,6 +107,7 @@ export function resolvePermitRawRomanization(
       compatibility: 'compatible',
       latinDistance: standardCompatibleDistance,
       officialVariantPromotion: false,
+      joinedTokenPromotion: false,
       conflictSubtype: null,
     }
   }
@@ -92,6 +117,17 @@ export function resolvePermitRawRomanization(
       compatibility: 'compatible',
       latinDistance: officialCompatibleDistance,
       officialVariantPromotion: true,
+      joinedTokenPromotion: false,
+      conflictSubtype: null,
+    }
+  }
+
+  if (joinedTokenCompatibleDistance !== null) {
+    return {
+      compatibility: 'compatible',
+      latinDistance: joinedTokenCompatibleDistance,
+      officialVariantPromotion: false,
+      joinedTokenPromotion: true,
       conflictSubtype: null,
     }
   }
@@ -101,6 +137,7 @@ export function resolvePermitRawRomanization(
       compatibility: 'unknown',
       latinDistance: unknownDistance,
       officialVariantPromotion: false,
+      joinedTokenPromotion: false,
       conflictSubtype: null,
     }
   }
@@ -112,6 +149,7 @@ export function resolvePermitRawRomanization(
     compatibility: 'conflict',
     latinDistance: nearest?.distance ?? null,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: nearest
       ? classifyRomanizationConflict(
           value,
