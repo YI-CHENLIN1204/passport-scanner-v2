@@ -61,6 +61,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 8,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
   },
 )
@@ -75,6 +76,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 8,
     officialVariantPromotion: true,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
   },
 )
@@ -89,6 +91,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 6,
     officialVariantPromotion: true,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
   },
 )
@@ -110,7 +113,38 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 7,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
+  },
+)
+
+assert.deepEqual(
+  resolveRomanization('王一明', [{
+    surname: 'WANG',
+    givenNames: 'IMING',
+    distance: 9,
+  }]),
+  {
+    compatibility: 'compatible',
+    latinDistance: 9,
+    officialVariantPromotion: false,
+    joinedTokenPromotion: true,
+    conflictSubtype: null,
+  },
+)
+
+assert.deepEqual(
+  resolveRomanization('王英明', [{
+    surname: 'WANG',
+    givenNames: 'YINMING',
+    distance: 9,
+  }]),
+  {
+    compatibility: 'conflict',
+    latinDistance: 9,
+    officialVariantPromotion: false,
+    joinedTokenPromotion: false,
+    conflictSubtype: 'token-count-mismatch',
   },
 )
 
@@ -124,6 +158,7 @@ assert.deepEqual(
     compatibility: 'conflict',
     latinDistance: 5,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: 'one-syllable-mismatch',
   },
 )
@@ -138,6 +173,7 @@ assert.deepEqual(
     compatibility: 'conflict',
     latinDistance: 4,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: 'token-count-mismatch',
   },
 )
@@ -152,6 +188,7 @@ assert.deepEqual(
     compatibility: 'unknown',
     latinDistance: 5,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
   },
 )
@@ -162,6 +199,7 @@ assert.deepEqual(
     compatibility: 'unknown',
     latinDistance: null,
     officialVariantPromotion: false,
+    joinedTokenPromotion: false,
     conflictSubtype: null,
   },
 )
