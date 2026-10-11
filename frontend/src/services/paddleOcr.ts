@@ -787,7 +787,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.5'
+  '2026.10.11.6'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -5243,9 +5243,6 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
   const skew =
     estimateTextSkewDegrees(best.prediction)
 
-  let reviewImage = best.image
-  let reviewRotation = best.rotation
-
   if (Math.abs(skew) >= 2.5 && Math.abs(skew) <= 40) {
     onProgress?.({
       stage: 'deskew',
@@ -5254,23 +5251,23 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
         `偵測到約 ${Math.abs(skew).toFixed(1)}° 傾斜，正在產生轉正覆核圖…`,
     })
 
-    reviewImage = await rotateImageFile(
+    const deskewImage = await rotateImageFile(
       best.image,
       -skew,
     )
-    reviewRotation =
+    const deskewRotation =
       normalizeRotation(best.rotation - skew)
 
     if (withinBudget()) {
       const deskewPrediction = await predictPermit(
         instance,
-        reviewImage,
+        deskewImage,
         0,
         totalStartedAt,
       )
 
       deskewPrediction.result.rotationDegrees =
-        reviewRotation
+        deskewRotation
       deskewPrediction.result.orientationAttempts =
         attempts.length + 1
 
@@ -5279,14 +5276,20 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
         permitResultQuality(best.result)
       ) {
         best = {
-          rotation: reviewRotation,
-          image: reviewImage,
+          rotation: deskewRotation,
+          image: deskewImage,
           prediction: deskewPrediction.prediction,
           result: deskewPrediction.result,
         }
       }
     }
   }
+
+  // The user-facing review image and rotation must match the OCR attempt
+  // actually selected by permitResultQuality. A rejected deskew is never
+  // presented as if it generated the retained recognition result.
+  const reviewImage = best.image
+  const reviewRotation = best.rotation
 
   // A nonempty but uncertain name can be wrong. Retry the name region
   // only under the existing time budget, and never override validated MRZ.
