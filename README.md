@@ -157,3 +157,6 @@ Docker Compose 會建立三個服務：
 PostgreSQL 使用 named volume `passport_scanner_postgres`。一般的 `docker compose down` 不會刪除資料；只有明確執行 `docker compose down -v` 或手動刪除 volume 才會移除資料。
 
 本機開發密碼可透過環境變數 `PASSPORT_DB_PASSWORD` 覆寫。Compose 內的預設密碼只供本機開發使用，不應直接用於正式公開環境。
+
+
+> 2026-10-12：main OCR 候選 `2026.10.11.21`（護照 broad VIZ 有限放大，待本機 Validation）。最佳實測仍為 `.20`：護照 13/19、台胞證 13/13；禁止 GitHub Actions。
