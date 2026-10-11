@@ -193,3 +193,7 @@
 - PR #28 的匿名原始文字列分類首次觀察：7 張中文姓名錯誤之中，完整原始列吻合 0、嵌於較長文字列 0、選中 OCR 文字列未出現完整姓名 7。這不能證明 detection / recognition 的根因，因為分類只讀取最終選中的 `rawRows`，可能存在其他未選中的候選。
 - 32/32 缺當次真正 OCR 工作圖，這是保留審核圖片的 legacy regression，不代表新上傳端到端品質；可能存在同一 Traveler 多圖；身分證 n=0。
 - `.6` 與 `.5` 的評估準確率持平，計時差異不能歸因於修正；`.7` ROI 座標來源修正仍在 PR #29、尚無實測。使用者本機 PowerShell `npm.ps1` 被 ExecutionPolicy 阻擋，且已處於 `frontend` 無需重複 `cd frontend`；採 `npm.cmd` 執行本機檢查，GitHub Actions 維持關閉。
+
+## 2026-10-11 — OCR .7 ROI 修正本機測試
+
+使用者於 PR #29 分支本機執行 `npm.cmd run test:permit-roi` 與 `npm.cmd run build` 均成功。PR #29 文件與 main 產生合併衝突，已由最新 main 建立本整合分支保留測試過的程式修改。修正台胞證 OCR crop prediction 座標與姓名 retry 所用影像來源不一致；`predictionImage` 維持相同座標系，人工覆核仍用完整圖。**僅代表測試守衛及建置成功，未有 .7 照片 Validation，不能宣稱精準率提升。** Actions 停用，固定 Test 不動。
