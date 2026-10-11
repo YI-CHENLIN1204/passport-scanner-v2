@@ -9,6 +9,7 @@ export interface PermitRawNameCandidate {
   latinDistance: number | null
   labelDistance: number | null
   exactRow: boolean
+  officialVariantPromotion?: boolean
 }
 
 function compactHanLength(value: string) {
