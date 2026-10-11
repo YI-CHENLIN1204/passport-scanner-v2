@@ -54,6 +54,9 @@ jobs:
       - name: Taiwan permit field evidence guard (synthetic only)
         run: npm run test:permit-evidence
 
+      - name: Permit OCR selected-image consistency (synthetic/source guard)
+        run: npm run test:permit-image
+
       - name: Build
         run: npm run build
 
