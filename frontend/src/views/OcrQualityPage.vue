@@ -2295,6 +2295,10 @@ onMounted(load)
               {{ result.permitRawNameEvidenceCounts.samplesWithOfficialVariantCandidate }} 張；
               最終實際選到官方拼音升級候選
               {{ result.permitRawNameEvidenceCounts.selectedOfficialVariant }} 張；
+              有英文拼音音節黏連、但可精確切分為中文字合法拼音
+              {{ result.permitRawNameEvidenceCounts.samplesWithJoinedTokenCandidate }} 張；
+              最終實際選到黏連音節精確切分候選
+              {{ result.permitRawNameEvidenceCounts.selectedJoinedToken }} 張；
               剩餘 conflict 類型（匿名樣本數）：
               token-count {{ result.permitRawNameEvidenceCounts.samplesWithConflictTokenCountMismatch }}；
               one-syllable {{ result.permitRawNameEvidenceCounts.samplesWithConflictOneSyllableMismatch }}；
