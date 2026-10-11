@@ -131,6 +131,8 @@ const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
 assert.match(page, /aggregatePermitRawNameEvidence\(rows\.map\(row => row\.permitRawNameEvidence\)\)/)
 assert.match(page, /samplesWithOfficialVariantCandidate/)
 assert.match(page, /selectedOfficialVariant/)
+assert.match(page, /samplesWithJoinedTokenCandidate/)
+assert.match(page, /selectedJoinedToken/)
 assert.doesNotMatch(page, /selectedConflictFallback|samplesWithEligibleConflictFallback/)
 
 console.log('Permit raw-name .16 diagnostics aggregation and wiring tests passed')
