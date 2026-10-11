@@ -16,7 +16,7 @@ export function shouldRetryUncertainPermitName(
 ): boolean {
   if (!currentName.trim()) return true
   if (validatedMrzName) return false
-  return currentConfidence !== null && currentConfidence < 0.9
+  return currentConfidence === null || currentConfidence < 0.9
 }
 
 export function shouldUseRetriedPermitName(
@@ -32,5 +32,5 @@ export function shouldUseRetriedPermitName(
   if (attempt.consensus < 2) return false
   if (attempt.score < 0.86 || attempt.confidence < 0.92) return false
   // Avoid replacing an already strong value.
-  return currentConfidence !== null && currentConfidence < 0.88
+  return currentConfidence === null || currentConfidence < 0.88
 }
