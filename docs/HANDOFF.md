@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — `.21` 護照中文姓名 broad VIZ 受限放大候選（待 Validation）
+
+接續 `.20` 已實測護照中文姓名 13/19、台胞證 13/13；六張護照錯誤中五張的 OCR 候選內容不符，故聚焦 recognition 輸入解析度，不照搬台胞證 selector。
+
+護照 `predictOne()` 原本在第一個 `name-field` anchored crop 無法選出姓名時，使用固定 (x=.24, y=.12, width=.74, height=.58) 的 broad VIZ `createRelativeCrop`。此路徑對低解析圖不做有限放大。候選 `2026.10.11.21` 僅將此 broad VIZ 改為相同範圍的 `createPixelCrop(...,1500)`，用既有 2.5x 放大及 1800px 最大寬度保護。保持原本兩次裁切 OCR 順序，不增加 inference 次數；`chooseTaiwanChineseName` 的標籤、拼音及信心規則完全未修改；護照 MRZ 與台胞證 BOCA / joined-token / unique one-syllable / standalone token / focused sex retry 均未改。
+
+新增 `frontend/scripts/test-passport-viz-crop.mjs` 靜態防退步測試，加入 `verify:ocr`；既有來源版本守衛同步調整為 `.21`。**候選尚未完成本機測試和 32 張 Validation，不能宣稱準確率提升。** 最佳已實測仍為 `2026.10.11.20`（護照 13/19、台胞證 13/13）。下一步集中跑 Windows `npm.cmd run verify:ocr` + Docker frontend rebuild + 32 張固定 Validation，比對護照中文姓名與台胞證是否回歸。不得上傳個資或執行 GitHub Actions。
+
+
 ## 2026-10-12 — .20 正式 Validation 成功，台胞證全欄 13/13
 
 使用者本機完成 2026.10.11.20 固定 auto Validation：32/32 完成、失敗 0。護照全欄及中文姓名 13/19（68%），其餘七個欄位 19/19；台胞證整張全欄、中文姓名、性別、出生日期、證件號碼、有效期限均 13/13（100%）。與 .19 相比，台胞證性別及全欄各進步 1 張，護照及中文姓名沒有退步。
