@@ -20,5 +20,5 @@ const predict = source.slice(
 assert.match(predict, /if \(vizName\) \{/)
 assert.match(predict, /if \(crop\.source === 'viz-crop'\) break/)
 assert.match(predict, /chooseTaiwanChineseName\(/)
-assert.match(source, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.24'/)
+assert.match(source, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.25'/)
 console.log('Passport .21 bounded VIZ crop guards passed')
