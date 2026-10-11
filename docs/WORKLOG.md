@@ -162,3 +162,13 @@
 - 已合併但**尚未**實測：`2026.10.11.5` 含 PR #21（MRZ 姓名／性別證據交叉比對）和 PR #22（姓名標籤裁切優先），相關 CI 綠燈並非準確率提升。
 - 待新對話執行：首先請使用者一次執行 `.5` Validation，核對護照保持 68%、台胞證是否超過 38%／46%／77%、延遲及回歸。若無改善，集中研究台胞證真實 OCR 工作影像、ROI／Detection／Recognition，並改善資料集，而非重複小幅 selector threshold 試錯。
 - 續作規範：只從 GitHub 最新檔案與程式驗證現況；遵守 fixed Test `2026.10.09.1`、人工覆核、歷史證件獨立與無 fallback、個資不上 GitHub。每輪更新 HANDOFF / WORKLOG / OCR 研究及必要的決策文件，且區別已實作、CI 通過和本機驗證。
+
+## 2026-10-11 — 正式 auto/WebGPU OCR .5 實測：PR #21 / #22 在 Legacy Validation 沒有淨增益
+
+- 狀態：**使用者本機實測**，OCR pipeline `2026.10.11.5`；來源：2026-10-11 使用者提供的 OCR 品質頁截圖（頁面顯示上次完成 2026/10/11 15:03；本段紀錄時間以畫面為準），並非 CI 或推測。
+- 32/32 完成、0 失敗、預熱約 0.8 秒；實際 runtime: detection WebGPU、recognition WebGPU，SDK backend auto。
+- 護照 Validation n=19：整張全對 13/19 = 68%、中文姓名 13/19 = 68%，英文姓名、生日、性別、國籍、證號、簽發國、效期皆 100%。OCR median 2.1 秒、P90 4.5 秒；呼叫總耗時 median 2.1 秒、P90 9.4 秒。
+- 台胞證 Validation n=13：整張全對 5/13 = 38%、中文姓名 6/13 = 46%、性別 10/13 = 77%，生日、證號、效期皆 100%；簡繁字形可能相當但 exact 不同的中文姓名 0 張。OCR median 3.4 秒、P90 6.8 秒；呼叫總耗時 median 4.9 秒、P90 7.5 秒。影像擷取 median 0.0 秒；方向重試 15%。
+- 與 `2026.10.11.3` 的同批 legacy Validation 相比：護照與台胞證整張及各欄位 exact 比率全部持平。**PR #21（未受 checksum 驗證的 MRZ 欄位交叉證據）與 PR #22（姓名標籤優先 crop）在此 cohort 未帶來可測淨改善**；並不代表程式修正沒有安全意義，也不能推斷單張案例沒有互相抵消。
+- 統計限制：護照 19/19、台胞證 13/13 均無當次真實 OCR 工作輸入影像，使用保存的審核影像做 legacy regression；可能同 Traveler 多張；台灣身分證 Validation n=0。不可外推到新照片端到端辨識率或人群泛化。
+- 下一步：**停止反覆小幅調 selector / MRZ threshold**；先針對台胞證未正確的 7/13 姓名與 3/13 性別，在合法且本機保存的真正工作輸入、影像變換、OCR boxes、來源 ROI 上作錯誤歸因，集中改良 orientation、detection、recognition 或 crop 並以合成正反案例 CI＋一次 Validation 比對。固定 Test `2026.10.09.1` 不動，production 原圖仍回國日 +7 天，私有影像與個資不上 GitHub。追蹤：Issue #25。
