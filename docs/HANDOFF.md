@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — .22 護照姓名兩個 ROI 的匿名失敗歸因（候選待驗證）
+
+.21 真實固定 Validation 已證明護照中文姓名 14/19（74%）、台胞證 13/13（100%），剩下 5 張護照姓名錯誤，其中 4 張 OCR 產生其他候選但非正確姓名、1 張雖有完整候選卻未被選中。不能直接推定需要放寬 selector。
+
+.22 只改善已有 OCR 輸出的診斷：Validation 對錯誤護照樣本分開計算 name-field 與 broad VIZ 各自是否有完整正確候選、錯誤候選、無候選或該 crop 未執行，另彙總兩區都只有錯誤候選和正確候選僅在 VIZ 出現的件數。此分類是匿名 aggregate，使用過程中可短暫比較本機 ground truth，結果物件只留分類，UI 不顯示姓名、樣本 ID、影像或 OCR raw text。加入 regression/source wiring test，納入 verify:ocr。
+
+**.22 不變更護照或台胞證辨識算法，也不增加任何 OCR inference。最佳已證明準確率仍是 .21（護照 14/19、台胞證 13/13）。** .22 的目的在固定 Validation 上一次分辨 remaining 5 張的 crop 缺口，再選擇下一批能有實質提升假設的辨識改善。執行 Windows verify:ocr、Docker frontend rebuild、32 張固定 Validation 後回填匿名結果；不可將診斷數字說成 accuracy 改善。禁止 GitHub Actions。
+
+
 ## 2026-10-12 — .21 正式 Validation：護照中文姓名 14/19（74%）
 
 使用者已在 Windows 本機完成 pipeline 2026.10.11.21 固定 32 張 auto Validation，32/32 完成、失敗 0。護照全欄正確 14/19（74%），中文姓名 14/19（74%），英文姓名、出生日期、性別、國籍、證件號碼、簽發國、有效期限皆 19/19。相較 .20 的 13/19，護照全欄與中文姓名各新增 1 張正確；護照 OCR 中位數約 1.3 秒、P90 約 2.4 秒。剩 5 張護照中文姓名錯誤，候選文字完整吻合 1 張、其他候選內容不符 4 張、原始 OCR 行完整吻合 0 張、較長文字內出現姓名 0 張。外交通行的拼音 shadow 改善 0 張；one-syllable shadow 潛在改善 1 張，尚未採用為正式 selector。
