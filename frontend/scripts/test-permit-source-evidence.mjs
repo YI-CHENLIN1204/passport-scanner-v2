@@ -17,16 +17,16 @@ try {
   rmSync(dir, { recursive: true, force: true })
 }
 assert.deepEqual(aggregate([]), {
-  distanceCropUsed: 0, nameRetryAccepted: 0, nameRetryConsensus: 0, mrzUsed: 0,
+  distanceCropUsed: 0, nameRetryApplied: 0, nameRetryConsensus: 0, mrzUsed: 0,
 })
 const rows = [
-  { distanceCropUsed: true, nameRetryPasses: 2, nameRetryConsensus: 2, mrzUsed: false },
-  { distanceCropUsed: false, nameRetryPasses: 0, nameRetryConsensus: 0, mrzUsed: true },
-  { distanceCropUsed: true, nameRetryPasses: 1, nameRetryConsensus: 1, mrzUsed: true },
+  { distanceCropUsed: true, nameRetryApplied: true, nameRetryConsensus: 2, mrzUsed: false },
+  { distanceCropUsed: false, nameRetryApplied: false, nameRetryConsensus: 0, mrzUsed: true },
+  { distanceCropUsed: true, nameRetryApplied: false, nameRetryConsensus: 1, mrzUsed: true },
   null,
 ]
 assert.deepEqual(aggregate(rows), {
-  distanceCropUsed: 2, nameRetryAccepted: 2, nameRetryConsensus: 1, mrzUsed: 2,
+  distanceCropUsed: 2, nameRetryApplied: 1, nameRetryConsensus: 1, mrzUsed: 2,
 })
 const output = JSON.stringify(aggregate(rows))
 for (const secret of ['姓名', '甲乙', 'trainingSampleId', 'rawRows', 'groundTruth']) {
