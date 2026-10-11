@@ -801,7 +801,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.20'
+  '2026.10.11.21'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -1475,10 +1475,22 @@ async function createRelativeCrop(
 }
 
 async function createTaiwanVizCrop(image: File) {
-  // Broadly isolate the VIZ side of the biodata page. The OCR result is
-  // still not trusted by text/confidence alone: chooseTaiwanChineseName
-  // requires an actual 姓名 label and a nearby value.
-  return createRelativeCrop(image, 0.24, 0.12, 0.74, 0.58)
+  // Broad VIZ is the fallback after the name-field crop. Preserve its
+  // coordinates but avoid low-resolution Han text entering recognition
+  // without bounded upscaling (at most 2.5x and 1800px wide).
+  const bitmap = await createImageBitmap(image)
+  const width = bitmap.width
+  const height = bitmap.height
+  bitmap.close()
+
+  return createPixelCrop(
+    image,
+    width * 0.24,
+    height * 0.12,
+    width * 0.74,
+    height * 0.58,
+    1500,
+  )
 }
 
 async function createBottomCrop(
