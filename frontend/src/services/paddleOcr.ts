@@ -3644,6 +3644,7 @@ export interface TaiwanCompatriotPermitOcrResult {
   mrzUsed: boolean
   chineseNamePasses: number
   chineseNameConsensus: number
+  nameRetryApplied: boolean
   chineseNameConfidence: number | null
   textHorizontalScore: number
   uprightSemanticScore: number
@@ -4644,6 +4645,7 @@ function buildTaiwanCompatriotPermitResult(
       name?.value
         ? 1
         : 0,
+    nameRetryApplied: false,
     chineseNameConfidence:
       nameEvidence.source === 'visual-agreement'
         ? Math.min(0.97, name?.score ?? 0.9)
@@ -5381,6 +5383,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
         retriedName.consensus
       best.result.chineseNameConfidence =
         retriedName.confidence
+      best.result.nameRetryApplied = true
       best.result.extractedFieldCount = [
         best.result.chineseName,
         best.result.permitNumber,
