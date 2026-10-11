@@ -1,5 +1,21 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — `.19` 再次提升：台胞證全欄 12/13、sex 12/13；下一步只剩 1 張 sex empty
+
+使用者完成 `2026.10.11.19` 正式 auto Validation，32/32 成功。護照維持：全欄 68%（13/19）、中文姓名 68%、其他評估欄位 100%。台胞證提升到 **全欄 92%（12/13）**、中文姓名 **100%（13/13）**、出生日期 100%、性別 **92%（12/13）**、證件號碼 100%、有效期限 100%。相較 `.18`：sex 10/13→12/13、全欄 10/13→12/13；護照與姓名無回歸。
+
+`.19` sex evidence 診斷：MRZ sex 0；geometry label sex 10；same-row semantic sex 3；有單一 standalone 男/女/M/F token 12；standalone M/F conflict 0；最終來源 visual-agreement 3、label 7、standalone-token fallback **2**、semantic-row override 0、MRZ 0、semantic fallback 0、**empty 1**。因此 `.19` 的 standalone-token fallback 已被實測證明有效，並且只剩 1 張台胞證完全沒有任何 sex evidence。
+
+### 下一步 `.20` 方向
+
+- **不再放寬 selector**。`.19` 已證明 selector 可在既有 OCR detection 中補回 2/3；最後 1 張是 detection/recognition 沒產生任何可用 sex evidence。
+- `.20` 只針對 `finalSex === ''` 的台胞證啟動 focused sex retry：以正面版面性別欄附近的小區域 crop / re-OCR 為主，或以已偵測到的 Sex/性別 label 位置建立窄 ROI；不得對已經有 sex 的 12 張額外重跑。
+- retry 結果只接受非常保守的 `男/女/M/F` 或 same-row Sex/性別語意；若 ROI 同時出現衝突值，維持 empty / 人工審核。
+- 需要新增匿名 retry 診斷：sex retry 啟動件數、有文字框件數、有候選件數、實際覆寫件數、仍 empty 件數。不要記錄旅客內容。
+- 中文姓名 `.17` 路徑已達 13/13，**禁止再動姓名 selector**，除非新資料出現回歸。
+
+目前正式最佳基準：護照全欄 13/19；台胞證全欄 12/13、中文姓名 13/13、sex 12/13。`.20` 若能補回最後 1 張 sex，現有 13 張台胞證固定 Validation 將可達 13/13 全欄。
+
 ## 2026-10-12 — `.18` 無提升但定位 sex 缺失來源；main 已進入 `.19` standalone-token fallback
 
 使用者完成 `2026.10.11.18` 正式 auto Validation，32/32 成功。護照維持全欄 68%（13/19）。台胞證維持全欄 77%（10/13）、中文姓名 100%（13/13）、出生日期 100%、性別 77%（10/13）、證件號碼 100%、有效期限 100%。因此 `.18` 沒有提高準確率，但姓名 13/13 無回歸。
