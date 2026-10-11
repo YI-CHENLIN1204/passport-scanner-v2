@@ -84,7 +84,7 @@ assert.deepEqual(
 const { shouldRetryUncertainPermitName, shouldUseRetriedPermitName } = retryPolicy
 assert.equal(shouldRetryUncertainPermitName('', null, false), true)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, false), true)
-assert.equal(shouldRetryUncertainPermitName('甲乙', null, false), true)
+assert.equal(shouldRetryUncertainPermitName('甲乙', null, false), false)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.96, false), false)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, true), false)
 const consensus = { value: '丙丁', score: 0.94, confidence: 0.96, consensus: 2 }
