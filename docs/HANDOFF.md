@@ -1,5 +1,16 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 最新實測狀態：2026-10-11 15:03（優先於下方交接快照）
+
+**OCR `2026.10.11.5` 已由使用者本機正式 auto/WebGPU 完成一次 32 張 Legacy Validation，沒有淨增益。** 護照 n=19：整張全對及中文姓名 13/19 (68%)；台胞證 n=13：整張 5/13 (38%)、中文姓名 6/13 (46%)、性別 10/13 (77%)；其餘評估必要欄位 100%，失敗 0/32。護照 OCR median/P90 為 2.1/4.5 秒；台胞證 3.4/6.8 秒。與最後 `.3` 實測比例持平。PR #21/#22 雖已合併且 CI 成功，但在此 Legacy cohort 未證實精準率提升。
+
+**後續動作已更改：不需再請使用者跑 `.5` 的相同 32 張，也不做 WASM/Worker 或 fixed Test。** 直接依 Issue #25 開發以真實 OCR 工作輸入影像、orientation/ROI/detection/recognition 錯誤歸因為核心的單一改善批次；自動測試與一次下輪 Validation 驗收。現有 32 張均沒有當次真正 OCR 工作輸入圖，可能同 Traveler 重複，身分證 n=0；只能作 legacy regression。不可擅自擴展 production 照片保存期限、上傳個資或改既有證件歷史／人工審核規則。
+
+**本段是使用者實測證據紀錄，並非新的 OCR 程式改善或 CI 結果。** 後續最新 SHA、CI 需持續按 GitHub 檢查。參見 [WORKLOG.md](WORKLOG.md) 最新實測與 [Issue #25](https://github.com/YI-CHENLIN1204/passport-scanner-v2/issues/25)。
+
+---
+
+
 ## 新對話啟動指令（直接複製到新的 ChatGPT / Codex）
 
 > 請直接延續 GitHub 專案 **`YI-CHENLIN1204/passport-scanner-v2`**，不要重新規劃 V2 或重新研究已結案的 OCR 實驗。請先讀取 `docs/HANDOFF.md` 的最新狀態、`docs/WORKLOG.md` 最末幾輪、`docs/DECISIONS.md`、`docs/OCR_OPEN_SOURCE_REVIEW.md`，再檢查 GitHub `main` 最新 SHA、PR、CI 和實際程式碼。不要只憑舊對話或文件中的歷史 TODO 開工。
