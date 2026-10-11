@@ -18,7 +18,7 @@
 
 - PR #33 的匿名 retry 診斷已直接整合 main：Validation 可看到全部台胞證及「中文姓名錯誤子群」的 retry 次數、OCR box 次數、姓名候選次數。
 - 新增/更新純函式測試：pixel enhancement、retry evidence independent-region consensus、null-confidence policy、retry diagnostics、ROI scale/bounds。
-- `npm.cmd run test:ocr-regression` 可一次執行全部 OCR regression scripts；另需 `npm.cmd run build`。
+- `npm.cmd run verify:ocr` 會一次執行全部 OCR regression scripts 與 Vite/TypeScript Build，作為本批唯一程式驗證入口。
 - 已用 GitHub 端靜態檢查確認 `.10` 版本、bounded upscale、ROI clamp、enhancement、time budget、independent consensus、Validation wrong-name wiring 均存在；**GitHub Connector 不能代替本機 Node/Vite 執行**。
 - GitHub Actions 仍僅 `workflow_dispatch`，本批沒有啟動 Actions。
 
