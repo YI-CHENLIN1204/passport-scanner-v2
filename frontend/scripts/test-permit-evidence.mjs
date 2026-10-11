@@ -74,6 +74,27 @@ assert.deepEqual(
   { value: 'F', source: 'semantic' },
 )
 
+assert.equal(
+  selectPermitSexCandidate('', false, '', null, '', 'F'),
+  'F',
+)
+assert.deepEqual(
+  selectPermitSexEvidence('', false, '', null, '', 'F'),
+  { value: 'F', source: 'standalone-token' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('M', false, '', null, '', 'F'),
+  { value: 'M', source: 'mrz' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('', false, 'M', 0.7, '', 'F'),
+  { value: 'M', source: 'label' },
+)
+assert.deepEqual(
+  selectPermitSexEvidence('', false, '', null, 'M', 'F'),
+  { value: 'M', source: 'semantic' },
+)
+
 assert.deepEqual(
   selectPermitMrzVsVisualName('甲乙', '丙丁', 'compatible', '丙丁', 0.93),
   { value: '丙丁', source: 'visual-agreement' },
@@ -115,4 +136,4 @@ assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0
 assert.equal(shouldUseRetriedPermitName('丙丁', 0.81, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, null), false)
 
-console.log('Passed 40 synthetic permit field, MRZ cross-check and retry guards.')
+console.log('Passed permit field, sex evidence, MRZ cross-check and retry guards.')
