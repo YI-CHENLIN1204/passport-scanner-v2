@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const source = readFileSync('src/services/paddleOcr.ts', 'utf8')
+const start = source.indexOf('async function predictOne(')
+const end = source.indexOf('async function predictPassportWithDistanceFallback(', start)
+assert.ok(start >= 0 && end > start)
+const predict = source.slice(start, end)
+assert.match(predict, /let provisionalName: ReturnType<typeof chooseTaiwanChineseName> = null/)
+assert.match(predict, /if \(!provisionalName\) \{/)
+assert.match(predict, /if \(vizName\.romanizationStatus === 'compatible'\) \{/)
+assert.match(predict, /best\.chineseNameRomanizationStatus =\s*vizName\.romanizationStatus/)
+assert.match(predict, /if \(crop\.source === 'viz-crop'\) break/)
+assert.doesNotMatch(predict, /if \(vizName\) \{[\s\S]*?best\.chineseNameSource = crop\.source[\s\S]*?break\s*\}/)
+assert.match(source, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.23'/)
+console.log('Passport .23 unknown name preserves fallback and waits for compatible VIZ')
