@@ -1,5 +1,17 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — `.17` 候選完成：只處理唯一 short/exact one-syllable mismatch
+
+在 `.16` 已達到台胞證中文姓名 11/13、整張 9/13、護照 13/19 的目前最佳基準後，main 已完成 `.17` 候選。`.17` 不改 BOCA official promotion、不改 exact joined-token promotion、不恢復 row-distance fallback，也不做任意 fuzzy Romanization。
+
+`.17` 唯一新增 production selector 規則：只有在沒有任何 compatible 或可接受 unknown candidate 時，收集所有 `compatibility=conflict` 且為 **2–4 個中文字、完整獨立 raw row** 的候選；若這類 short/exact conflict **恰好只有一個**，而且 subtype 正好是 `one-syllable-mismatch`，才回傳該候選並標記 `oneSyllableFallbackPromotion=true`。只要有第二個 short/exact conflict，或候選不是完整列、不是 2–4 字、不是 one-syllable mismatch，就不自動選。
+
+此 fallback 保留 candidate 的 `compatibility='conflict'`，不假裝成 phonetic-compatible；因此 downstream confidence 仍是較保守的 row/conflict 路徑，人工審核語意不會被抬高。Validation 新增匿名指標：符合 one-syllable fallback 條件的樣本數、實際採用件數。
+
+synthetic regression 已覆蓋：唯一 one-syllable 成功、非 exact 拒絕、5 字以上拒絕、存在第二個 short conflict 拒絕、compatible 優先、anchored unknown 優先、token-count conflict 不得誤採。版本 metadata 已更新為 `2026.10.11.17`。
+
+`.17` 尚未在使用者 Windows 本機執行 `npm.cmd run verify:ocr`、Docker frontend rebuild 或 32 張 Validation，不能宣稱達到 13/13。GitHub Actions 仍 workflow_dispatch only，未執行。
+
 ## 2026-10-12 — `.16` 再次實質提升；main 下一步聚焦唯一 one-syllable mismatch
 
 使用者完成 `2026.10.11.16` 正式 auto Validation，32/32 成功。護照維持：全欄 68%（13/19）、中文姓名 68%、其餘評估欄位 100%。台胞證再提升：全欄 **69%（9/13）**，中文姓名 **85%（11/13）**；出生日期 100%、性別 77%、證件號碼 100%、有效期限 100%。相較 `.15`，台胞證全欄 7/13→9/13，中文姓名 9/13→11/13；護照無退步。
