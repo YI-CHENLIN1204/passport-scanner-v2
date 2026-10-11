@@ -114,7 +114,7 @@ export interface PaddleBaselineResult {
   parsedMrz: ParsedMrz | null
   chineseName: string | null
   chineseNameScore: number | null
-  chineseNameSource: 'name-field' | 'viz-crop' | null
+  chineseNameSource: 'name-field' | 'viz-crop' | 'focused-viz' | null
   chineseNameRomanizationStatus: RomanizationCompatibility
   chineseNameDiagnostics: PassportChineseNameDiagnostic[]
   structureComplete: boolean
