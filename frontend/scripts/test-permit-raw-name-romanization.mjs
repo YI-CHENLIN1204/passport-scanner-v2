@@ -61,6 +61,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 8,
     officialVariantPromotion: false,
+    conflictSubtype: null,
   },
 )
 
@@ -74,6 +75,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 8,
     officialVariantPromotion: true,
+    conflictSubtype: null,
   },
 )
 
@@ -87,6 +89,7 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 6,
     officialVariantPromotion: true,
+    conflictSubtype: null,
   },
 )
 
@@ -107,25 +110,50 @@ assert.deepEqual(
     compatibility: 'compatible',
     latinDistance: 7,
     officialVariantPromotion: false,
+    conflictSubtype: null,
   },
 )
 
-assert.equal(
+assert.deepEqual(
   resolveRomanization('王英明', [{
     surname: 'WANG',
     givenNames: 'YIN MING',
     distance: 5,
-  }]).compatibility,
-  'conflict',
+  }]),
+  {
+    compatibility: 'conflict',
+    latinDistance: 5,
+    officialVariantPromotion: false,
+    conflictSubtype: 'one-syllable-mismatch',
+  },
 )
 
-assert.equal(
+assert.deepEqual(
+  resolveRomanization('王一明', [{
+    surname: 'WANG',
+    givenNames: 'I',
+    distance: 4,
+  }]),
+  {
+    compatibility: 'conflict',
+    latinDistance: 4,
+    officialVariantPromotion: false,
+    conflictSubtype: 'token-count-mismatch',
+  },
+)
+
+assert.deepEqual(
   resolveRomanization('王英華', [{
     surname: 'WANG',
     givenNames: 'TING MING',
     distance: 5,
-  }]).compatibility,
-  'unknown',
+  }]),
+  {
+    compatibility: 'unknown',
+    latinDistance: 5,
+    officialVariantPromotion: false,
+    conflictSubtype: null,
+  },
 )
 
 assert.deepEqual(
@@ -134,6 +162,7 @@ assert.deepEqual(
     compatibility: 'unknown',
     latinDistance: null,
     officialVariantPromotion: false,
+    conflictSubtype: null,
   },
 )
 
