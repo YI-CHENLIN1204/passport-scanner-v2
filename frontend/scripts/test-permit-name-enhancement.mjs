@@ -41,6 +41,6 @@ assert.match(retry, /createPermitNameEnhancedVariant\(enhancementSource\)/)
 assert.match(retry, /if \(!canContinue\(\)\) break/)
 assert.match(retry, /completedPasses \+= 1/)
 assert.match(retry, /passes: completedPasses/)
-assert.match(ocr, /OCR_PIPELINE_VERSION = '2026\.10\.11\.10'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\\s*=\\s*'2026\\.10\\.11\\.10'/)
 
 console.log('Permit name enhancement functional and retry-budget tests passed')
