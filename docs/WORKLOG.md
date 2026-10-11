@@ -184,3 +184,12 @@
 ## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
 
 在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。
+
+## 2026-10-11 — 使用者本機 OCR .6 Legacy Validation 回歸（截圖）
+
+- 狀態：**已本機實測**，正式 auto，偵測／文字辨識 WebGPU；OCR pipeline `2026.10.11.6`。32/32 完成、0 失敗，預熱約 1.2 秒。這並非尚在 PR #29 的 `.7`。
+- 護照 Validation 19 張，整張及中文姓名 68%（13/19），其餘已比較必要欄位 100%；OCR median 1.1 秒 / P90 2.2 秒。
+- 台胞證 Validation 13 張，整張 38%（5/13）、中文姓名 46%（6/13）、性別 77%（10/13）；生日、證件號及效期 100%；OCR median 1.1 秒 / P90 2.7 秒。
+- PR #28 的匿名原始文字列分類首次觀察：7 張中文姓名錯誤之中，完整原始列吻合 0、嵌於較長文字列 0、選中 OCR 文字列未出現完整姓名 7。這不能證明 detection / recognition 的根因，因為分類只讀取最終選中的 `rawRows`，可能存在其他未選中的候選。
+- 32/32 缺當次真正 OCR 工作圖，這是保留審核圖片的 legacy regression，不代表新上傳端到端品質；可能存在同一 Traveler 多圖；身分證 n=0。
+- `.6` 與 `.5` 的評估準確率持平，計時差異不能歸因於修正；`.7` ROI 座標來源修正仍在 PR #29、尚無實測。使用者本機 PowerShell `npm.ps1` 被 ExecutionPolicy 阻擋，且已處於 `frontend` 無需重複 `cd frontend`；採 `npm.cmd` 執行本機檢查，GitHub Actions 維持關閉。
