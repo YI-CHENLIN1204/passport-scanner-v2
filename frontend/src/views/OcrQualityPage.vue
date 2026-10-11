@@ -2292,6 +2292,8 @@ onMounted(load)
               {{ result.permitRawNameEvidenceCounts.samplesConflictDistance3To4 }} /
               {{ result.permitRawNameEvidenceCounts.samplesConflictDistance5Plus }} 張；
               符合保守 conflict fallback 條件 {{ result.permitRawNameEvidenceCounts.samplesWithEligibleConflictFallback }} 張；
+              其中唯一候選 {{ result.permitRawNameEvidenceCounts.samplesWithUniqueEligibleConflictFallback }} 張、
+              多候選歧義 {{ result.permitRawNameEvidenceCounts.samplesWithAmbiguousEligibleConflictFallback }} 張；
               最終選到拼音相容 {{ result.permitRawNameEvidenceCounts.selectedCompatible }} 張；
               最終選到 unknown {{ result.permitRawNameEvidenceCounts.selectedUnknown }} 張；
               最終使用近英文姓名列的 conflict fallback {{ result.permitRawNameEvidenceCounts.selectedConflictFallback }} 張；
