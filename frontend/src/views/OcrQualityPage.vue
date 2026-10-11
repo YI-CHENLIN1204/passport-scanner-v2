@@ -985,6 +985,7 @@ interface ValidationProfileSample {
   passportNameFailure: ValidationPassportNameFailure | null
   passportCropDiagnosis: PassportCropDiagnosis | null
   passportExactDecision: string | null
+  passportExactDecisionSource: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   permitScriptEquivalentOnly: boolean
@@ -1023,6 +1024,7 @@ interface ValidationProfileDocument {
     reason: string
     count: number
   }>
+  passportDecisionSourceCounts: Array<{ source: string; reason: string; count: number }>
   passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   permitScriptEquivalentCount: number | null
@@ -1393,9 +1395,9 @@ async function profileValidationOnly() {
         const exactDecisions = sample.documentType === 'PASSPORT' &&
           passportNameFailure === 'exact-candidate'
           ? prediction.passportNameDiagnostics.flatMap(
-              group => group.decisionTrace ?? [],
-            ).filter(decision =>
-              normalizeEvalValue('nameZh', decision.text) === expectedName,
+              group => (group.decisionTrace ?? []).filter(decision =>
+                normalizeEvalValue('nameZh', decision.text) === expectedName,
+              ).map(decision => ({ ...decision, source: group.source })),
             )
           : []
         // Store only classification, never candidate text or truth.
@@ -1410,6 +1412,17 @@ async function profileValidationOnly() {
           : passportNameFailure === 'exact-candidate'
             ? 'not-in-selector-trace'
             : null
+        const passportExactDecisionSource = passportExactDecision
+          ? exactDecisions.find(item =>
+              passportExactDecision === 'selected-other-attempt'
+                ? item.reason === 'selected'
+                : passportExactDecision === (
+                    item.reason === 'romanization-conflict'
+                      ? `romanization:${item.conflictSubtype ?? 'unclassified'}`
+                      : item.reason
+                  ),
+            )?.source ?? 'untraced'
+          : null
 
         // Compare outcomes only; never retain the raw name.
         // This uses attempted crops, not a full second OCR pipeline.
@@ -1455,6 +1468,7 @@ async function profileValidationOnly() {
           passportNameFailure,
           passportCropDiagnosis,
           passportExactDecision,
+          passportExactDecisionSource,
           passportShadow,
           passportOfficialShadow,
           permitScriptEquivalentOnly,
@@ -1604,6 +1618,24 @@ async function profileValidationOnly() {
                   'unchanged-wrong': rows.filter(row => row.passportShadow === 'unchanged-wrong').length,
                 }
               : null,
+          passportDecisionSourceCounts:
+            documentType === 'PASSPORT'
+              ? Array.from(new Set(rows.filter(row =>
+                  row.passportExactDecision && row.passportExactDecisionSource,
+                ).map(row =>
+                  `${row.passportExactDecisionSource}|${row.passportExactDecision}`,
+                ))).map(key => {
+                  const [source, reason] = key.split('|')
+                  return {
+                    source,
+                    reason,
+                    count: rows.filter(row =>
+                      row.passportExactDecisionSource === source &&
+                      row.passportExactDecision === reason,
+                    ).length,
+                  }
+                })
+              : [],
           passportDecisionReasons:
             documentType === 'PASSPORT'
               ? [
@@ -2531,6 +2563,19 @@ onMounted(load)
                 {{ item.reason }} {{ item.count }} 張；
               </span>
               這是候選狀態的近似分類，尚未代表自動修復效果。
+            </p>
+            <p
+              v-if="result.passportDecisionSourceCounts.length"
+              class="validation-legacy-note"
+            >
+              正確候選的來源與未採用原因（匿名件數）：
+              <span
+                v-for="item in result.passportDecisionSourceCounts"
+                :key="`${item.source}-${item.reason}`"
+              >
+                {{ item.source }} / {{ item.reason }} {{ item.count }} 張；
+              </span>
+              只保留來源與分類，不儲存候選姓名或證件資料。
             </p>
             <p v-if="result.passportOfficialCounts" class="validation-legacy-note">
               外交部護照拼音對照表候選（只讀，非正式輸出）：
