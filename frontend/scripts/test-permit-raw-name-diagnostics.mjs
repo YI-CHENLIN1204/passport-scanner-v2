@@ -27,6 +27,7 @@ const rows = [
     compatibleCandidateCount: 1,
     unknownCandidateCount: 1,
     conflictCandidateCount: 1,
+    eligibleConflictFallbackCount: 1,
     selectedCompatibility: 'compatible',
   },
   {
@@ -36,6 +37,7 @@ const rows = [
     compatibleCandidateCount: 0,
     unknownCandidateCount: 1,
     conflictCandidateCount: 0,
+    eligibleConflictFallbackCount: 0,
     selectedCompatibility: 'unknown',
   },
   {
@@ -45,6 +47,7 @@ const rows = [
     compatibleCandidateCount: 0,
     unknownCandidateCount: 0,
     conflictCandidateCount: 0,
+    eligibleConflictFallbackCount: 0,
     selectedCompatibility: null,
   },
 ]
@@ -54,6 +57,7 @@ assert.deepEqual(aggregate(rows), {
   samplesWithCompatibleCandidate: 1,
   samplesWithUnknownCandidate: 2,
   samplesWithConflictCandidate: 1,
+  samplesWithEligibleConflictFallback: 1,
   totalCandidates: 4,
   selectedCompatible: 1,
   selectedUnknown: 1,
