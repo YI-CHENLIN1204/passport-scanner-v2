@@ -4995,10 +4995,17 @@ async function createPermitNameGroupCrop(
   )
 }
 
+export interface PermitRetryDetectionSummary {
+  attemptedCrops: number
+  cropsWithTextBoxes: number
+  cropsWithNameCandidates: number
+}
+
 async function retryPermitChineseName(
   instance: PaddleInstance,
   image: File,
   prediction: unknown,
+  diagnostic?: (summary: PermitRetryDetectionSummary) => void,
 ) {
   const crops: File[] = []
 
@@ -5030,6 +5037,11 @@ async function retryPermitChineseName(
   const candidates: Array<
     PermitCandidate<string>
   > = []
+  const summary: PermitRetryDetectionSummary = {
+    attemptedCrops: 0,
+    cropsWithTextBoxes: 0,
+    cropsWithNameCandidates: 0,
+  }
 
   for (const crop of crops) {
     const [namePrediction] =
@@ -5048,9 +5060,16 @@ async function retryPermitChineseName(
     const candidate =
       choosePermitChineseName(geometries)
 
-    if (candidate) candidates.push(candidate)
+    summary.attemptedCrops += 1
+    if (geometries.length > 0) summary.cropsWithTextBoxes += 1
+    if (candidate) {
+      summary.cropsWithNameCandidates += 1
+      candidates.push(candidate)
+    }
   }
 
+  // Report only aggregate shape, never the detected text, identity or crop.
+  diagnostic?.(summary)
   if (!candidates.length) return null
 
   const grouped = new Map<
@@ -5096,6 +5115,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
     progress: TaiwanCompatriotPermitOcrProgress,
   ) => void,
   experimentalInstance?: ValidationPaddleInstance,
+  retryDiagnostic?: (summary: PermitRetryDetectionSummary) => void,
 ): Promise<TaiwanCompatriotPermitOcrResult> {
   const totalStartedAt = performance.now()
   const softBudgetMs = 9_000
@@ -5298,6 +5318,7 @@ export async function recognizeTaiwanCompatriotPermitWithPaddle(
       instance,
       best.predictionImage,
       best.prediction,
+      retryDiagnostic,
     )
 
     if (
