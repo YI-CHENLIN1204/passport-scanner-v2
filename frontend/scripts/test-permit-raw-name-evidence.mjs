@@ -87,6 +87,6 @@ assert.ok(rowSelectorStart >= 0 && rowSelectorEnd > rowSelectorStart)
 const rowSelector = ocr.slice(rowSelectorStart, rowSelectorEnd)
 assert.match(rowSelector, /selectPermitRawNameCandidate\(candidates\)/)
 assert.doesNotMatch(rowSelector, /offset <= 2/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.11'/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.12'/)
 
 console.log('Permit raw-row name evidence ranking and wiring tests passed')
