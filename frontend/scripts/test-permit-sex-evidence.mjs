@@ -7,6 +7,7 @@ import ts from 'typescript'
 const dir = mkdtempSync(resolve('node_modules', '.permit-sex-diagnostics-'))
 let aggregate
 let extractSemantic
+let collectStandalone
 try {
   const compiled = ts.transpileModule(
     readFileSync('src/services/permitSexDiagnostics.ts', 'utf8'),
@@ -24,6 +25,14 @@ try {
   writeFileSync(semanticFile, semanticCompiled)
   ;({ extractPermitSemanticSexFromRows: extractSemantic } =
     await import(pathToFileURL(semanticFile).href))
+  const standaloneCompiled = ts.transpileModule(
+    readFileSync('src/services/permitStandaloneSexEvidence.ts', 'utf8'),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } },
+  ).outputText
+  const standaloneFile = resolve(dir, 'permitStandaloneSexEvidence.mjs')
+  writeFileSync(standaloneFile, standaloneCompiled)
+  ;({ collectStandalonePermitSexEvidence: collectStandalone } =
+    await import(pathToFileURL(standaloneFile).href))
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }
@@ -39,6 +48,27 @@ assert.equal(extractSemantic(['M', 'Sex']), '')
 assert.equal(extractSemantic(['NAME FOO']), '')
 assert.equal(extractSemantic([]), '')
 
+assert.deepEqual(
+  collectStandalone(['姓名', '女', '出生日期']),
+  { value: 'F', tokenCount: 1, conflicting: false },
+)
+assert.deepEqual(
+  collectStandalone(['M', '姓名']),
+  { value: 'M', tokenCount: 1, conflicting: false },
+)
+assert.deepEqual(
+  collectStandalone(['M', 'F']),
+  { value: '', tokenCount: 2, conflicting: true },
+)
+assert.deepEqual(
+  collectStandalone(['SEX F', '女性別']),
+  { value: '', tokenCount: 0, conflicting: false },
+)
+assert.deepEqual(
+  collectStandalone([]),
+  { value: '', tokenCount: 0, conflicting: false },
+)
+
 const rows = [
   {
     mrzSex: 'M',
@@ -46,6 +76,9 @@ const rows = [
     labeledSex: '',
     labeledScore: null,
     semanticSex: 'F',
+    standaloneSex: '',
+    standaloneTokenCount: 0,
+    standaloneTokenConflict: false,
     selectedSource: 'semantic-row',
   },
   {
@@ -54,6 +87,9 @@ const rows = [
     labeledSex: 'F',
     labeledScore: 0.95,
     semanticSex: 'F',
+    standaloneSex: '',
+    standaloneTokenCount: 0,
+    standaloneTokenConflict: false,
     selectedSource: 'visual-agreement',
   },
   {
@@ -62,6 +98,9 @@ const rows = [
     labeledSex: '',
     labeledScore: null,
     semanticSex: '',
+    standaloneSex: '',
+    standaloneTokenCount: 0,
+    standaloneTokenConflict: false,
     selectedSource: 'mrz',
   },
   {
@@ -70,7 +109,21 @@ const rows = [
     labeledSex: '',
     labeledScore: null,
     semanticSex: 'M',
+    standaloneSex: '',
+    standaloneTokenCount: 0,
+    standaloneTokenConflict: false,
     selectedSource: 'semantic',
+  },,
+  {
+    mrzSex: '',
+    mrzRequiredValid: false,
+    labeledSex: '',
+    labeledScore: null,
+    semanticSex: '',
+    standaloneSex: 'F',
+    standaloneTokenCount: 1,
+    standaloneTokenConflict: false,
+    selectedSource: 'standalone-token',
   },
 ]
 
@@ -78,6 +131,8 @@ assert.deepEqual(aggregate(rows), {
   samplesWithMrzSex: 3,
   samplesWithLabeledSex: 1,
   samplesWithSemanticSex: 3,
+  samplesWithStandaloneSexToken: 1,
+  samplesWithStandaloneTokenConflict: 0,
   mrzSemanticConflict: 1,
   requiredValidMrzSemanticConflict: 1,
   selectedVisualAgreement: 1,
@@ -85,6 +140,7 @@ assert.deepEqual(aggregate(rows), {
   selectedMrz: 1,
   selectedLabel: 0,
   selectedSemantic: 1,
+  selectedStandaloneToken: 1,
   selectedEmpty: 0,
 })
 
@@ -95,11 +151,13 @@ for (const secret of ['name', '姓名', 'rawRows', 'sampleId', 'documentNumber']
 
 const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
 assert.match(ocr, /extractPermitSemanticSexFromRows\(rawRows\)/)
-assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.18'/)
+assert.match(ocr, /collectStandalonePermitSexEvidence/)
+assert.match(ocr, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.19'/)
 
 const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
 assert.match(page, /permitSexEvidenceCounts/)
 assert.match(page, /selectedSemanticRow/)
+assert.match(page, /selectedStandaloneToken/)
 assert.match(page, /mrzSemanticConflict/)
 
 console.log('Permit same-row sex semantics, selector diagnostics and Validation wiring tests passed')
