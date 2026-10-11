@@ -4,6 +4,7 @@ import { selectPermitRetryWinner, type PermitNameRetryRegion } from './permitNam
 import { isShortExactPermitNameConflict, selectPermitRawNameCandidate, type PermitRawNameCompatibility } from './permitRawNameEvidence'
 import { extractPermitLatinName, type PermitLatinName } from './permitLatinName'
 import { resolvePermitRawRomanization } from './permitRawNameRomanization'
+import { extractPermitSemanticSexFromRows } from './permitSexSemantics'
 import {
   isPlausibleTd3Line1,
   normalizeMrzCandidate,
@@ -4162,34 +4163,6 @@ function extractPermitExpiryFromRows(
     : null
 }
 
-function extractPermitSexFromRows(
-  rows: string[],
-): PermitSex | null {
-  for (const row of rows) {
-    const compact = row
-      .replace(/\s+/g, '')
-      .toUpperCase()
-
-    if (
-      /女(?:性别|性別)/.test(compact) ||
-      /(?:性别|性別)[:：]?女/.test(compact) ||
-      /(?:SEX)[:：]?F(?:$|[^A-Z])/.test(compact)
-    ) {
-      return 'F'
-    }
-
-    if (
-      /男(?:性别|性別)/.test(compact) ||
-      /(?:性别|性別)[:：]?男/.test(compact) ||
-      /(?:SEX)[:：]?M(?:$|[^A-Z])/.test(compact)
-    ) {
-      return 'M'
-    }
-  }
-
-  return null
-}
-
 function extractPermitChineseNameFromRows(
   rows: string[],
 ) {
@@ -4397,7 +4370,7 @@ function buildTaiwanCompatriotPermitResult(
     extractPermitExpiryFromRows(rawRows)
 
   const semanticSex =
-    extractPermitSexFromRows(rawRows)
+    extractPermitSemanticSexFromRows(rawRows)
 
   const birthDate = findLabelAnchoredCandidate(
     geometries,
