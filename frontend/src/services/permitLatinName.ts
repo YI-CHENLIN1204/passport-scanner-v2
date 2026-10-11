@@ -30,8 +30,8 @@ export function extractPermitLatinName(
   let upper = text
     .toUpperCase()
     .replace(/[0-9]/g, ' ')
-    .replace(/[^A-Z,- ]/g, ' ')
-    .replace(/s+/g, ' ')
+    .replace(/[^A-Z,\- ]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 
   // Taiwan permit OCR commonly groups the printed "Name" label and the
