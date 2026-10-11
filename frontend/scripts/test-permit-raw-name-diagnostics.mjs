@@ -31,6 +31,8 @@ const rows = [
     selectedOfficialVariant: true,
     joinedTokenCandidateCount: 0,
     selectedJoinedToken: false,
+    oneSyllableFallbackEligibleCount: 1,
+    selectedOneSyllableFallback: false,
     conflictTokenCountMismatchCandidateCount: 0,
     conflictOneSyllableMismatchCandidateCount: 1,
     conflictOtherMismatchCandidateCount: 0,
@@ -50,6 +52,8 @@ const rows = [
     selectedOfficialVariant: false,
     joinedTokenCandidateCount: 0,
     selectedJoinedToken: false,
+    oneSyllableFallbackEligibleCount: 0,
+    selectedOneSyllableFallback: false,
     conflictTokenCountMismatchCandidateCount: 1,
     conflictOneSyllableMismatchCandidateCount: 0,
     conflictOtherMismatchCandidateCount: 0,
@@ -69,6 +73,8 @@ const rows = [
     selectedOfficialVariant: false,
     joinedTokenCandidateCount: 0,
     selectedJoinedToken: false,
+    oneSyllableFallbackEligibleCount: 0,
+    selectedOneSyllableFallback: false,
     conflictTokenCountMismatchCandidateCount: 0,
     conflictOneSyllableMismatchCandidateCount: 0,
     conflictOtherMismatchCandidateCount: 0,
@@ -88,6 +94,8 @@ const rows = [
     selectedOfficialVariant: false,
     joinedTokenCandidateCount: 1,
     selectedJoinedToken: true,
+    oneSyllableFallbackEligibleCount: 0,
+    selectedOneSyllableFallback: false,
     conflictTokenCountMismatchCandidateCount: 0,
     conflictOneSyllableMismatchCandidateCount: 0,
     conflictOtherMismatchCandidateCount: 0,
@@ -96,27 +104,50 @@ const rows = [
     nearestConflictLatinDistance: null,
     selectedCompatibility: 'compatible',
   },
+  {
+    latinRowCount: 1,
+    labelRowCount: 0,
+    candidateCount: 1,
+    compatibleCandidateCount: 0,
+    unknownCandidateCount: 0,
+    conflictCandidateCount: 1,
+    officialVariantCandidateCount: 0,
+    selectedOfficialVariant: false,
+    joinedTokenCandidateCount: 0,
+    selectedJoinedToken: false,
+    oneSyllableFallbackEligibleCount: 1,
+    selectedOneSyllableFallback: true,
+    conflictTokenCountMismatchCandidateCount: 0,
+    conflictOneSyllableMismatchCandidateCount: 1,
+    conflictOtherMismatchCandidateCount: 0,
+    conflictUnclassifiedCandidateCount: 0,
+    shortExactConflictCandidateCount: 1,
+    nearestConflictLatinDistance: 7,
+    selectedCompatibility: 'conflict',
+  },
 ]
 
 assert.deepEqual(aggregate(rows), {
-  samplesWithLatinRows: 4,
+  samplesWithLatinRows: 5,
   samplesWithLabelRows: 0,
   samplesWithCompatibleCandidate: 2,
   samplesWithUnknownCandidate: 1,
-  samplesWithConflictCandidate: 2,
+  samplesWithConflictCandidate: 3,
   samplesWithOfficialVariantCandidate: 1,
   selectedOfficialVariant: 1,
   samplesWithJoinedTokenCandidate: 1,
   selectedJoinedToken: 1,
+  samplesWithOneSyllableFallbackEligible: 2,
+  selectedOneSyllableFallback: 1,
   samplesWithConflictTokenCountMismatch: 1,
-  samplesWithConflictOneSyllableMismatch: 1,
+  samplesWithConflictOneSyllableMismatch: 2,
   samplesWithConflictOtherMismatch: 0,
   samplesWithConflictUnclassified: 0,
-  samplesWithShortExactConflictCandidate: 2,
+  samplesWithShortExactConflictCandidate: 3,
   samplesConflictDistanceLe2: 0,
   samplesConflictDistance3To4: 1,
-  samplesConflictDistance5Plus: 1,
-  totalCandidates: 6,
+  samplesConflictDistance5Plus: 2,
+  totalCandidates: 7,
   selectedCompatible: 2,
   selectedUnknown: 1,
   selectedNone: 1,
@@ -128,11 +159,19 @@ for (const secret of ['姓名', '甲乙', 'rawRows', 'groundTruth', 'sampleId'])
 }
 
 const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
-assert.match(page, /aggregatePermitRawNameEvidence\(rows\.map\(row => row\.permitRawNameEvidence\)\)/)
+assert.match(
+  page,
+  /aggregatePermitRawNameEvidence\(rows\.map\(row => row\.permitRawNameEvidence\)\)/,
+)
 assert.match(page, /samplesWithOfficialVariantCandidate/)
 assert.match(page, /selectedOfficialVariant/)
 assert.match(page, /samplesWithJoinedTokenCandidate/)
 assert.match(page, /selectedJoinedToken/)
-assert.doesNotMatch(page, /selectedConflictFallback|samplesWithEligibleConflictFallback/)
+assert.match(page, /samplesWithOneSyllableFallbackEligible/)
+assert.match(page, /selectedOneSyllableFallback/)
+assert.doesNotMatch(
+  page,
+  /selectedConflictFallback|samplesWithEligibleConflictFallback/,
+)
 
-console.log('Permit raw-name .16 diagnostics aggregation and wiring tests passed')
+console.log('Permit raw-name .17 diagnostics aggregation and wiring tests passed')
