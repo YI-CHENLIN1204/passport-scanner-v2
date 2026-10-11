@@ -211,3 +211,9 @@
 延續 `.8` 主線，只增加 Validation 的可觀察性，不更改 OCR 判斷／模型／輸出或版本號。利用現有 `distanceCropUsed`、`chineseNamePasses`、`chineseNameConsensus`、`mrzUsed`，在每張 Evaluation 的記憶體內做匿名彙總，僅報告「選用放大距離裁切」「姓名重讀候選已採用」「雙區域一致候選」「MRZ 提供過欄位」四項件數。程式抽出 `permitSourceEvidence.ts`，新增 synthetic `test:permit-source` 驗證計數與無個資輸出。與既有「7 張姓名錯誤未在選中 rawRows 中出現」分類搭配，僅可縮小研究範圍；**不能確定 Detection/Recognition 因果，也沒有修正 OCR 精準率**。沒有個人名字、原始 OCR 文字、sample ID、工作影像或逐張資料保存到結果或 GitHub。
 
 GitHub Actions 因額度限制維持 `workflow_dispatch` 且不得執行。此批在 GitHub Connector 完成原始碼和文檔更新，尚無本機 Build／照片 Validation 證據；等本批整理完成再讓使用者一次執行。正式 `.8` 與最後實際 `.6` 精準度請區分；fixed Test 不變。
+
+## 2026-10-11 — 台胞證姓名重讀 OCR 文字框匿名來源觀察（開發候選，未測）
+
+為區分「姓名重讀沒有任何文字框」與「有文字框但無姓名候選」，在既有 `retryPermitChineseName` 的每次裁切 OCR 後累計 `attemptedCrops`、`cropsWithTextBoxes`、`cropsWithNameCandidates`。第四參數 callback 僅供 Validation，正式呼叫不提供；Evaluation 頁面僅顯示匿名總數和啟動姓名重讀張數。未傳送 OCR 文字、姓名、真值、逐張 ID 或影像，正式辨識與姓名覆寫規則不變；因不是新的識別演算法，管線版本維持 `.8`。這些數字只能說明選中 ROI 的辨識中是否產生 OCR box 與合格候選，**不能嚴格拆開 Detection、Recognition 及原始影像問題**。
+
+GitHub Actions 保持手動但不啟動，本 PR 的原始碼和測試腳本尚未在使用者本機編譯。新增 `npm.cmd run test:permit-retry-detection` 結構測試，後續集中跑本機測試／Build，未通過前不合併。最後真實照片測量仍 `.6`；不得宣稱準確率提升，固定 Test 與正式照片保留不動。
