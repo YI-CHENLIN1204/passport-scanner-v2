@@ -2286,6 +2286,7 @@ onMounted(load)
               有姓名標籤列 {{ result.permitRawNameEvidenceCounts.samplesWithLabelRows }} 張；
               有拼音相容中文候選 {{ result.permitRawNameEvidenceCounts.samplesWithCompatibleCandidate }} 張；
               有拼音衝突中文候選 {{ result.permitRawNameEvidenceCounts.samplesWithConflictCandidate }} 張；
+              符合保守 conflict fallback 條件 {{ result.permitRawNameEvidenceCounts.samplesWithEligibleConflictFallback }} 張；
               最終選到拼音相容 {{ result.permitRawNameEvidenceCounts.selectedCompatible }} 張；
               最終選到 unknown {{ result.permitRawNameEvidenceCounts.selectedUnknown }} 張；
               最終使用近英文姓名列的 conflict fallback {{ result.permitRawNameEvidenceCounts.selectedConflictFallback }} 張；
