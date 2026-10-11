@@ -32,4 +32,12 @@ const output = JSON.stringify(aggregate(rows))
 for (const secret of ['姓名', '甲乙', 'trainingSampleId', 'rawRows', 'groundTruth']) {
   assert.equal(output.includes(secret), false)
 }
-console.log('Anonymous permit source evidence functional tests passed')
+const ocr = readFileSync('src/services/paddleOcr.ts', 'utf8')
+const page = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
+assert.match(ocr, /nameRetryApplied: false/)
+assert.match(ocr, /best\.result\.nameRetryApplied = true/)
+assert.match(page, /nameRetryApplied: result\.nameRetryApplied/)
+assert.match(page, /permitSourceCounts\.nameRetryApplied/)
+assert.doesNotMatch(page, /permitSourceCounts\.nameRetryAccepted/)
+
+console.log('Anonymous permit source evidence functional and wiring tests passed')
