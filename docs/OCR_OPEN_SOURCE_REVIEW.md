@@ -568,3 +568,11 @@ retry parser 只接受 ROI 內 detection box 完整等於 `男`／`女`／`M`／
 
 結論：.21 broad VIZ bounded-upscale 有固定 legacy Validation 淨改善，列為目前最佳已實測 pipeline。繼續護照中文姓名 recognition / ROI 方向，但不能推定對新照片泛化改善，也不可直接依 shadow 提示自動放寬姓名 selector。全部 32 張仍缺原始 OCR 工作輸入影像。保留台胞證 BOCA、joined-token、unique one-syllable、standalone sex、focused retry 已成功路徑。禁止 GitHub Actions，不上傳個資。
 
+## 2026-10-12 — .22 護照姓名兩個 ROI 的匿名失敗歸因（候選待驗證）
+
+.21 真實固定 Validation 已證明護照中文姓名 14/19（74%）、台胞證 13/13（100%），剩下 5 張護照姓名錯誤，其中 4 張 OCR 產生其他候選但非正確姓名、1 張雖有完整候選卻未被選中。不能直接推定需要放寬 selector。
+
+.22 只改善已有 OCR 輸出的診斷：Validation 對錯誤護照樣本分開計算 name-field 與 broad VIZ 各自是否有完整正確候選、錯誤候選、無候選或該 crop 未執行，另彙總兩區都只有錯誤候選和正確候選僅在 VIZ 出現的件數。此分類是匿名 aggregate，使用過程中可短暫比較本機 ground truth，結果物件只留分類，UI 不顯示姓名、樣本 ID、影像或 OCR raw text。加入 regression/source wiring test，納入 verify:ocr。
+
+**.22 不變更護照或台胞證辨識算法，也不增加任何 OCR inference。最佳已證明準確率仍是 .21（護照 14/19、台胞證 13/13）。** .22 的目的在固定 Validation 上一次分辨 remaining 5 張的 crop 缺口，再選擇下一批能有實質提升假設的辨識改善。執行 Windows verify:ocr、Docker frontend rebuild、32 張固定 Validation 後回填匿名結果；不可將診斷數字說成 accuracy 改善。禁止 GitHub Actions。
+
