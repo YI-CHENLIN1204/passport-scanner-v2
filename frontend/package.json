@@ -18,7 +18,8 @@
     "test:permit-source": "node scripts/test-permit-source-evidence.mjs",
     "test:permit-broad-crop": "node scripts/test-permit-broad-name-crop.mjs",
     "test:permit-name-enhancement": "node scripts/test-permit-name-enhancement.mjs",
-    "test:permit-retry-detection": "node scripts/test-permit-retry-detection.mjs"
+    "test:permit-retry-detection": "node scripts/test-permit-retry-detection.mjs",
+    "test:permit-retry-evidence": "node scripts/test-permit-retry-evidence.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
