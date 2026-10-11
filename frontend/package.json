@@ -16,7 +16,8 @@
     "test:permit-roi": "node scripts/test-permit-roi-source.mjs",
     "test:permit-name-roi": "node scripts/test-permit-name-roi-priority.mjs",
     "test:permit-source": "node scripts/test-permit-source-evidence.mjs",
-    "test:permit-broad-crop": "node scripts/test-permit-broad-name-crop.mjs"
+    "test:permit-broad-crop": "node scripts/test-permit-broad-name-crop.mjs",
+    "test:permit-name-enhancement": "node scripts/test-permit-name-enhancement.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
