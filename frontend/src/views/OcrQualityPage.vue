@@ -2154,6 +2154,17 @@ onMounted(load)
               formatBenchmarkRunTime(validationProfileResult.completedAt)
             }} · 頁面暫存的歷史結果，非當前執行中的結果。
           </p>
+          <p
+            v-if="validationProfileResult.pipelineVersion !== OCR_PIPELINE_VERSION"
+            class="retest-failed"
+          >
+            這是舊 OCR 版本 {{ validationProfileResult.pipelineVersion }} 的歷史結果；
+            目前頁面程式版本是 {{ OCR_PIPELINE_VERSION }}。
+            請重新執行 Validation 後再比較，不要把此結果視為目前版本成績。
+          </p>
+          <p class="validation-history-note">
+            目前頁面 OCR pipeline：{{ OCR_PIPELINE_VERSION }}。
+          </p>
           <p class="validation-history-note">
             實際執行 provider：
             偵測 {{
