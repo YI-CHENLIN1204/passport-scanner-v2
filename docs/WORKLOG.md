@@ -217,3 +217,7 @@ GitHub Actions 因額度限制維持 `workflow_dispatch` 且不得執行。此�
 為區分「姓名重讀沒有任何文字框」與「有文字框但無姓名候選」，在既有 `retryPermitChineseName` 的每次裁切 OCR 後累計 `attemptedCrops`、`cropsWithTextBoxes`、`cropsWithNameCandidates`。第四參數 callback 僅供 Validation，正式呼叫不提供；Evaluation 頁面僅顯示匿名總數和啟動姓名重讀張數。未傳送 OCR 文字、姓名、真值、逐張 ID 或影像，正式辨識與姓名覆寫規則不變；因不是新的識別演算法，管線版本維持 `.8`。這些數字只能說明選中 ROI 的辨識中是否產生 OCR box 與合格候選，**不能嚴格拆開 Detection、Recognition 及原始影像問題**。
 
 GitHub Actions 保持手動但不啟動，本 PR 的原始碼和測試腳本尚未在使用者本機編譯。新增 `npm.cmd run test:permit-retry-detection` 結構測試，後續集中跑本機測試／Build，未通過前不合併。最後真實照片測量仍 `.6`；不得宣稱準確率提升，固定 Test 與正式照片保留不動。
+
+### PR #33 測試品質補強（GitHub 端原始碼檢查，尚待本機執行）
+
+將姓名重讀診斷中的布林觀察轉為 `permitRetryDetection.ts` 純函式，集中處理每張 cropped OCR 計數及跨 Validation 樣本的匿名彙總。`test-permit-retry-detection.mjs` 已改為實際載入並測試 TypeScript 函式、空資料／有框無姓名／候選與隱私輸出，並保留正式 OCR `predictionImage` 來源匹配檢查。已在 GitHub 端核對函式與前端引用路徑，但**尚未在使用者本機執行 npm test/build**；不應聲稱合成測試通過。診斷不改 OCR 模型、選擇規則、正式版本 `.8`，不新增個資持久化與 GitHub Actions 執行。
