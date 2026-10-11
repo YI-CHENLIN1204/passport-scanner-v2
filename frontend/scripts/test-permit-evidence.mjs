@@ -84,15 +84,17 @@ assert.deepEqual(
 const { shouldRetryUncertainPermitName, shouldUseRetriedPermitName } = retryPolicy
 assert.equal(shouldRetryUncertainPermitName('', null, false), true)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, false), true)
+assert.equal(shouldRetryUncertainPermitName('甲乙', null, false), true)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.96, false), false)
 assert.equal(shouldRetryUncertainPermitName('甲乙', 0.81, true), false)
 const consensus = { value: '丙丁', score: 0.94, confidence: 0.96, consensus: 2 }
 assert.equal(shouldUseRetriedPermitName('', null, consensus), true)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, consensus), true)
+assert.equal(shouldUseRetriedPermitName('甲乙', null, consensus), true)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.94, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, consensus: 1 }), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, { ...consensus, score: 0.75 }), false)
 assert.equal(shouldUseRetriedPermitName('丙丁', 0.81, consensus), false)
 assert.equal(shouldUseRetriedPermitName('甲乙', 0.81, null), false)
 
-console.log('Passed 33 synthetic permit field, MRZ cross-check and retry guards.')
+console.log('Passed 35 synthetic permit field, MRZ cross-check and retry guards.')
