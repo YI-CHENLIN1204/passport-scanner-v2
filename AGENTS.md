@@ -80,3 +80,5 @@
 > `.23` 待驗證候選：護照 name-field unknown 時保留 provisional 並讓 broad VIZ 尋找 compatible，未證實提昇。最佳已實測 `.22`：護照 14/19、台胞證 13/13；禁止 GitHub Actions。
 
 > .23 已正式 Validation：護照 14/19、台胞證 13/13，與 .22 持平；broad VIZ 正確候選 0→1，但未提升最終姓名。下一步追查候選拒絕原因；禁止 GitHub Actions。
+
+> 2026-10-12：main `.24` 只增加護照正確候選 source × rejection reason 的匿名診斷，待本機測試。最佳已實測 `.23` 護照 14/19、台胞證 13/13。禁止 GitHub Actions。
