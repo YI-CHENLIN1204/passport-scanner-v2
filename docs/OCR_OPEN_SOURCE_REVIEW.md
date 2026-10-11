@@ -463,3 +463,16 @@ pipeline metadata 已更新為 `2026.10.11.12`。`.12` 尚未本機 regression/b
 剩餘 conflict subtype 匿名樣本數：token-count mismatch 5、one-syllable mismatch 2、other 0、unclassified 0。這些計數可重疊；但只剩 2 張最終沒有 raw-row 姓名，而既有 ground-truth 對照顯示這 2 張中文姓名錯誤樣本的正確姓名 **2/2 仍完整存在 raw row**。下一步應只針對最保守的 one-syllable 唯一候選條件，不再放寬 token segmentation、row distance 或任意 fuzzy spelling。
 
 `.16` 已成為目前最佳基準：護照全欄 13/19；台胞證全欄 9/13、中文姓名 11/13。任何後續版本必須至少維持此基準。
+
+
+## 2026-10-12 — `.17` 候選完成：只處理唯一 short/exact one-syllable mismatch
+
+在 `.16` 已達到台胞證中文姓名 11/13、整張 9/13、護照 13/19 的目前最佳基準後，main 已完成 `.17` 候選。`.17` 不改 BOCA official promotion、不改 exact joined-token promotion、不恢復 row-distance fallback，也不做任意 fuzzy Romanization。
+
+`.17` 唯一新增 production selector 規則：只有在沒有任何 compatible 或可接受 unknown candidate 時，收集所有 `compatibility=conflict` 且為 **2–4 個中文字、完整獨立 raw row** 的候選；若這類 short/exact conflict **恰好只有一個**，而且 subtype 正好是 `one-syllable-mismatch`，才回傳該候選並標記 `oneSyllableFallbackPromotion=true`。只要有第二個 short/exact conflict，或候選不是完整列、不是 2–4 字、不是 one-syllable mismatch，就不自動選。
+
+此 fallback 保留 candidate 的 `compatibility='conflict'`，不假裝成 phonetic-compatible；因此 downstream confidence 仍是較保守的 row/conflict 路徑，人工審核語意不會被抬高。Validation 新增匿名指標：符合 one-syllable fallback 條件的樣本數、實際採用件數。
+
+synthetic regression 已覆蓋：唯一 one-syllable 成功、非 exact 拒絕、5 字以上拒絕、存在第二個 short conflict 拒絕、compatible 優先、anchored unknown 優先、token-count conflict 不得誤採。版本 metadata 已更新為 `2026.10.11.17`。
+
+`.17` 尚未在使用者 Windows 本機執行 `npm.cmd run verify:ocr`、Docker frontend rebuild 或 32 張 Validation，不能宣稱達到 13/13。GitHub Actions 仍 workflow_dispatch only，未執行。
