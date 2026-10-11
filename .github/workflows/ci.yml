@@ -57,6 +57,9 @@ jobs:
       - name: Permit OCR selected-image consistency (synthetic/source guard)
         run: npm run test:permit-image
 
+      - name: Anonymous Taiwan permit OCR failure classification (synthetic)
+        run: npm run test:permit-buckets
+
       - name: Build
         run: npm run build
 

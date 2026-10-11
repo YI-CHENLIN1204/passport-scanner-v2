@@ -180,3 +180,7 @@
 - 修改：僅在 deskew 品質分數不低於舊候選時替換 `best`，所有情況在候選選定後才從 `best.image` / `best.rotation` 給覆核圖與角度；維持既有矯正、重辨識、MRZ/姓名候選及人工覆核政策。版本預計 `2026.10.11.6`。
 - 自動防退步：`frontend/scripts/test-permit-image-consistency.mjs` 監控 production function 的選中來源與資料流（結構性測試，非實際影像準確率測試）；新增 `npm run test:permit-image` 到 CI。
 - 下一步：CI 成功後核對選中影像與結果一致；繼續做真實 OCR 工作圖 / ROI 歸因，整批完成後才一次 Validation，勿再逐小修請使用者重跑 32 張。固定 Test 不動、私人資料不上 GitHub。
+
+## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
+
+在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。

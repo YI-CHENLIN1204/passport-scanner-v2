@@ -28,6 +28,7 @@ import {
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
+import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -441,6 +442,7 @@ async function currentFieldsForSample(
         expiryDate: result.expiryDate || null,
       } as Record<string, string | null>,
       passportNameDiagnostics: [],
+      permitRawRows: result.rawRows,
       totalMs: result.totalMs,
       orientationAttempts:
         result.orientationAttempts ?? 1,
@@ -968,6 +970,7 @@ interface ValidationProfileSample {
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   passportOfficialShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
   permitScriptEquivalentOnly: boolean
+  permitNameRawFailure: PermitNameRawFailureBucket | null
   fieldExact: Record<string, boolean>
   fetchMs: number
   wallMs: number
@@ -1000,6 +1003,7 @@ interface ValidationProfileDocument {
   passportShadowCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   passportOfficialCounts: Record<'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong', number> | null
   permitScriptEquivalentCount: number | null
+  permitNameRawFailureCounts: Record<PermitNameRawFailureBucket, number> | null
   failedCount: number
 }
 
@@ -1247,6 +1251,14 @@ async function profileValidationOnly() {
           ]),
         ) as Record<string, boolean>
 
+        const permitNameRawFailure = sample.documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+          ? classifyPermitNameRawFailure(
+              prediction.fields.nameZh,
+              truth.nameZh,
+              'permitRawRows' in prediction ? (prediction.permitRawRows ?? []) : [],
+            )
+          : null
+
         const passportNameFailure =
           sample.documentType === 'PASSPORT'
             ? categorizeValidationPassportNameFailure(
@@ -1326,6 +1338,7 @@ async function profileValidationOnly() {
           passportShadow,
           passportOfficialShadow,
           permitScriptEquivalentOnly,
+          permitNameRawFailure,
           fieldExact,
           fullExact:
             fields.length > 0 &&
@@ -1413,6 +1426,14 @@ async function profileValidationOnly() {
                   regressed: rows.filter(row => row.passportOfficialShadow === 'regressed').length,
                   'unchanged-correct': rows.filter(row => row.passportOfficialShadow === 'unchanged-correct').length,
                   'unchanged-wrong': rows.filter(row => row.passportOfficialShadow === 'unchanged-wrong').length,
+                }
+              : null,
+          permitNameRawFailureCounts:
+            documentType === 'TAIWAN_COMPATRIOT_PERMIT'
+              ? {
+                  'exact-raw-row': rows.filter(row => row.permitNameRawFailure === 'exact-raw-row').length,
+                  'embedded-in-raw-row': rows.filter(row => row.permitNameRawFailure === 'embedded-in-raw-row').length,
+                  'not-in-selected-raw-rows': rows.filter(row => row.permitNameRawFailure === 'not-in-selected-raw-rows').length,
                 }
               : null,
           permitScriptEquivalentCount:
@@ -2160,6 +2181,16 @@ onMounted(load)
               {{ result.permitScriptEquivalentCount }} 張。
               僅供分析；簡繁對照可能合併不同字義，
               不計入正確率，也不會自動修改姓名。
+            </p>
+            <p
+              v-if="result.permitNameRawFailureCounts"
+              class="validation-legacy-note"
+            >
+              台胞證中文姓名錯誤的匿名來源分類（僅選中 OCR 的文字列）：
+              完整原始列吻合 {{ result.permitNameRawFailureCounts['exact-raw-row'] }} 張；
+              嵌於較長文字列 {{ result.permitNameRawFailureCounts['embedded-in-raw-row'] }} 張；
+              選中 OCR 文字列未見完整姓名 {{ result.permitNameRawFailureCounts['not-in-selected-raw-rows'] }} 張。
+              這些不是 Detection／Recognition 的確定根因，也不記錄姓名或逐張資料。
             </p>
             <p
               v-if="result.passportNameFailures"

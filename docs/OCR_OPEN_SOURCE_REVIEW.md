@@ -282,3 +282,7 @@ CI 可證明 loader 檔案被正確託管，但不能代替瀏覽器 Worker 完�
 檢查 `recognizeTaiwanCompatriotPermitWithPaddle` 發現：微傾角 deskew 可以執行第二次 OCR，當品質未達原 `best` 時應保留舊 OCR prediction；但此前 `reviewImage`、`reviewRotation` 已更新為新圖，即使新 OCR 被拒絕也會提供不同影像供覆核／擷取，而欄位仍來自舊圖。修正為**品質 gate 選出 `best` 後才設定 review image / rotation**，避免將被拒絕的影像標作被選中之 OCR 的工作來源。
 
 這是來源一致性修復，不包含影像對照實測；不代表改善台胞證姓名 6/13 或性別 10/13。結構性 CI guard 只保護程式路徑，不能保證端到端辨識率。後續需蒐集合法且可分組的真正 OCR 工作輸入，方可評估 ROI 與 recognition 失敗根因。
+
+## 2026-10-11 — 台胞證匿名 OCR 原始文字列分類（候選，未實測）
+
+在 Validation 內針對台胞證姓名錯誤，比對選中 OCR 的 rawRows 後只保存三種分類計數：`exact-raw-row`、`embedded-in-raw-row`、`not-in-selected-raw-rows`。僅瞬間在本機記憶體處理姓名，報告不含真值、OCR 文字、ID、逐張結果與影像。合成測試檢查分類及匿名輸出並接入 CI。這只能指出最終 OCR 文字列是否包含姓名，**不能確定 Detection/Recognition/ROI 的根因**，也無法補回缺失的 OCR 工作輸入圖。尚無本機 Validation 或精準率提升證據。保留固定 Test、人工覆核與影像政策；下一步做真實工作圖來源／ROI 分析並整批驗收。

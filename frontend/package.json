@@ -11,7 +11,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
-    "test:permit-image": "node scripts/test-permit-image-consistency.mjs"
+    "test:permit-image": "node scripts/test-permit-image-consistency.mjs",
+    "test:permit-buckets": "node scripts/test-permit-validation-buckets.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
