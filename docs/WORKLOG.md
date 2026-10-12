@@ -711,3 +711,9 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 ## 2026-10-12 — 分開記錄 Mobile / Server Worker 耗時（待本機驗證）
 
 單張模型 A/B 現在額外顯示 Mobile 與 Server 各自包含 Worker 初始化、推論及 dispose 的總時間；保留原本兩模型合計 P50/P90。該數據可判斷 57 秒主要來自哪個模型，但**不等同純 Recognition latency**。已新增 regression guard；正式 pipeline `.29` 不變、只使用 Validation 的單張護照、不新增 OCR inference。本批程式尚需 Windows `verify:ocr`、Docker frontend build 與手動單張 A/B 確認。禁止 GitHub Actions 或任何證件資料上傳。
+
+## 2026-10-12 — Server-rec 單張 A/B 實測與歷史 baseline 覆蓋稽核
+
+使用者完成一張 Validation 護照的雙 Worker 對照：Mobile 正確 1/1、Server 正確 1/1、救回 0、退步 0、錯誤 0。Mobile 含初始化與釋放 8,589ms，Server 含初始化與釋放 47,208ms，兩模型合計 55,796ms；這不是純辨識延遲。UI 顯示樣本 1/19「一般／無歷史錯誤證據」，因此目前的歷史 baseline 優先排序沒有證明能選中最新版 .29 的錯誤護照；不得聲稱 Server 準確率提升。
+
+為避免再次昂貴盲測，已在 OCR 品質頁新增可手動執行的「先檢查匿名歷史基準覆蓋率（不執行 OCR）」：只檢查 Validation 護照人工答案與已存 evaluationBaselineJson，匿名統計有 baseline、歷史姓名錯誤、歷史姓名正確、無 baseline、無人工姓名答案的件數，不載入圖片、不跑任何 OCR、不存個資；並更新回歸守衛。需在本機 verify/build 後先執行此稽核，據結果決定下一步，不要直接重跑 19 張或盲測 Server。Production pipeline `.29` 不變，GitHub Actions 禁止執行。
