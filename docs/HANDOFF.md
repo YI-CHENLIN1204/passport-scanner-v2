@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — 模型 A/B 準備重大更新：官方 server-rec ONNX 已找到
+
+已在 PaddlePaddle 官方 Hugging Face 頁面找到 PP-OCRv5_server_rec_onnx，含 inference.onnx (約 84.5MB) 與 inference.yml，Apache-2.0。來源：https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx/tree/main。原先所稱「需要自行轉 ONNX」已不再成立。新增本地打包工具 frontend/scripts/package-ocr-server-model.mjs、synthetic regression test 與 verify:ocr 入口，能將本機下載的官方檔案串流封裝為 SDK 所需 uncompressed tar，並透過既有 inspector 驗證結構與 model_name。詳見 docs/OCR_MODEL_AB_PLAN.md。
+
+正式 PP-OCRv5 mobile OCR pipeline 仍為 2026.10.11.29，已實測護照 14/19、台胞證 13/13。尚未真的下載、實際封裝或瀏覽器初始化 server-rec ONNX，也未做模型 A/B。接下來應完成候選模型相容性及隔離測試，再要求一次有意義的本機驗證。不得上傳模型二進位、任何真實證件影像或個資，不得執行 GitHub Actions。
+
+
 ## 2026-10-12 — .29 驗證持平；已啟動模型級 A/B 前置研究
 
 使用者完成 `2026.10.11.29` 固定 32 張 auto Validation：護照中文姓名及整張全欄 **14/19（74%）**，台胞證全欄及必要欄位 **13/13（100%）**，完成 32 張、失敗 0。與 `.28` 持平，`.29` Canvas 高品質插值**沒有可見淨改善**，不得再以調 interpolation 設定作下一輪推進。
