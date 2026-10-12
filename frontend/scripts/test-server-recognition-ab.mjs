@@ -36,17 +36,21 @@ assert.match(fn,/!currentPageWrongIndexReady\.value/)
 assert.match(fn,/serverComparisonCursor\.value = \(serverComparisonCursor\.value \+ 1\) % passportSamples\.length/)
 assert.match(fn,/if \(compared > 0 \|\| errors > 0\)/)
 assert.match(fn,/createServerRecognitionValidationInstance\(/)
-assert.match(fn,/createValidationPaddleInstance\(true\)/)
-assert.match(fn,/recognizePassportWithPaddle\(file, undefined, mobileInstance\)/)
-assert.match(fn,/await mobileInstance\.dispose\(\)/)
+assert.doesNotMatch(fn,/createValidationPaddleInstance\(/)
+assert.doesNotMatch(fn,/mobileInstance/)
+assert.match(fn,/正式 \.29 當頁判錯/)
+assert.match(fn,/候選救回/)
+
+
+
 assert.match(fn,/recognizePassportWithPaddle\(file, undefined, instance\)/)
-assert.match(fn,/if \(mobileInstance\) await mobileInstance\.dispose\(\)/)
+
 assert.doesNotMatch(fn,/recognizePassportWithPaddle\(file\)/)
-assert.match(fn,/單張：執行 Mobile OCR/)
+
 assert.match(fn,/單張：執行 Server OCR/)
-assert.match(fn, /mobileElapsed\.push\(performance\.now\(\) - mobileStarted\)/)
+
 assert.match(fn, /serverElapsed\.push\(performance\.now\(\) - serverStarted\)/)
-assert.match(fn, /Mobile 含初始化\/釋放/)
+
 assert.match(fn, /Server 含初始化\/釋放/)
 assert.match(fn,/recognizePassportWithPaddle\(file, undefined, instance\)/)
 assert.match(fn,/evalFieldEquals\('nameZh'/)
