@@ -10,6 +10,8 @@ export interface ServerRecognitionSmokeResult {
   modelName: string
   detections: number
   elapsedMs: number
+  backend: 'auto' | 'wasm'
+  webgpuFallback: boolean
 }
 
 const base = '/paddle-models/experiments/'
@@ -61,28 +63,48 @@ export async function smokeTestServerRecognition(): Promise<ServerRecognitionSmo
   if (!modelResponse.ok) throw new Error('本機 Server Recognition 模型檔案不存在')
 
   const started = performance.now()
-  const instance = await PaddleOCR.create({
+  const sample = await syntheticImage()
+  const create = (backend: 'auto' | 'wasm') => PaddleOCR.create({
     lang: 'chinese_cht',
     ocrVersion: 'PP-OCRv5',
     textDetectionModelName: 'PP-OCRv5_mobile_det',
     textDetectionModelAsset: { url: mobileDetection },
     textRecognitionModelName: manifest.modelName,
     textRecognitionModelAsset: { url: modelUrl },
-    ortOptions: { backend: 'auto' },
+    ortOptions: backend === 'wasm'
+      ? { backend: 'wasm', numThreads: 1, wasmPaths: '/ort-wasm/' }
+      : { backend: 'auto' },
   })
-  try {
-    const prediction = await instance.predict(await syntheticImage())
-    const result = Array.isArray(prediction) ? prediction[0] : prediction
-    const obj = result as unknown as Record<string, unknown> | null
-    const texts = obj?.rec_texts ?? obj?.texts
-    return {
-      initialized: true,
-      input: 'synthetic-only',
-      modelName: manifest.modelName,
-      detections: Array.isArray(texts) ? texts.length : 0,
-      elapsedMs: Math.round(performance.now() - started),
+  const execute = async (backend: 'auto' | 'wasm', fallback: boolean) => {
+    const instance = await create(backend)
+    try {
+      const prediction = await instance.predict(sample)
+      const result = Array.isArray(prediction) ? prediction[0] : prediction
+      const obj = result as unknown as Record<string, unknown> | null
+      const texts = obj?.rec_texts ?? obj?.texts
+      return {
+        initialized: true as const,
+        input: 'synthetic-only' as const,
+        modelName: manifest.modelName,
+        detections: Array.isArray(texts) ? texts.length : 0,
+        elapsedMs: Math.round(performance.now() - started),
+        backend,
+        webgpuFallback: fallback,
+      }
+    } finally {
+      await instance.dispose()
     }
-  } finally {
-    await instance.dispose()
+  }
+
+  try {
+    return await execute('auto', false)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    // Retry only the recognized WebGPU MaxPool limitation; preserve other
+    // errors rather than masking invalid model assets or SDK failures.
+    if (!/ceil_mode[\\s\\S]*WebGPU MaxPool|WebGPU MaxPool[\\s\\S]*ceil_mode/i.test(message)) {
+      throw error
+    }
+    return execute('wasm', true)
   }
 }
