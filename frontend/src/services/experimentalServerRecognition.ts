@@ -48,6 +48,26 @@ async function syntheticImage(): Promise<File> {
 }
 
 /**
+ * Separate candidate instance for validation-only A/B. Caller owns disposal.
+ * Uses the same mobile detector as production but server recognition on WASM.
+ */
+export async function createServerRecognitionValidationInstance() {
+  const response = await fetch(base + 'server-rec-manifest.json', { cache: 'no-store' })
+  if (!response.ok) throw new Error('尚未準備 Server Recognition 本機模型資產')
+  const manifest: unknown = await response.json()
+  if (!isManifest(manifest)) throw new Error('Server Recognition manifest 不符合預期')
+  return PaddleOCR.create({
+    lang: 'chinese_cht',
+    ocrVersion: 'PP-OCRv5',
+    textDetectionModelName: 'PP-OCRv5_mobile_det',
+    textDetectionModelAsset: { url: mobileDetection },
+    textRecognitionModelName: manifest.modelName,
+    textRecognitionModelAsset: { url: base + manifest.archive },
+    ortOptions: { backend: 'wasm', numThreads: 1, wasmPaths: '/ort-wasm/' },
+  })
+}
+
+/**
  * Opt-in, read-only browser runtime smoke test.
  * Only a canvas-generated synthetic image is passed to the experiment.
  * Does not call production getPaddle, use customer images, or write data.
