@@ -19,17 +19,20 @@ assert.ok(end>start)
 const fn=page.slice(start,end)
 assert.match(fn,/getTrainingEvaluationSamples\('validation'\)/)
 assert.match(fn,/item\.documentType === 'PASSPORT'/)
-assert.match(fn,/const samples = \[chosen\.sample\]/)
-assert.match(fn,/evaluationBaselineFieldsForSample\(sample\)/)
+assert.match(fn,/const samples = \[chosen\]/)
+
 assert.match(page,/currentPageWrongPassportSamples = ref<Set<string>>/)
+assert.match(page,/currentPageWrongIndexReady = ref\(false\)/)
 assert.match(page,/currentProfileWrong\.add\(sample\.trainingSampleId\)/)
 assert.match(page,/currentPageWrongPassportSamples\.value = stopValidationRequested\.value/)
-assert.match(fn,/right\.priority - left\.priority/)
+
 assert.match(fn,/本頁最新正式 Validation 姓名錯誤/)
+assert.match(fn,/currentPageWrongPassportSamples\.value\.has\(item\.trainingSampleId\)/)
+assert.match(fn,/!currentPageWrongIndexReady\.value/)
 
 assert.match(fn,/right\.priority - left\.priority/)
-assert.match(fn,/samplePriority/)
-assert.match(fn,/passportSamples\[cursor\]!/)
+
+
 assert.match(fn,/serverComparisonCursor\.value = \(serverComparisonCursor\.value \+ 1\) % passportSamples\.length/)
 assert.match(fn,/if \(compared > 0 \|\| errors > 0\)/)
 assert.match(fn,/createServerRecognitionValidationInstance\(/)
