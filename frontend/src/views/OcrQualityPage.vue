@@ -34,7 +34,72 @@ import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../ser
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
-import { smokeTestServerRecognition } from '../services/experimentalServerRecognition'
+import { smokeTestServerRecognition, createServerRecognitionValidationInstance } from '../services/experimentalServerRecognition'
+
+const serverComparisonRunning = ref(false)
+const serverComparisonStop = ref(false)
+const serverComparisonProgress = ref('')
+const serverComparisonError = ref('')
+const serverComparisonSummary = ref('')
+async function runServerRecognitionComparison() {
+  if (serverComparisonRunning.value || profilingValidation.value || retesting.value) return
+  serverComparisonRunning.value = true
+  serverComparisonStop.value = false
+  serverComparisonError.value = ''
+  serverComparisonSummary.value = ''
+  let instance: ValidationPaddleInstance | undefined
+  let compared = 0
+  let mobileCorrect = 0
+  let serverCorrect = 0
+  let rescued = 0
+  let regressed = 0
+  let errors = 0
+  const elapsed: number[] = []
+  try {
+    // Only validation cohort. Never touch the held-out fixed Test cohort.
+    const samples = (await getTrainingEvaluationSamples('validation'))
+      .filter(item => item.documentType === 'PASSPORT')
+    if (!samples.length) throw new Error('Validation 沒有護照樣本')
+    serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
+    instance = await createServerRecognitionValidationInstance()
+    for (const [index, sample] of samples.entries()) {
+      if (serverComparisonStop.value) break
+      serverComparisonProgress.value = `護照 Validation ${index + 1}/${samples.length}`
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      try {
+        const file = await getTrainingSampleImageFile(sample.trainingSampleId)
+        const truth = groundTruthForSample(sample).nameZh
+        const before = performance.now()
+        // Same orientation, MRZ, parser and selector via the production function;
+        // only the injected recognition model differs.
+        const mobile = await recognizePassportWithPaddle(file)
+        const server = await recognizePassportWithPaddle(file, undefined, instance)
+        elapsed.push(performance.now() - before)
+        const mobileOk = evalFieldEquals('nameZh', mobile.chineseName, truth)
+        const serverOk = evalFieldEquals('nameZh', server.chineseName, truth)
+        compared++
+        if (mobileOk) mobileCorrect++
+        if (serverOk) serverCorrect++
+        if (!mobileOk && serverOk) rescued++
+        if (mobileOk && !serverOk) regressed++
+      } catch {
+        // Aggregate error counts only, never names, images, identifiers or raw OCR.
+        errors++
+      }
+    }
+    const sorted = [...elapsed].sort((a, b) => a - b)
+    const percentile = (fraction: number) =>
+      sorted.length ? Math.round(sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]) : 0
+    serverComparisonSummary.value =
+      `比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
+  } catch (error) {
+    serverComparisonError.value = error instanceof Error ? error.message : 'A/B 比較失敗'
+  } finally {
+    if (instance) await instance.dispose()
+    serverComparisonRunning.value = false
+    serverComparisonProgress.value = ''
+  }
+}
 
 const serverModelSmokeRunning = ref(false)
 const serverModelSmokeError = ref('')
@@ -2316,6 +2381,28 @@ onMounted(load)
           <p v-if="serverModelSmokeError" class="validation-legacy-note">
             啟動失敗：{{ serverModelSmokeError }}
           </p>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">ISOLATED MODEL A/B</p>
+          <h2>護照 Validation：Mobile / Server Recognition 對照</h2>
+          <p>只使用 Validation 護照；沿用相同的護照解析與姓名選擇規則，Server 模型採獨立 WASM 實例。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <small>本次模型級 A/B 可能比正式掃描慢，且需額外載入約 85 MB 模型。按鈕需人工啟動。</small>
+        </div>
+        <div class="retest-action">
+          <button type="button" class="secondary-action"
+            :disabled="serverComparisonRunning || profilingValidation || retesting"
+            @click="runServerRecognitionComparison">
+            {{ serverComparisonRunning ? '候選模型比較中…' : '執行護照 Validation 模型 A/B' }}
+          </button>
+          <button v-if="serverComparisonRunning" type="button"
+            class="secondary-action" :disabled="serverComparisonStop"
+            @click="serverComparisonStop = true">完成目前樣本後停止</button>
+          <p v-if="serverComparisonProgress" class="validation-legacy-note">{{ serverComparisonProgress }}</p>
+          <p v-if="serverComparisonSummary" class="validation-legacy-note">{{ serverComparisonSummary }}</p>
+          <p v-if="serverComparisonError" class="validation-legacy-note">比較失敗：{{ serverComparisonError }}</p>
         </div>
       </section>
 
