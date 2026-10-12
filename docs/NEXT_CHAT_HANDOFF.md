@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — Same-ROI A/B 第二次 Windows 真實觀測：Server 0 rescue，Recognition 7.9x 成本
+
+- 使用者 Windows OCR 品質頁截圖：最新 same-ROI probe 在 Validation 中掃描 12 張，Mobile broad VIZ ROI 已有 exact 中文姓名候選 11 張，第一張 Mobile miss 觸發 Server 比較（不是同頁完整 .29 error index 的已確認錯誤樣本）。缺人工姓名答案 0。
+- 該 ROI Mobile exact 0、Server exact 0、Recognition 候選救回 0；兩者 detected boxes 29、recognized 29。Mobile init 1036ms，ROI wall 3162ms（det 863ms、rec 2269ms、SDK total 3136ms），dispose 6ms。Server init 1025ms，ROI wall 18933ms（det 907ms、rec 17989ms、SDK total 18905ms），dispose 10ms。
+- 推論：Recognition Server/Mobile 17989/2269 ≈ 7.93x，Detection 接近，初始化不是主要耗時瓶頸。這一張沒有證實 Server 品質收益，但不能外推五張 .29 最終錯誤樣本全部沒有收益；11/12 ROI mobile exact 也不能視為正式姓名正確率或新 Validation。
+- 決策：正式 production `2026.10.11.29` 維持 PP-OCRv5 Mobile，台胞證原路徑不動。暫停無選樣根據、無預期收益的完整 Server A/B 或盲目 ROI 掃描，不再要求重跑 32 張 Validation。若未來評估 Server，需以確定的 .29 錯誤索引或等效完整錯誤歸因為前提，並維持相同輸入、選擇條件及端到端淨改善門檻。
+- 下一個有收益的方向：先分析四張缺少完整正確候選的實際影像失敗模式，以及一張已有完整候選但被 one-syllable mismatch 阻擋的 selector 證據；不放寬拼音、不盲加裁切。優先設計匿名、可驗證的判斷與有意義的替代模型 gate；不要因多出版本號或額外測試自稱提高準確率。
+- 這輪僅記錄使用者實際觀測並更新文件；沒有新程式碼、npm verify、fixed Test 或正式 Validation 執行。禁止 GitHub Actions／個資上傳。
+
 ## 2026-10-12 — 相同 broad VIZ ROI Recognition A/B 已建置（待 Windows verify / runtime）
 
 已確認目前使用的 `@paddleocr/paddleocr-js 0.4.2` 公開 browser API 沒有獨立 recognition-only 入口：公開 `PaddleOCR.predict()` 會先跑 TextDetection，再把 detected boxes 裁切後交給 TextRecognition；package exports 也沒有公開可直接建立 rec-only model 的 runtime。若為了這次 A/B 強行繞過，必須 fork / vendor SDK internal preprocessing，風險與維護成本過高，暫不採用。
