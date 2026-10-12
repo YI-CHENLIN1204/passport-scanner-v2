@@ -1,4 +1,10 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
+import {
+  createPassportBroadVizProbeImage,
+  createValidationPaddleInstance,
+  extractPassportChineseNameCandidatesForProbe,
+  type ValidationPaddleInstance,
+} from './paddleOcr'
 
 interface ServerManifest {
   modelName: string
@@ -66,6 +72,66 @@ export async function createServerRecognitionValidationInstance() {
     worker: true,
     ortOptions: { backend: 'wasm', numThreads: 1, wasmPaths: '/ort-wasm/' },
   })
+}
+
+export function createMobileRecognitionValidationInstance() {
+  return createValidationPaddleInstance(true)
+}
+
+export async function createPassportBroadVizProbeInput(
+  image: File,
+) {
+  return createPassportBroadVizProbeImage(image)
+}
+
+export interface PassportBroadVizRecognitionProbeResult {
+  candidateTexts: string[]
+  detectedBoxes: number
+  recognizedCount: number
+  detMs: number
+  recMs: number
+  pipelineMs: number
+  wallMs: number
+}
+
+function finiteMetric(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round(value)
+    : 0
+}
+
+export async function predictPassportBroadVizProbe(
+  instance: ValidationPaddleInstance,
+  roi: Blob,
+): Promise<PassportBroadVizRecognitionProbeResult> {
+  const started = performance.now()
+  const prediction = await instance.predict(roi)
+  const wallMs = Math.round(performance.now() - started)
+  const first = Array.isArray(prediction)
+    ? prediction[0]
+    : undefined
+  const metrics = first && typeof first === 'object' && 'metrics' in first
+    ? (first as {
+        metrics?: {
+          detMs?: unknown
+          recMs?: unknown
+          totalMs?: unknown
+          detectedBoxes?: unknown
+          recognizedCount?: unknown
+        }
+      }).metrics
+    : undefined
+
+  return {
+    candidateTexts:
+      extractPassportChineseNameCandidatesForProbe(prediction),
+    detectedBoxes: finiteMetric(metrics?.detectedBoxes),
+    recognizedCount: finiteMetric(metrics?.recognizedCount),
+    detMs: finiteMetric(metrics?.detMs),
+    recMs: finiteMetric(metrics?.recMs),
+    pipelineMs: finiteMetric(metrics?.totalMs),
+    wallMs,
+  }
 }
 
 /**

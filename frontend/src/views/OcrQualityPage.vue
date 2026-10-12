@@ -34,7 +34,201 @@ import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../ser
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
-import { smokeTestServerRecognition, createServerRecognitionValidationInstance } from '../services/experimentalServerRecognition'
+import {
+  smokeTestServerRecognition,
+  createServerRecognitionValidationInstance,
+  createMobileRecognitionValidationInstance,
+  createPassportBroadVizProbeInput,
+  predictPassportBroadVizProbe,
+  type PassportBroadVizRecognitionProbeResult,
+} from '../services/experimentalServerRecognition'
+
+
+const recognitionProbeCursor = ref(0)
+const recognitionProbeRunning = ref(false)
+const recognitionProbeProgress = ref('')
+const recognitionProbeSummary = ref('')
+const recognitionProbeError = ref('')
+
+async function runRecognitionRoiProbe() {
+  if (
+    recognitionProbeRunning.value ||
+    serverComparisonRunning.value ||
+    profilingValidation.value ||
+    retesting.value
+  ) return
+
+  recognitionProbeRunning.value = true
+  recognitionProbeProgress.value = ''
+  recognitionProbeSummary.value = ''
+  recognitionProbeError.value = ''
+
+  let mobileInstance: ValidationPaddleInstance | undefined
+  let serverInstance: ValidationPaddleInstance | undefined
+  let mobileInitMs = 0
+  let mobileDisposeMs = 0
+  let serverInitMs = 0
+  let serverDisposeMs = 0
+
+  try {
+    const passportSamples = (
+      await getTrainingEvaluationSamples('validation')
+    ).filter(sample => sample.documentType === 'PASSPORT')
+
+    if (!passportSamples.length) {
+      throw new Error('Validation 沒有護照樣本')
+    }
+
+    const maxMobileScan = 5
+    const startCursor =
+      recognitionProbeCursor.value % passportSamples.length
+    const scanLimit = Math.min(
+      maxMobileScan,
+      passportSamples.length,
+    )
+    let scanned = 0
+    let mobileExactSkipped = 0
+    let missingTruth = 0
+    let selectedIndex = -1
+    let selectedTruth: string | null = null
+    let selectedRoi: Blob | null = null
+    let selectedMobile:
+      | PassportBroadVizRecognitionProbeResult
+      | null = null
+
+    recognitionProbeProgress.value =
+      '正在初始化 Mobile WASM Worker（只用 broad VIZ ROI）…'
+    const mobileInitStarted = performance.now()
+    mobileInstance =
+      await createMobileRecognitionValidationInstance()
+    mobileInitMs =
+      Math.round(performance.now() - mobileInitStarted)
+
+    for (
+      let offset = 0;
+      offset < scanLimit;
+      offset += 1
+    ) {
+      const index =
+        (startCursor + offset) % passportSamples.length
+      const sample = passportSamples[index]!
+      const truth = groundTruthForSample(sample).nameZh
+      scanned += 1
+
+      if (!truth) {
+        missingTruth += 1
+        continue
+      }
+
+      recognitionProbeProgress.value =
+        `Mobile ROI 篩選 ${scanned}/${scanLimit}；只找缺少 exact 姓名候選的樣本…`
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve()),
+      )
+
+      const file =
+        await getTrainingSampleImageFile(
+          sample.trainingSampleId,
+        )
+      const roi =
+        await createPassportBroadVizProbeInput(file)
+      const mobile =
+        await predictPassportBroadVizProbe(
+          mobileInstance,
+          roi,
+        )
+      const mobileExact =
+        mobile.candidateTexts.some(candidate =>
+          evalFieldEquals(
+            'nameZh',
+            candidate,
+            truth,
+          ),
+        )
+
+      if (mobileExact) {
+        mobileExactSkipped += 1
+        continue
+      }
+
+      selectedIndex = index
+      selectedTruth = truth
+      selectedRoi = roi
+      selectedMobile = mobile
+      break
+    }
+
+    recognitionProbeProgress.value =
+      '正在釋放 Mobile Worker…'
+    const mobileDisposeStarted = performance.now()
+    await mobileInstance.dispose()
+    mobileDisposeMs =
+      Math.round(performance.now() - mobileDisposeStarted)
+    mobileInstance = undefined
+
+    if (
+      selectedIndex < 0 ||
+      !selectedTruth ||
+      !selectedRoi ||
+      !selectedMobile
+    ) {
+      recognitionProbeCursor.value =
+        (startCursor + Math.max(1, scanned)) %
+        passportSamples.length
+      recognitionProbeSummary.value =
+        `同 ROI probe：Mobile 掃描 ${scanned} 張；已有 exact 姓名候選 ${mobileExactSkipped} 張；缺人工答案 ${missingTruth} 張；本輪沒有找到適合測 Server 的 Mobile miss，因此 Server 完全未啟動。Mobile 初始化 ${mobileInitMs}ms、釋放 ${mobileDisposeMs}ms。這不是完整 .29 準確率測試。`
+      return
+    }
+
+    recognitionProbeProgress.value =
+      '找到 Mobile broad VIZ exact miss；正在初始化 Server WASM Worker…'
+    const serverInitStarted = performance.now()
+    serverInstance =
+      await createServerRecognitionValidationInstance()
+    serverInitMs =
+      Math.round(performance.now() - serverInitStarted)
+
+    recognitionProbeProgress.value =
+      'Server 正在辨識同一張 broad VIZ ROI…'
+    const server =
+      await predictPassportBroadVizProbe(
+        serverInstance,
+        selectedRoi,
+      )
+    const serverExact =
+      server.candidateTexts.some(candidate =>
+        evalFieldEquals(
+          'nameZh',
+          candidate,
+          selectedTruth,
+        ),
+      )
+
+    recognitionProbeProgress.value =
+      '正在釋放 Server Worker…'
+    const serverDisposeStarted = performance.now()
+    await serverInstance.dispose()
+    serverDisposeMs =
+      Math.round(performance.now() - serverDisposeStarted)
+    serverInstance = undefined
+
+    recognitionProbeCursor.value =
+      (selectedIndex + 1) % passportSamples.length
+
+    recognitionProbeSummary.value =
+      `相同 broad VIZ ROI A/B：Mobile 篩選掃描 ${scanned} 張（其中 exact 已存在 ${mobileExactSkipped} 張）；選中的 Mobile miss：Mobile exact 0、Server exact ${serverExact ? 1 : 0}、Recognition 候選救回 ${serverExact ? 1 : 0}。Mobile：init ${mobileInitMs}ms、ROI wall ${selectedMobile.wallMs}ms（det ${selectedMobile.detMs}ms / rec ${selectedMobile.recMs}ms / SDK total ${selectedMobile.pipelineMs}ms）、dispose ${mobileDisposeMs}ms、boxes ${selectedMobile.detectedBoxes}、recognized ${selectedMobile.recognizedCount}。Server：init ${serverInitMs}ms、ROI wall ${server.wallMs}ms（det ${server.detMs}ms / rec ${server.recMs}ms / SDK total ${server.pipelineMs}ms）、dispose ${serverDisposeMs}ms、boxes ${server.detectedBoxes}、recognized ${server.recognizedCount}。兩模型使用同一個記憶體 ROI 與同一 PP-OCRv5 mobile detector；此結果只回答 Recognition 候選品質，不等於完整 .29 最終姓名或整張護照準確率。`
+  } catch (error) {
+    recognitionProbeError.value =
+      error instanceof Error
+        ? error.message
+        : '同 ROI Recognition A/B 失敗'
+  } finally {
+    if (mobileInstance) await mobileInstance.dispose()
+    if (serverInstance) await serverInstance.dispose()
+    recognitionProbeRunning.value = false
+    recognitionProbeProgress.value = ''
+  }
+}
 
 const passportBaselineAudit = ref('')
 const passportBaselineAuditError = ref('')
@@ -2444,6 +2638,54 @@ onMounted(load)
           </p>
           <p v-if="serverModelSmokeError" class="validation-legacy-note">
             啟動失敗：{{ serverModelSmokeError }}
+          </p>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">RECOGNITION ROI A/B</p>
+          <h2>護照 Validation：相同 broad VIZ ROI Recognition 比較</h2>
+          <p>
+            不需要先重跑 32 張正式 Validation。每次最多先用 Mobile WASM Worker
+            掃描 5 張 Validation 護照的既有 broad VIZ ROI，只為找到一張
+            Mobile 沒有 exact 中文姓名候選的樣本；找到後才啟動 Server，
+            而且 Server 直接吃同一個記憶體 ROI。這不新增任何裁切，也不跑
+            整套旋轉、MRZ、Tesseract 或完整護照 parser。
+          </p>
+          <small>
+            兩邊仍使用同一個 PP-OCRv5 mobile detector，只有 Recognition model
+            不同。畫面只顯示匿名 exact / boxes / timing 統計，不顯示姓名、
+            OCR 原文或證件號。此 probe 用來判斷 Server 是否值得繼續做正式
+            end-to-end rescue；不是新的正式準確率數字。
+          </small>
+        </div>
+        <div class="retest-action">
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="
+              recognitionProbeRunning ||
+              serverComparisonRunning ||
+              profilingValidation ||
+              retesting
+            "
+            @click="runRecognitionRoiProbe"
+          >
+            {{
+              recognitionProbeRunning
+                ? '同 ROI Recognition 比較中…'
+                : '執行同 ROI Recognition A/B（最多 Mobile 掃 5 張）'
+            }}
+          </button>
+          <p v-if="recognitionProbeProgress" class="validation-legacy-note">
+            {{ recognitionProbeProgress }}
+          </p>
+          <p v-if="recognitionProbeSummary" class="validation-legacy-note">
+            {{ recognitionProbeSummary }}
+          </p>
+          <p v-if="recognitionProbeError" class="validation-legacy-note">
+            比較失敗：{{ recognitionProbeError }}
           </p>
         </div>
       </section>

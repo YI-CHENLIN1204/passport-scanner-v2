@@ -739,3 +739,13 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 先前本頁正式 `.29` auto Validation 完成 32/32，護照 14/19、台胞證 13/13，建立 5 張護照姓名錯誤的暫存索引；第一張雙模型 A/B Mobile 和 Server 均錯，救回 0。Mobile 含啟動釋放 11,402ms、Server 63,145ms，雙模型 74,547ms。
 
 本批只改研究實驗：由於同頁正式 Validation 已驗證所挑選的護照姓名錯誤，因此不再在昂貴的救援試驗中重複初始化 Mobile Worker；只執行 Server WASM Worker 並與同頁 `.29` 判錯及人工 ground truth 比對。每次仍只跑一張已驗證失敗的 Validation 護照，若 Server 正確則計候選救回。UI 明確標示此為「正式 auto 已判錯 vs Server WASM」的跨 backend 對照，不能等同兩模型在同一 backend 同時重跑的嚴格 A/B。安全索引同頁暫存、刷新消失；模型和文件照片不提交 GitHub。正式 OCR pipeline `.29`、台胞證、固定 Test 完全不變。已更新 synthetic/static regression guard，尚未 Windows verify/build 或實測；Server 耗時瓶頸仍需另行研究。禁止 GitHub Actions。
+
+### 2026-10-12 — 相同 broad VIZ ROI Recognition A/B 已建置（待 Windows verify / runtime）
+
+已確認目前使用的 `@paddleocr/paddleocr-js 0.4.2` 公開 browser API 沒有獨立 recognition-only 入口：公開 `PaddleOCR.predict()` 會先跑 TextDetection，再把 detected boxes 裁切後交給 TextRecognition；package exports 也沒有公開可直接建立 rec-only model 的 runtime。若為了這次 A/B 強行繞過，必須 fork / vendor SDK internal preprocessing，風險與維護成本過高，暫不採用。
+
+main 新增更低成本、read-only 的 **same-ROI recognition probe**：完全重用 production `.29` 既有 broad VIZ crop，不新增 ROI、不改座標、不改 selector。每次最多先用 Mobile WASM Worker 掃 5 張 Validation 護照，只找一張同一 broad VIZ ROI 沒有 exact 中文姓名候選的樣本；找到後才啟動 Server WASM Worker，並把**同一個記憶體 ROI Blob**交給 Server。兩者使用同一 PP-OCRv5 mobile detector，只有 recognition model 不同。
+
+probe 僅顯示匿名 Mobile / Server exact candidate、detected boxes、recognized count，以及 init / detection / recognition / SDK total / wall / dispose 時間；不顯示姓名、OCR 原文、證號，不保存逐張結果，不讀 fixed Test，不寫 benchmark。Mobile 掃描窗口若全都有 exact candidate，Server 完全不初始化。此 probe 不跑完整護照旋轉、MRZ、Tesseract 或 parser，因此**不是新的 .29 end-to-end 準確率**；用途是先確認 Server Recognition 本身是否能在相同姓名輸入上產生 Mobile 缺少的正確中文字候選。
+
+新增 `frontend/scripts/test-server-recognition-roi-probe.mjs` 並接入 `verify:ocr`。提交前已對修改後 source 執行 connector-side 靜態 guard assertions（同 ROI、Validation-only、最多 Mobile 5 張、Server 僅在 Mobile miss 後啟動、無 persistence、stage metrics）並通過；但本環境無法取得 npm/GitHub 網路資源執行完整 `npm.cmd run verify:ocr`，故**尚未宣稱編譯或瀏覽器 runtime 驗證完成**。production pipeline 仍 `2026.10.11.29`，已實測基準仍護照 14/19、台胞證 13/13；GitHub Actions 禁止執行。

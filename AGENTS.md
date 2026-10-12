@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## 2026-10-12 — 最新 A/B 效能方向
+
+same-ROI Recognition probe 已加入：重用 production `.29` broad VIZ crop，Mobile 最多先掃 5 張 Validation 找 exact-candidate miss，Server 只對同一 ROI 跑一次，並拆 init / det / rec / total / dispose。此 probe 不要求先重跑 32 張，不是正式準確率，不改台胞證或 production pipeline。完整 Windows `npm.cmd run verify:ocr` 與瀏覽器 runtime 尚待本機驗證；禁止 GitHub Actions。
+
+
 本文件提供給 Codex、AI coding agent 與協作者。開始修改程式碼前，**必讀 `docs/HANDOFF.md` 頂端最新狀態、`docs/WORKLOG.md` 末尾、`docs/DECISIONS.md`、`docs/OCR_OPEN_SOURCE_REVIEW.md`**，再查最新 main SHA、PR、CI 與實際程式；下方過去的優先序不能凌駕於明確最新交接。
 
 ## 最新單人開發流程（2026-10-11；優先於歷史開發節奏）

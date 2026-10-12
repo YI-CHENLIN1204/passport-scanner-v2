@@ -1555,6 +1555,45 @@ async function createTaiwanVizCrop(image: File) {
   )
 }
 
+export async function createPassportBroadVizProbeImage(
+  image: File,
+) {
+  // Validation-only probe reuses the exact existing .29 broad VIZ crop.
+  return createTaiwanVizCrop(image)
+}
+
+export function extractPassportChineseNameCandidatesForProbe(
+  prediction: unknown,
+) {
+  const result = Array.isArray(prediction)
+    ? prediction[0]
+    : prediction
+  const items = predictionItems(result)
+  const rawTexts = Array.from(
+    new Set(
+      [
+        ...items
+          .map(item =>
+            typeof item.text === 'string'
+              ? item.text.trim()
+              : '',
+          )
+          .filter(Boolean),
+        ...buildTextRows(items),
+      ].filter(Boolean),
+    ),
+  )
+
+  return Array.from(
+    new Set(
+      rawTexts
+        .map(normalizeChineseNameCandidate)
+        .filter(isPlausibleTaiwanChineseName),
+    ),
+  )
+}
+
+
 async function createBottomCrop(
   image: File,
   cropRatio = 0.45,
