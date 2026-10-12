@@ -516,3 +516,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 先前本頁正式 `.29` auto Validation 完成 32/32，護照 14/19、台胞證 13/13，建立 5 張護照姓名錯誤的暫存索引；第一張雙模型 A/B Mobile 和 Server 均錯，救回 0。Mobile 含啟動釋放 11,402ms、Server 63,145ms，雙模型 74,547ms。
 
 本批只改研究實驗：由於同頁正式 Validation 已驗證所挑選的護照姓名錯誤，因此不再在昂貴的救援試驗中重複初始化 Mobile Worker；只執行 Server WASM Worker 並與同頁 `.29` 判錯及人工 ground truth 比對。每次仍只跑一張已驗證失敗的 Validation 護照，若 Server 正確則計候選救回。UI 明確標示此為「正式 auto 已判錯 vs Server WASM」的跨 backend 對照，不能等同兩模型在同一 backend 同時重跑的嚴格 A/B。安全索引同頁暫存、刷新消失；模型和文件照片不提交 GitHub。正式 OCR pipeline `.29`、台胞證、固定 Test 完全不變。已更新 synthetic/static regression guard，尚未 Windows verify/build 或實測；Server 耗時瓶頸仍需另行研究。禁止 GitHub Actions。
+
+
+2026-10-13: v6 Small offline experiment now reports aggregate bounding-box availability, recognition score >=0.75, and upper-ROI evidence for standalone exact candidates, especially within the four verified .29 candidate-miss passports. These checks are exploratory and do not change production OCR or establish end-to-end recovery. Historical 1/4 confirmed candidate rescue remains the latest result. No private data committed; no Actions.

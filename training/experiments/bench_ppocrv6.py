@@ -27,6 +27,8 @@ def evaluate(zip_path,limit,production_index=None):
     anonymous_rows=[]
     overlap={'confirmed_missing_candidates':0,'v6_standalone_rescue':0,'v6_substring_potential':0,'v6_absent':0,'confirmed_selector_blocked':0}
     indexed_seen=set()
+    candidate_evidence={'matched_exact_with_geometry':0,'matched_exact_no_geometry':0,'matched_exact_low_confidence':0,'matched_exact_upper_roi':0,'matched_exact_lower_roi':0}
+    verified_missing_evidence={'standalone_with_geometry':0,'standalone_confident':0,'standalone_upper_roi':0}
     passport_ordinal=0
     STAGE = 'zip-manifest'
     with zipfile.ZipFile(zip_path) as z:
@@ -55,11 +57,31 @@ def evaluate(zip_path,limit,production_index=None):
           result=engine(roi)
           timings.append(round((time.monotonic()-started)*1000))
           texts=[''.join(t.split()) for t in (getattr(result,'txts',None) or [])]
+          boxes=getattr(result,'boxes',None)
+          scores=getattr(result,'scores',None)
+          matched_indices=[i for i,t in enumerate(texts) if t==truth]
+          # Diagnostic only. Geometry/score MAY be absent depending on RapidOCR output.
+          # Do not reject a valid candidate because metadata is missing.
+          evidence=[]
+          for idx in matched_indices:
+            box=boxes[idx] if boxes is not None and idx<len(boxes) else None
+            score=float(scores[idx]) if scores is not None and idx<len(scores) else None
+            has_geometry=box is not None and len(box)>0
+            upper=False
+            if has_geometry:
+              center_y=sum(float(point[1]) for point in box)/len(box)
+              upper=center_y<roi.shape[0]*0.66
+            evidence.append((has_geometry,score is not None and score>=0.75,upper))
           total+=1
           status = 'absent'
           if truth in texts:
             exact+=1
             status='standalone-exact'
+            if any(item[0] for item in evidence): candidate_evidence['matched_exact_with_geometry']+=1
+            else: candidate_evidence['matched_exact_no_geometry']+=1
+            if not any(item[1] for item in evidence):candidate_evidence['matched_exact_low_confidence']+=1
+            if any(item[2] for item in evidence):candidate_evidence['matched_exact_upper_roi']+=1
+            elif any(item[0] for item in evidence):candidate_evidence['matched_exact_lower_roi']+=1
           elif any(truth in text for text in texts):
             substring+=1
             status='substring-only'
@@ -76,7 +98,11 @@ def evaluate(zip_path,limit,production_index=None):
             if key in production_index['missingCandidateSampleIds']:
               indexed_seen.add(key)
               overlap['confirmed_missing_candidates']+=1
-              if status=='standalone-exact': overlap['v6_standalone_rescue']+=1
+              if status=='standalone-exact':
+                overlap['v6_standalone_rescue']+=1
+                if any(item[0] for item in evidence):verified_missing_evidence['standalone_with_geometry']+=1
+                if any(item[1] for item in evidence):verified_missing_evidence['standalone_confident']+=1
+                if any(item[2] for item in evidence):verified_missing_evidence['standalone_upper_roi']+=1
               elif status=='substring-only':overlap['v6_substring_potential']+=1
               else:overlap['v6_absent']+=1
             if key in production_index['selectorBlockedSampleIds']:
@@ -90,6 +116,8 @@ def evaluate(zip_path,limit,production_index=None):
     return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
+      v6_exact_candidate_evidence=candidate_evidence,
+      production_missing_candidate_evidence=verified_missing_evidence if production_index is not None else 'not_provided',
       production_29_overlap=overlap if production_index is not None else 'not_provided',
       init_ms=startup,median_roi_ms=round(statistics.median(timings)) if timings else 0,
       disclaimer='Original OCR in export is historical, NOT .29. Do not infer true rescue from this table. Validation ordering is not a stable sample identity.')
