@@ -1136,3 +1136,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 性別仍優先 MRZ，唯正面標籤與 row semantic 一致、score >=0.90 時可選不同的視覺性別；否則不覆蓋。使用同一組 OCR 結果解析的兩個資訊源**不是統計獨立的雙模型驗證**，需要人工審核。
 - 姓名以強相符的正面標籤與拼音 row 候選（score >=0.88）才覆蓋衝突的 MRZ GBK 名；未有確證仍可對低信心姓名做受限局部 OCR 重試，但不憑任意新文字變更姓名。
 - 這只修改待人工審核 OCR 建議，不能修改正式旅客主檔、舊證件獨立歷史紀錄、fixed Test baseline 或照片保留規則。需先通過 CI，僅用新 Validation 實測後確認是否應採用。
+
+## 2026-10-12 — 保守相鄰漢字框候選恢復（待真實 Validation）
+- 假設：部分護照中文姓名可能已被 PP-OCRv5 Mobile 辨為相鄰獨立漢字框，但正式姓名 selector 僅處理單個文字框；原有同行 raw-row 診斷不會成為 selector 候選。這是新候選產生路徑，不是重試先前失敗的 VIZ 裁切、放寬拼音或更換插值。
+- 在 `chooseTaiwanChineseName()` 新增只限原本 `best` 不存在或低於原門檻的受限兩框拼接 fallback：每框 1–2 個漢字、score >= .82、水平接近且同行、鄰近「姓名」或 MRZ 對應拉丁姓名錨點，整個合併姓名必須使用原本嚴格 `compareChineseNameToMrzRomanization` 得到 `compatible`；多個不同合格合併結果則不使用。原既有成功候選不被覆蓋。
+- 不變更台胞證、身分證或任何背景 OCR 模型；正式版本號維持 `2026.10.11.29` 以避免聲稱已提高準確率。新增 `test-passport-joined-han-name.mjs` 並接入 `verify:ocr` 靜態防回歸。
+- 注意：此假設**尚無證據證實**四張失敗護照有相鄰完整漢字框。沒有新一輪 32 張 Windows 真實 Validation，也未完成本地 npm build / regression，不得把這批視為已驗證改善；先測編譯，再評估是否真實救回且沒有其他欄位退步。禁止 GitHub Actions 與個資提交。

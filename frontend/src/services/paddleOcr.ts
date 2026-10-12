@@ -685,6 +685,56 @@ function chooseTaiwanChineseName(
       return candidates
     })
 
+  // Conservative recovery when Paddle returns a given name as adjacent Han
+  // boxes. No fuzzy romanization or arbitrary row concatenation: both boxes
+  // must be strong, share one tight visual line, and the *entire* name must
+  // match the MRZ syllable-by-syllable. Human review is still required.
+  const joinedHanCandidates = parsedMrz
+    ? geometries.flatMap((left) => geometries.flatMap((right) => {
+        if (left === right ||
+          left.height <= 0 || right.height <= 0 ||
+          (left.score ?? 0) < 0.82 ||
+          (right.score ?? 0) < 0.82 ||
+          !/^[\p{Script=Han}]{1,2}$/u.test(left.normalized) ||
+          !/^[\p{Script=Han}]{1,2}$/u.test(right.normalized)
+        ) return []
+
+        const scale = Math.max(left.height, right.height)
+        const gap = right.minX - left.maxX
+        if (gap < -scale * 0.1 || gap > scale * 1.5 ||
+          Math.abs(left.centerY - right.centerY) > scale * 0.45) return []
+
+        const text = left.normalized + right.normalized
+        if (!isPlausibleTaiwanChineseName(text) ||
+          compareChineseNameToMrzRomanization(
+            text, parsedMrz.surname, parsedMrz.givenNames,
+          ) !== 'compatible') return []
+
+        const minX = left.minX
+        const maxX = right.maxX
+        const centerY = (left.centerY + right.centerY) / 2
+        const anchored = nameLabels.some(label => {
+          const h = Math.max(scale, label.height)
+          return Math.abs(centerY - label.centerY) <= h * 1.6 &&
+            minX >= label.maxX - h &&
+            minX - label.maxX <= h * 18
+        }) || englishNameAnchors.some(english => {
+          const h = Math.max(scale, english.height)
+          return english.centerY >= centerY - h * 0.5 &&
+            english.centerY - centerY <= h * 5 &&
+            Math.abs((minX + maxX) / 2 - english.centerX) <= h * 14
+        })
+        if (!anchored) return []
+
+        return [{
+          text,
+          score: Math.min(left.score ?? 0, right.score ?? 0),
+          romanizationStatus: 'compatible' as const,
+          rank: 2.7,
+        }]
+      }))
+    : []
+
   const eligible = [
     ...directLabelValues,
     ...spatialCandidates,
@@ -750,6 +800,14 @@ function chooseTaiwanChineseName(
   }
 
   if (!best || best.score < 0.65) {
+    // Never overwrite an accepted single-box candidate. Only recover a
+    // unique, MRZ-confirmed joined pair when the normal selector has none.
+    const distinctJoins = new Map(joinedHanCandidates.map(
+      candidate => [candidate.text, candidate],
+    ))
+    if (distinctJoins.size === 1) {
+      return [...distinctJoins.values()][0]!
+    }
     return guardedOfficialNameSuggestion(
       [...directLabelValues, ...spatialCandidates], parsedMrz,
     )

@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const source = readFileSync('src/services/paddleOcr.ts', 'utf8')
+const from = source.indexOf('const joinedHanCandidates = parsedMrz')
+const to = source.indexOf('const eligible = [', from)
+assert.ok(from >= 0 && to > from)
+const joined = source.slice(from, to)
+assert.match(joined, /left\.height <= 0 \|\| right\.height <= 0/)
+assert.match(joined, /\(left\.score \?\? 0\) < 0\.82/)
+assert.match(joined, /\(right\.score \?\? 0\) < 0\.82/)
+assert.match(joined, /gap > scale \* 1\.5/)
+assert.match(joined, /Math\.abs\(left\.centerY - right\.centerY\) > scale \* 0\.45/)
+assert.match(joined, /compareChineseNameToMrzRomanization/)
+assert.match(joined, /!== 'compatible'/)
+assert.match(joined, /nameLabels\.some/)
+assert.match(joined, /englishNameAnchors\.some/)
+assert.match(joined, /if \(!anchored\) return \[\]/)
+assert.ok(joined.includes('/^[\\p{Script=Han}]{1,2}$/u'))
+
+const selector = source.slice(to, source.indexOf('function passportOrientationQuality(', to))
+assert.match(selector, /if \(!best \|\| best\.score < 0\.65\)/)
+assert.match(selector, /distinctJoins\.size === 1/)
+assert.match(selector, /guardedOfficialNameSuggestion/)
+assert.match(source, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.29'/)
+console.log('Strict joined Han name fallback is unique, anchored, high-confidence and exact-MRZ only')
