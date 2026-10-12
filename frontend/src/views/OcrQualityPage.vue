@@ -63,10 +63,27 @@ async function runServerRecognitionComparison() {
     // Run one validation passport per click until Worker stability is proven.
     const passportSamples = (await getTrainingEvaluationSamples('validation'))
       .filter(item => item.documentType === 'PASSPORT')
+      .map((sample, originalIndex) => {
+        const prior = evaluationBaselineFieldsForSample(sample)
+        const truth = groundTruthForSample(sample).nameZh
+        const priorName = prior?.nameZh
+        return {
+          sample,
+          originalIndex,
+          suspectedWrong: prior !== null &&
+            !evalFieldEquals('nameZh', priorName, truth),
+        }
+      })
+      .sort((left, right) =>
+        Number(right.suspectedWrong) - Number(left.suspectedWrong) ||
+        left.originalIndex - right.originalIndex,
+      )
     if (!passportSamples.length) throw new Error('Validation 沒有護照樣本')
     const cursor = serverComparisonCursor.value % passportSamples.length
-    const samples = passportSamples.slice(cursor, cursor + 1)
-    serverComparisonProgress.value = `護照 Validation 樣本 ${cursor + 1}/${passportSamples.length}`
+    const chosen = passportSamples[cursor]!
+    const samples = [chosen.sample]
+    const samplePriority = chosen.suspectedWrong ? '歷史 baseline 疑似錯誤' : '一般／無歷史錯誤證據'
+    serverComparisonProgress.value = `護照 Validation ${cursor + 1}/${passportSamples.length}（${samplePriority}）`
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
     for (const [index, sample] of samples.entries()) {
       if (serverComparisonStop.value) break
@@ -114,7 +131,7 @@ async function runServerRecognitionComparison() {
       serverComparisonCursor.value = (serverComparisonCursor.value + 1) % passportSamples.length
     }
     serverComparisonSummary.value =
-      `本次樣本 ${cursor + 1}/${passportSamples.length}；比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
+      `本次樣本 ${cursor + 1}/${passportSamples.length}（${samplePriority}）；比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
   } catch (error) {
     serverComparisonError.value = error instanceof Error ? error.message : 'A/B 比較失敗'
   } finally {
@@ -2412,7 +2429,7 @@ onMounted(load)
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
-          <p>安全模式每次取 Validation 的下一張護照（每輪僅 1 張，重新整理頁面後從首張開始）；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <p>安全模式優先挑選歷史 baseline 姓名疑似錯誤的 Validation 護照，每輪僅 1 張；歷史 baseline 不一定等於最新 `.29` 結果，仍以實際 A/B 判定。；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
