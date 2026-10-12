@@ -654,3 +654,7 @@ OCR 品質頁面已新增完全隔離的「執行合成圖模型啟動測試」�
 
 目前候選尚未於使用者 Windows 實際下載或完成合成 smoke；原 production pipeline 2026.10.11.29 完全不變，正式最佳已實測護照 14/19、台胞證 13/13。下一驗收先看 npm.cmd run verify:ocr、Docker frontend rebuild、合成 smoke 是否成功，**不要求立即跑固定 32 張 Validation**。只有獨立模型可確定載入且比較設計完成，才進入真正 A/B。禁止 GitHub Actions；不得上傳模型二進位或護照個資。
 
+## 2026-10-12 — Server Recognition 合成 smoke：WebGPU MaxPool ceil_mode 不支援，已加 WASM fallback
+
+使用者在瀏覽器按「執行合成圖模型啟動測試」，顯示 `ceil_mode output-shape is computed, but ceil_mode kernel execution (padding) is not yet implemented in the WebGPU MaxPool kernel`。這表示隔離模型初始化／執行遇到 WebGPU ONNX Runtime kernel 不支援；**不是模型 A/B 準確率結果**。main 已在 `experimentalServerRecognition.ts` 增加限定此錯誤的 fallback：auto 失敗且吻合 WebGPU MaxPool ceil_mode 時，重新用獨立 WASM backend、單執行緒、`/ort-wasm/` 初始化並用同一張 Canvas 合成文字執行；每個成功建立的 instance 都在 finally dispose。其他錯誤不隱藏、不盲目 retry。UI 顯示實際 backend、fallback 與耗時，並新增 static regression guard。正式 production PP-OCRv5 mobile pipeline 2026.10.11.29 未改，尚未在使用者本機測試 WASM 成功。下一次只需 pull、verify、frontend Docker rebuild、按合成圖測試；**不要跑 32 張 Validation**。禁止 GitHub Actions、個資和模型二進位上傳。
+
