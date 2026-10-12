@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Explicit local-only model setup. Never reads OCR samples or any private data.
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, existsSync, readFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 
 const input = resolve('.local-ocr-models/server-rec')
@@ -24,6 +24,8 @@ if (!['PP-OCRv5_server_rec','PP-OCRv5_server_rec_onnx'].includes(actual)) {
 }
 run(['scripts/package-ocr-server-model.mjs',input,output])
 run(['scripts/inspect-ocr-model-tar.mjs',output,actual])
+writeFileSync(resolve('public/paddle-models/experiments/server-rec-manifest.json'),
+  JSON.stringify({ modelName: actual, archive: 'PP-OCRv5_server_rec_onnx.tar' }, null, 2) + '\n')
 console.log('SDK textRecognitionModelName must be: ' + actual)
 console.log('Official model asset prepared at /paddle-models/experiments/PP-OCRv5_server_rec_onnx.tar')
 console.log('Static checks passed; browser SDK runtime still requires a separate smoke test.')
