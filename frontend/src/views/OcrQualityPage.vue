@@ -57,6 +57,8 @@ async function runServerRecognitionComparison() {
   let regressed = 0
   let errors = 0
   const elapsed: number[] = []
+  const mobileElapsed: number[] = []
+  const serverElapsed: number[] = []
   try {
     // Only validation cohort. Never touch the held-out fixed Test cohort.
     // Safety gate: do not restart a 19-passport inference marathon.
@@ -96,6 +98,7 @@ async function runServerRecognitionComparison() {
         // Both candidates now run with isolated WASM Workers. Releasing
         // the Mobile instance before initializing the larger Server one
         // avoids keeping two full models alive on the UI thread.
+        const mobileStarted = performance.now()
         serverComparisonProgress.value = '單張：啟動 Mobile WASM Worker…'
         mobileInstance = await createValidationPaddleInstance(true)
         serverComparisonProgress.value = '單張：執行 Mobile OCR…'
@@ -103,7 +106,9 @@ async function runServerRecognitionComparison() {
         serverComparisonProgress.value = '單張：釋放 Mobile Worker…'
         await mobileInstance.dispose()
         mobileInstance = undefined
+        mobileElapsed.push(performance.now() - mobileStarted)
         if (serverComparisonStop.value) break
+        const serverStarted = performance.now()
         serverComparisonProgress.value = '單張：啟動 Server WASM Worker…'
         instance = await createServerRecognitionValidationInstance()
         serverComparisonProgress.value = '單張：執行 Server OCR…'
@@ -111,6 +116,7 @@ async function runServerRecognitionComparison() {
         serverComparisonProgress.value = '單張：釋放 Server Worker…'
         await instance.dispose()
         instance = undefined
+        serverElapsed.push(performance.now() - serverStarted)
         elapsed.push(performance.now() - before)
         const mobileOk = evalFieldEquals('nameZh', mobile.chineseName, truth)
         const serverOk = evalFieldEquals('nameZh', server.chineseName, truth)
@@ -130,8 +136,10 @@ async function runServerRecognitionComparison() {
     if (compared > 0 || errors > 0) {
       serverComparisonCursor.value = (serverComparisonCursor.value + 1) % passportSamples.length
     }
+    const mobileMs = mobileElapsed.length ? Math.round(mobileElapsed[0]!) : 0
+    const serverMs = serverElapsed.length ? Math.round(serverElapsed[0]!) : 0
     serverComparisonSummary.value =
-      `本次樣本 ${cursor + 1}/${passportSamples.length}（${samplePriority}）；比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
+      `本次樣本 ${cursor + 1}/${passportSamples.length}（${samplePriority}）；比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；Mobile 含初始化/釋放 ${mobileMs}ms；Server 含初始化/釋放 ${serverMs}ms；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
   } catch (error) {
     serverComparisonError.value = error instanceof Error ? error.message : 'A/B 比較失敗'
   } finally {
