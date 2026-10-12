@@ -34,6 +34,26 @@ import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../ser
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
+import { smokeTestServerRecognition } from '../services/experimentalServerRecognition'
+
+const serverModelSmokeRunning = ref(false)
+const serverModelSmokeError = ref('')
+const serverModelSmokeSummary = ref('')
+async function runServerModelSmoke() {
+  if (serverModelSmokeRunning.value) return
+  serverModelSmokeRunning.value = true
+  serverModelSmokeError.value = ''
+  serverModelSmokeSummary.value = ''
+  try {
+    const result = await smokeTestServerRecognition()
+    serverModelSmokeSummary.value =
+      `Server Recognition 模型初始化成功；合成圖片辨識框數 ${result.detections}；耗時 ${result.elapsedMs} ms。`
+  } catch (error) {
+    serverModelSmokeError.value = error instanceof Error ? error.message : '未知模型初始化錯誤'
+  } finally {
+    serverModelSmokeRunning.value = false
+  }
+}
 
 const benchmark =
   ref<OcrBenchmarkSummaryResponse | null>(null)
@@ -2263,6 +2283,39 @@ onMounted(load)
               }}
             </small>
           </div>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">EXPERIMENTAL MODEL SMOKE</p>
+          <h2>Server Recognition 本機合成圖測試</h2>
+          <p>
+            僅在操作者主動點擊後初始化獨立的候選 PP-OCRv5 Server Recognition。
+            使用程式產生的假中文字測試圖，不讀取旅客資料、不呼叫正式 OCR、
+            不寫入資料庫。須先在本機準備官方 ONNX 模型資產。
+          </p>
+          <small>
+            此處只驗證瀏覽器 SDK 能否初始化與執行合成圖，
+            不是護照準確率 A/B，也不代表後續真實資料可達 100%。
+            模型約 85 MB，可能需要較多記憶體；正式 pipeline 不變。
+          </small>
+        </div>
+        <div class="retest-action">
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="serverModelSmokeRunning || profilingValidation"
+            @click="runServerModelSmoke"
+          >
+            {{ serverModelSmokeRunning ? '候選模型初始化中…' : '執行合成圖模型啟動測試' }}
+          </button>
+          <p v-if="serverModelSmokeSummary" class="validation-legacy-note">
+            {{ serverModelSmokeSummary }}
+          </p>
+          <p v-if="serverModelSmokeError" class="validation-legacy-note">
+            啟動失敗：{{ serverModelSmokeError }}
+          </p>
         </div>
       </section>
 
