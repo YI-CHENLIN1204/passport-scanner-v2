@@ -1,5 +1,10 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — Server Recognition 合成 smoke：WebGPU MaxPool ceil_mode 不支援，已加 WASM fallback
+
+使用者在瀏覽器按「執行合成圖模型啟動測試」，顯示 `ceil_mode output-shape is computed, but ceil_mode kernel execution (padding) is not yet implemented in the WebGPU MaxPool kernel`。這表示隔離模型初始化／執行遇到 WebGPU ONNX Runtime kernel 不支援；**不是模型 A/B 準確率結果**。main 已在 `experimentalServerRecognition.ts` 增加限定此錯誤的 fallback：auto 失敗且吻合 WebGPU MaxPool ceil_mode 時，重新用獨立 WASM backend、單執行緒、`/ort-wasm/` 初始化並用同一張 Canvas 合成文字執行；每個成功建立的 instance 都在 finally dispose。其他錯誤不隱藏、不盲目 retry。UI 顯示實際 backend、fallback 與耗時，並新增 static regression guard。正式 production PP-OCRv5 mobile pipeline 2026.10.11.29 未改，尚未在使用者本機測試 WASM 成功。下一次只需 pull、verify、frontend Docker rebuild、按合成圖測試；**不要跑 32 張 Validation**。禁止 GitHub Actions、個資和模型二進位上傳。
+
+
 ## 2026-10-12 — 官方 Server Recognition 隔離合成圖啟動測試已建置
 
 在官方 PaddlePaddle 發布的 PP-OCRv5_server_rec_onnx（約 84.5MB ONNX + inference.yml）基礎上，已新增一次性可選下載與 SHA256 校驗腳本、streaming tar 封裝工具及本機 manifest。執行 `cd frontend && npm.cmd run prepare:ocr-server-model` 可在本機下載及產生同源 /paddle-models/experiments/ 資產，二進位檔由 .gitignore 排除、不上傳 GitHub。候選模型來源、限制及精確步驟見 docs/OCR_MODEL_AB_PLAN.md。
