@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — Windows 實測：32/32 完成，joined-Han 無淨改善；兩種 Server A/B 均 0 rescue
+- 使用者提供兩張本機截圖（不含證件圖片／姓名）：正式 auto 模式 `2026.10.11.29`；Validation 32 張，失敗 0。護照 19 張：整張與中文姓名 14/19（74%），其餘必要欄位各 19/19；台胞證 13 張：整張與中文姓名及必要欄位皆 13/13。這與前版相同；新增相鄰漢字框合併沒有觀察到淨提升。
+- 5 張護照姓名失敗細分：4 張缺完整正確候選（即受診斷覆蓋限制的 recognition-candidate miss），1 張完整正確候選存在但 selector 的 `romanization:one-syllable-mismatch` 阻擋。候選源摘要：姓名欄位正確候選 1、broad VIZ 正確候選 1、focused VIZ 正確候選 0；屬不同 crop 的證據，勿把加總當成不同樣本數。
+- 同頁有已確認錯誤索引：5 張錯誤，4 張缺候選、1 張 selector 阻擋。same-ROI A/B 選中一張真正缺候選的樣本：Mobile exact 0，Server exact 0，rec rescue 0；Mobile ROI 3,791ms（det 1,094ms、rec 2,660ms），Server ROI 19,689ms（det 929ms、rec 19,665ms），各辨識 29 框。完整單張 Server WASM Worker A/B：Server correct 0、rescue 0、error 0；含模型啟動／釋放約 63,210ms（P50/P90 約 63,210ms）。
+- Server smoke 合成圖像在 WASM 成功（約 2,207ms）只表示模型可運作，非真實準確率。歷史 baseline 19/19 無可解析記錄，勿使用歷史錯誤優先選樣。
+- 決策：不再重跑相同的 joined-Han 規則、舊 ROI／裁切、PP-OCRv5 Server WASM 或放寬 strict MRZ，一律不宣稱準確率進步。下一階段要分析四張缺候選的影像辨識失敗根因與不同技術的獨立候選能力；另一張 one-syllable selector 問題保持隔離、不可盲改。
+- 此輪僅記錄用戶的真正 Windows 實測結果；尚未更動 production、未啟動 GitHub Actions，也未上傳證件圖片或個資。
+
+
 ## 2026-10-12 — Joined-Han selector executable synthetic test (unverified locally)
 - Follow-up to `b459f08a` and `83068160`: existing `test-passport-joined-han-name.mjs` only regex-scanned code. New `frontend/scripts/test-passport-joined-han-functional.mjs` reads the actual `chooseTaiwanChineseName()` function source, transpiles that TypeScript function with the existing `typescript` dependency, injects synthetic geometry and controlled phonetic matcher, and asserts output behavior instead of merely checking text patterns.
 - Synthetic scenarios include an adjacent Han split, weak second box, horizontally distant box, wrong row, strict MRZ mismatch, missing name anchor and already-accepted full box. No real names/documents are read; any synthetic Chinese names are fictitious.
