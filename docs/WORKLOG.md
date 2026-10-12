@@ -671,3 +671,11 @@ OCR 品質頁面已新增完全隔離的「執行合成圖模型啟動測試」�
 使用者本機 OCR 品質頁的隔離合成圖測試顯示：PP-OCRv5 server-rec ONNX 使用 WASM fallback 執行成功，辨識框 1，輸入合成文字「中文姓名 測試甲乙」與 OCR 輸出完全相符，總耗時 3552ms。WebGPU 仍因 MaxPool ceil_mode 不相容，使用 WASM。這證實候選模型在目前 SDK／瀏覽器至少能辨識合成中文文字，**不代表真實護照 A/B 的精準率改善**。
 
 下一階段應在 Validation-only、匿名且 read-only 條件下建立 Mobile 與 Server 模型對照，隔離新模型 SDK instance、保持正式護照與台胞證 OCR 不變；記錄 exact-name、rescue/regression、P50/P90 及失敗原因。正式 pipeline 仍 2026.10.11.29，最佳已實測護照 14/19、台胞證 13/13；不得因合成測試成功就宣稱護照突破 74%。禁止 GitHub Actions，不上傳真實資料。
+
+## 2026-10-12 — Server Recognition WASM 合成測試成功，隔離 Validation A/B 候選已建置
+
+使用者瀏覽器已確認：官方 PP-OCRv5 Server Recognition ONNX 在 WebGPU MaxPool ceil_mode 不支援後切換 WASM，成功辨識 1 個合成文字框；輸入「中文姓名 測試甲乙」、輸出完全相同，總耗時 3552ms。此為 SDK / 合成圖相容性成功，不代表護照準確率已改善。
+
+main 接續新增 `createServerRecognitionValidationInstance()`，由 `frontend/src/services/experimentalServerRecognition.ts` 建立獨立 WASM recognition candidate；OCR 品質頁新增「執行護照 Validation 模型 A/B」手動按鈕。只讀取 Validation 分組中的 PASSPORT，對同張影像分別透過現行 `recognizePassportWithPaddle` 及注入候選 instance 的同一護照解析函式運作，匿名統計 Mobile/Server 中文姓名正確、救回、退步、失敗及雙次推論 P50/P90。未進行個別結果持久化，未讀 Test 分組，不更改正式 Mobile pipeline；候選 instance 結束時 dispose，允許安全停止後續樣本。增加 `test-server-recognition-ab.mjs` 靜態守衛並納入 `verify:ocr`。
+
+**本次 A/B 程式碼已提交，但未在使用者 Windows 完整 build 或實際 Validation 跑過**。先執行 `npm.cmd run verify:ocr`、Docker frontend rebuild，再由 OCR 品質頁手動啟動護照 Validation A/B，截圖匿名結果。此比較會多佔記憶體且總耗時較久；數據是同一流程不同 recognition 模型的 end-to-end 比較，而不是完全孤立的 recognition token 比較。若沒有淨改善或明顯回歸，禁止切換正式 OCR。正式 pipeline 仍 .29，基準護照 14/19、台胞證 13/13。禁止 GitHub Actions，不上傳個資及模型二進位。
