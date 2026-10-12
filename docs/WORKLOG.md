@@ -729,3 +729,7 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 ## 2026-10-12 — 限定已驗證錯誤護照的單張 Server A/B
 
 歷史 Validation 護照 19 張可解析 baseline 為 0，故不能用歷史錯誤排序。更新 main：未在同一頁完整完成 production Validation 時，模型 A/B 按鈕停用；成功且沒有 OCR 失敗時，僅用本頁記憶體中的姓名判錯樣本 key 集合輪流進行單張 A/B。索引不持久化，刷新頁面即失效。不再盲測原本正確的護照。沿用獨立 Mobile/Server WASM Worker，正式 OCR pipeline .29 不變。已更新靜態守衛，尚待本機 verify/build。禁止 GitHub Actions 與真實個資上傳。
+
+## 2026-10-12 — .29 Validation 錯誤索引成功，Server A/B 第一張無救回
+
+使用者本機正式 auto Validation 完成 32/32：護照中文姓名及整張 14/19（74%），台胞證整張 13/13（100%），失敗 0；當頁建立 5 張護照姓名錯誤的 session-only 索引。隔離 Worker A/B 正確選中第一張錯誤護照（1/5）；Mobile 中文姓名 0/1、Server 0/1、救回 0、退步 0、錯誤 0。Mobile 含初始化／釋放 11,402ms，Server 63,145ms，總 P50/P90 74,547ms；每個時間是全流程開銷，不是純 recognition latency。此一筆不能推論其餘四張是否可救回，也不能升級正式模型。候選模型目前 WASM 耗時偏高；應保留安全單張模式並研究更有效率的 recognition-only 對照，不再做盲目全樣本連續運算。當頁索引刷新會消失，不保存姓名或證件資訊。正式 .29 未修改。禁止 GitHub Actions 和上傳個資。
