@@ -708,3 +708,6 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 
 **效能瓶頸仍存在**：單張兩模型約 57.5 秒，排序只能提高測試資訊價值，不會降低單張模型推論成本。不要直接回到連續 19 張模式；未來需另行改善模型初始化／耗時隔離與 Worker 強制中止能力。GitHub Actions 禁止執行，真實證件圖片、姓名、證件號不提交 GitHub。
 
+## 2026-10-12 — 分開記錄 Mobile / Server Worker 耗時（待本機驗證）
+
+單張模型 A/B 現在額外顯示 Mobile 與 Server 各自包含 Worker 初始化、推論及 dispose 的總時間；保留原本兩模型合計 P50/P90。該數據可判斷 57 秒主要來自哪個模型，但**不等同純 Recognition latency**。已新增 regression guard；正式 pipeline `.29` 不變、只使用 Validation 的單張護照、不新增 OCR inference。本批程式尚需 Windows `verify:ocr`、Docker frontend build 與手動單張 A/B 確認。禁止 GitHub Actions 或任何證件資料上傳。
