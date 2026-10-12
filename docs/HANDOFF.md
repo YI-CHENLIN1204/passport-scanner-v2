@@ -670,3 +670,7 @@ GitHub 寄送已用 2,700 / 3,000 included Actions 分鐘（90%）通知；使�
 本批已修正 OCR 品質頁的 Validation-only A/B：Mobile 改由 `createValidationPaddleInstance(true)` 獨立 WASM Worker 執行，取得結果後先 dispose、釋放資源，再初始化 Server 的 WASM Worker、執行同一張照片，最後 dispose。避免兩組大型模型同時佔用記憶體；正式 production OCR 完全不變。新增啟動 Mobile、推論 Mobile、釋放 Mobile、啟動 Server、推論 Server、釋放 Server 逐階段提示，更新 regression guard。單張限制仍保留，不執行 19 張或 Test cohort，不持久化姓名與 OCR 原文。
 
 **修正尚未經 Windows build 或瀏覽器 runtime 證實。** 若再次無回應，應停止同種主頁推論測試，改設計完全可中止的隔離工作流程；目前停止按鈕只能停止後續樣本，不能強制終止目前同步卡住的 OCR。基線仍 `.29` 護照 14/19、台胞證 13/13；GitHub Actions 禁止執行。
+
+## 2026-10-12 — 分開記錄 Mobile / Server Worker 耗時（待本機驗證）
+
+單張模型 A/B 現在額外顯示 Mobile 與 Server 各自包含 Worker 初始化、推論及 dispose 的總時間；保留原本兩模型合計 P50/P90。該數據可判斷 57 秒主要來自哪個模型，但**不等同純 Recognition latency**。已新增 regression guard；正式 pipeline `.29` 不變、只使用 Validation 的單張護照、不新增 OCR inference。本批程式尚需 Windows `verify:ocr`、Docker frontend build 與手動單張 A/B 確認。禁止 GitHub Actions 或任何證件資料上傳。
