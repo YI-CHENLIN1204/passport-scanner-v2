@@ -102,12 +102,15 @@ async function runServerRecognitionComparison() {
         return {
           sample,
           originalIndex,
+          priority: currentPageWrongPassportSamples.value.has(sample.trainingSampleId)
+            ? 2
+            : prior !== null && !evalFieldEquals('nameZh', priorName, truth) ? 1 : 0,
           suspectedWrong: currentPageWrongPassportSamples.value.has(sample.trainingSampleId) ||
             (prior !== null && !evalFieldEquals('nameZh', priorName, truth)),
         }
       })
       .sort((left, right) =>
-        Number(right.suspectedWrong) - Number(left.suspectedWrong) ||
+        right.priority - left.priority ||
         left.originalIndex - right.originalIndex,
       )
     if (!passportSamples.length) throw new Error('Validation 沒有護照樣本')
