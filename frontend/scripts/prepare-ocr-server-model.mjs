@@ -17,7 +17,7 @@ if (existsSync(output)) {
 mkdirSync(resolve('public/paddle-models/experiments'),{recursive:true})
 run(['scripts/download-official-ocr-server-model.mjs',input])
 const yaml = readFileSync(join(input,'inference.yml'),'utf8')
-const actual = yaml.match(/^\\s*model_name:\\s*['"]?([^\\s'"#]+)/m)?.[1] ?? ''
+const actual = yaml.match(/^\s*model_name:\s*['"]?([^\s'"#]+)/m)?.[1] ?? ''
 if (!['PP-OCRv5_server_rec','PP-OCRv5_server_rec_onnx'].includes(actual)) {
   console.error('Unexpected recognition model_name: ' + actual)
   process.exit(1)
