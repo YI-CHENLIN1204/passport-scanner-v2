@@ -102,7 +102,7 @@ export async function smokeTestServerRecognition(): Promise<ServerRecognitionSmo
     const message = error instanceof Error ? error.message : String(error)
     // Retry only the recognized WebGPU MaxPool limitation; preserve other
     // errors rather than masking invalid model assets or SDK failures.
-    if (!/ceil_mode[\\s\\S]*WebGPU MaxPool|WebGPU MaxPool[\\s\\S]*ceil_mode/i.test(message)) {
+    if (!(message.includes('ceil_mode') && message.includes('WebGPU MaxPool'))) {
       throw error
     }
     return execute('wasm', true)
