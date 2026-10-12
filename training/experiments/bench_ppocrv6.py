@@ -24,6 +24,8 @@ def evaluate(zip_path,limit):
     startup=round((time.monotonic()-begin)*1000)
     total=exact=substring=failed=0
     timings=[]
+    anonymous_rows=[]
+    passport_ordinal=0
     STAGE = 'zip-manifest'
     with zipfile.ZipFile(zip_path) as z:
       records=safe(z,'splits/validation.jsonl').decode('utf-8-sig').splitlines()
@@ -33,6 +35,7 @@ def evaluate(zip_path,limit):
         STAGE = 'manifest-row-json'
         row=json.loads(line.strip().lstrip('\ufeff'))
         if row.get('documentType')!='PASSPORT' or row.get('split')!='validation':continue
+        passport_ordinal += 1
         STAGE = 'ground-truth-json'
         label=json.loads(safe(z,row['label']).decode('utf-8-sig'))
         truth=''.join(str((label.get('groundTruth') or {}).get('nameZh') or '').split())
@@ -51,14 +54,30 @@ def evaluate(zip_path,limit):
           timings.append(round((time.monotonic()-started)*1000))
           texts=[''.join(t.split()) for t in (getattr(result,'txts',None) or [])]
           total+=1
-          if truth in texts: exact+=1
-          elif any(truth in text for text in texts):substring+=1
+          status = 'absent'
+          if truth in texts:
+            exact+=1
+            status='standalone-exact'
+          elif any(truth in text for text in texts):
+            substring+=1
+            status='substring-only'
+          # No sample key, name, raw OCR text or document number printed.
+          # The original OCR payload may be historical, never call it .29.
+          old=label.get('originalOcr') or {}
+          fields=(old.get('originalFields') or old.get('fields') or {}) if isinstance(old,dict) else {}
+          old_name=fields.get('nameZh') if isinstance(fields,dict) else None
+          old_status=('exact' if isinstance(old_name,str) and ''.join(old_name.split())==truth
+                      else 'different' if isinstance(old_name,str) and old_name.strip()
+                      else 'unknown')
+          anonymous_rows.append({'validation_passport_index':passport_ordinal,
+            'v6_roi_candidate':status,'exported_original_ocr_proxy':old_status})
         except Exception:
           failed+=1
     return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
+      anonymous_by_validation_order=anonymous_rows,
       init_ms=startup,median_roi_ms=round(statistics.median(timings)) if timings else 0,
-      disclaimer='Exploratory ROI candidate results, not production accuracy')
+      disclaimer='Original OCR in export is historical, NOT .29. Do not infer true rescue from this table. Validation ordering is not a stable sample identity.')
 
 if __name__=='__main__':
     p=argparse.ArgumentParser()
