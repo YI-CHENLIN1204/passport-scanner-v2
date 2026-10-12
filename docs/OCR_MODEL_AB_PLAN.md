@@ -1,5 +1,13 @@
 # 護照中文姓名：辨識模型 A/B — 執行門檻與決策（2026-10-12）
 
+### 2026-10-12 — Separate confirmed recognition misses from selector blocks before future A/B
+- After same-ROI Server took 17,989ms recognition vs Mobile 2,269ms and rescued 0/1, the unaudited ROI scan is a poor signal: it found a miss after screening 12 passports without knowing whether it was among five .29 end-to-end failures.
+- Change the existing session-only complete production Validation index to capture two disjoint anonymous sample-key sets: `exact-candidate` (selector issue) and the remaining errors (no exact candidate in eligible OCR diagnostics). Do not persist keys, names or images; discard on incomplete Validation/page refresh.
+- Gate ROI Mobile/Server experiments behind completed in-page .29 production Validation. Pass only confirmed missing-candidate passport samples to model experiments. Never run Server for already-correct OCR candidates merely blocked by strict MRZ name selection.
+- ROI probe is still exploratory and not an end-to-end rescue. Keep same ROI/Worker and at-most-one Server call, Mobile scans at most five confirmed missing-candidate passports; production `.29` and permit 13/13 code unchanged. Never use historical baseline to infer sample failures.
+- No model accuracy improvement claimed; new code requires npm verify/build and browser validation. No Actions executed.
+
+
 ## 2026-10-12 — Same-ROI A/B 第二次 Windows 真實觀測：Server 0 rescue，Recognition 7.9x 成本
 
 - 使用者 Windows OCR 品質頁截圖：最新 same-ROI probe 在 Validation 中掃描 12 張，Mobile broad VIZ ROI 已有 exact 中文姓名候選 11 張，第一張 Mobile miss 觸發 Server 比較（不是同頁完整 .29 error index 的已確認錯誤樣本）。缺人工姓名答案 0。

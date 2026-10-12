@@ -74,22 +74,29 @@ async function runRecognitionRoiProbe() {
     const allPassportSamples = (
       await getTrainingEvaluationSamples('validation')
     ).filter(sample => sample.documentType === 'PASSPORT')
-    // Prefer the five true .29 end-to-end errors when the same-page
-    // production Validation index is available; never infer from old baselines.
-    const prioritizeKnownErrors =
-      currentPageWrongIndexReady.value &&
-      currentPageWrongPassportSamples.value.size > 0
-    const passportSamples = prioritizeKnownErrors
-      ? allPassportSamples.filter(sample =>
-          currentPageWrongPassportSamples.value.has(sample.trainingSampleId))
-      : allPassportSamples
+    // A/B on arbitrary ROI misses did not predict final .29 failures:
+    // only use current-page .29 validation-confirmed recognition misses.
+    // Already-existing exact candidates belong to selector analysis, not
+    // expensive Server Recognition experiments.
+    if (!currentPageWrongIndexReady.value) {
+      throw new Error('請先取得當頁完整正式 Validation 錯誤索引；不再盲掃任意 ROI miss。')
+    }
+    const passportSamples = allPassportSamples.filter(sample =>
+      currentPageRecognitionMissPassportSamples.value.has(
+        sample.trainingSampleId,
+      ))
+    if (!passportSamples.length) {
+      recognitionProbeSummary.value =
+        '本頁正式 Validation 沒有需要測替代 Recognition 的缺候選護照；已有正確候選但被 selector 阻擋的樣本不需要再跑 Server。'
+      return
+    }
 
     if (!passportSamples.length) {
       throw new Error('Validation 沒有護照樣本')
     }
 
     // One bounded sweep per click. Still at most one Server invocation.
-    const maxMobileScan = 19
+    const maxMobileScan = 5
     const startCursor =
       recognitionProbeCursor.value % passportSamples.length
     const scanLimit = Math.min(
@@ -186,7 +193,7 @@ async function runRecognitionRoiProbe() {
         (startCursor + Math.max(1, scanned)) %
         passportSamples.length
       recognitionProbeSummary.value =
-        `同 ROI probe：${prioritizeKnownErrors ? '優先本頁 .29 姓名錯誤索引' : '逐張掃描 Validation 護照（非 .29 錯誤索引）'}；Mobile 掃描 ${scanned} 張；已有 exact 姓名候選 ${mobileExactSkipped} 張；缺人工答案 ${missingTruth} 張；本輪沒有找到 broad VIZ ROI 的 Mobile miss，因此 Server 完全未啟動。Mobile 初始化 ${mobileInitMs}ms、釋放 ${mobileDisposeMs}ms。即使姓名候選 exact，也不表示正式最終姓名正確；這不是完整 .29 準確率測試。`
+        `同 ROI probe：本頁 .29 辨識候選缺失索引；Mobile 掃描 ${scanned} 張；已有 exact 姓名候選 ${mobileExactSkipped} 張；缺人工答案 ${missingTruth} 張；本輪沒有找到 broad VIZ ROI 的 Mobile miss，因此 Server 完全未啟動。Mobile 初始化 ${mobileInitMs}ms、釋放 ${mobileDisposeMs}ms。即使姓名候選 exact，也不表示正式最終姓名正確；這不是完整 .29 準確率測試。`
       return
     }
 
@@ -226,7 +233,7 @@ async function runRecognitionRoiProbe() {
       (selectedIndex + 1) % passportSamples.length
 
     recognitionProbeSummary.value =
-      `相同 broad VIZ ROI A/B（${prioritizeKnownErrors ? '本頁 .29 錯誤索引優先' : 'Validation ROI 篩選，非 .29 錯誤索引'}）：Mobile 篩選掃描 ${scanned} 張（其中 exact 已存在 ${mobileExactSkipped} 張）；選中的 Mobile miss：Mobile exact 0、Server exact ${serverExact ? 1 : 0}、Recognition 候選救回 ${serverExact ? 1 : 0}。Mobile：init ${mobileInitMs}ms、ROI wall ${selectedMobile.wallMs}ms（det ${selectedMobile.detMs}ms / rec ${selectedMobile.recMs}ms / SDK total ${selectedMobile.pipelineMs}ms）、dispose ${mobileDisposeMs}ms、boxes ${selectedMobile.detectedBoxes}、recognized ${selectedMobile.recognizedCount}。Server：init ${serverInitMs}ms、ROI wall ${server.wallMs}ms（det ${server.detMs}ms / rec ${server.recMs}ms / SDK total ${server.pipelineMs}ms）、dispose ${serverDisposeMs}ms、boxes ${server.detectedBoxes}、recognized ${server.recognizedCount}。兩模型使用同一個記憶體 ROI 與同一 PP-OCRv5 mobile detector；此結果只回答 Recognition 候選品質，不等於完整 .29 最終姓名或整張護照準確率。`
+      `相同 broad VIZ ROI A/B（本頁 .29 辨識候選缺失索引）：Mobile 篩選掃描 ${scanned} 張（其中 exact 已存在 ${mobileExactSkipped} 張）；選中的 Mobile miss：Mobile exact 0、Server exact ${serverExact ? 1 : 0}、Recognition 候選救回 ${serverExact ? 1 : 0}。Mobile：init ${mobileInitMs}ms、ROI wall ${selectedMobile.wallMs}ms（det ${selectedMobile.detMs}ms / rec ${selectedMobile.recMs}ms / SDK total ${selectedMobile.pipelineMs}ms）、dispose ${mobileDisposeMs}ms、boxes ${selectedMobile.detectedBoxes}、recognized ${selectedMobile.recognizedCount}。Server：init ${serverInitMs}ms、ROI wall ${server.wallMs}ms（det ${server.detMs}ms / rec ${server.recMs}ms / SDK total ${server.pipelineMs}ms）、dispose ${serverDisposeMs}ms、boxes ${server.detectedBoxes}、recognized ${server.recognizedCount}。兩模型使用同一個記憶體 ROI 與同一 PP-OCRv5 mobile detector；此結果只回答 Recognition 候選品質，不等於完整 .29 最終姓名或整張護照準確率。`
   } catch (error) {
     recognitionProbeError.value =
       error instanceof Error
@@ -270,6 +277,10 @@ async function auditPassportBaselineCoverage() {
 // Only ephemeral sample references from the completed current-page Validation.
 // Never persist identifiers, OCR text or per-person outcomes.
 const currentPageWrongPassportSamples = ref<Set<string>>(new Set())
+// Session-only failure buckets based on the *full production* .29 outcome.
+// Never persist sample keys, recognized strings, or ground truth.
+const currentPageRecognitionMissPassportSamples = ref<Set<string>>(new Set())
+const currentPageSelectorBlockedPassportSamples = ref<Set<string>>(new Set())
 const currentPageWrongIndexReady = ref(false)
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
@@ -296,7 +307,7 @@ async function runServerRecognitionComparison() {
     // Run one validation passport per click until Worker stability is proven.
     const passportSamples = (await getTrainingEvaluationSamples('validation'))
       .filter(item => item.documentType === 'PASSPORT' &&
-        currentPageWrongPassportSamples.value.has(item.trainingSampleId))
+        currentPageRecognitionMissPassportSamples.value.has(item.trainingSampleId))
     if (!passportSamples.length) throw new Error('Validation 沒有護照樣本')
     const cursor = serverComparisonCursor.value % passportSamples.length
     const chosen = passportSamples[cursor]!
@@ -1617,7 +1628,11 @@ async function profileValidationOnly() {
 
   const outcomes: ValidationProfileSample[] = []
   const currentProfileWrong = new Set<string>()
+  const currentProfileRecognitionMiss = new Set<string>()
+  const currentProfileSelectorBlocked = new Set<string>()
   currentPageWrongPassportSamples.value = new Set()
+  currentPageRecognitionMissPassportSamples.value = new Set()
+  currentPageSelectorBlockedPassportSamples.value = new Set()
   currentPageWrongIndexReady.value = false
   const failures: Record<string, number> = {}
   let warmupMs = 0
@@ -1796,6 +1811,14 @@ async function profileValidationOnly() {
           .filter((name): name is string => Boolean(name))
         if (sample.documentType === 'PASSPORT' && !fieldExact.nameZh) {
           currentProfileWrong.add(sample.trainingSampleId)
+          if (passportNameFailure === 'exact-candidate') {
+            currentProfileSelectorBlocked.add(sample.trainingSampleId)
+          } else {
+            // Exact full name absent from eligible diagnostic candidates.
+            // This is a recognition candidate miss, not proof of a bad
+            // detector: keep classification explicitly approximate.
+            currentProfileRecognitionMiss.add(sample.trainingSampleId)
+          }
         }
         const baselineNameCorrect = Boolean(fieldExact.nameZh)
         const shadowNameCorrect = shadowNames.length
@@ -2133,6 +2156,12 @@ async function profileValidationOnly() {
     currentPageWrongIndexReady.value = !stopValidationRequested.value && failedCount === 0 && selectedMode === 'production'
     currentPageWrongPassportSamples.value = currentPageWrongIndexReady.value
       ? currentProfileWrong
+      : new Set()
+    currentPageRecognitionMissPassportSamples.value = currentPageWrongIndexReady.value
+      ? currentProfileRecognitionMiss
+      : new Set()
+    currentPageSelectorBlockedPassportSamples.value = currentPageWrongIndexReady.value
+      ? currentProfileSelectorBlocked
       : new Set()
     validationProfileAttempt.value = {
       mode: selectedMode,
@@ -2657,14 +2686,17 @@ onMounted(load)
           <p class="page-kicker">RECOGNITION ROI A/B</p>
           <h2>護照 Validation：相同 broad VIZ ROI Recognition 比較</h2>
           <p>
-            不需要先重跑 32 張正式 Validation。每次最多先用 Mobile WASM Worker
-            掃描 19 張 Validation 護照（找到第一張 miss 就提前停止）的既有 broad VIZ ROI，只為找到一張
-            Mobile 沒有 exact 中文姓名候選的樣本；若本頁有完整 .29 錯誤索引，
-            則優先只掃那些正式判錯的護照；找到後才啟動 Server，
+            需先在同頁完成一次正式 .29 Validation 建立匿名錯誤索引。之後每次最多用 Mobile WASM Worker
+            掃描最多 5 張本頁正式 .29 已確認「沒有完整正確候選」的護照 ROI（找到第一張 miss 就提前停止）的既有 broad VIZ ROI，只為找到一張
+            Mobile 沒有 exact 中文姓名候選的樣本；只使用同頁完整正式 .29
+            Validation 所建立的缺候選索引，已知 selector 問題不執行 Server；
+            找到後才啟動 Server，
             而且 Server 直接吃同一個記憶體 ROI。這不新增任何裁切，也不跑
             整套旋轉、MRZ、Tesseract 或完整護照 parser。
           </p>
           <small>
+            需要先在同一頁完成一次正式 Validation 才能建立索引；重新整理後索引消失。
+            不再對不確定是否屬於 .29 錯誤的任意 ROI miss 執行 Server。
             兩邊仍使用同一個 PP-OCRv5 mobile detector，只有 Recognition model
             不同。畫面只顯示匿名 exact / boxes / timing 統計，不顯示姓名、
             OCR 原文或證件號。此 probe 用來判斷 Server 是否值得繼續做正式
@@ -2679,16 +2711,23 @@ onMounted(load)
               recognitionProbeRunning ||
               serverComparisonRunning ||
               profilingValidation ||
-              retesting
+              retesting ||
+              !currentPageWrongIndexReady ||
+              currentPageRecognitionMissPassportSamples.size === 0
             "
             @click="runRecognitionRoiProbe"
           >
             {{
               recognitionProbeRunning
                 ? '同 ROI Recognition 比較中…'
-                : '執行同 ROI Recognition A/B（最多 Mobile 掃 19 張）'
+                : '執行已確認缺候選護照 ROI A/B（最多 5 張）'
             }}
           </button>
+          <p class="validation-legacy-note">
+            {{ currentPageWrongIndexReady
+              ? `本頁正式 .29 錯誤 ${currentPageWrongPassportSamples.size} 張；缺正確候選 ${currentPageRecognitionMissPassportSamples.size} 張；已有正確候選但未選中 ${currentPageSelectorBlockedPassportSamples.size} 張。`
+              : '本頁尚無完整 .29 錯誤索引；先不要執行模型 A/B。' }}
+          </p>
           <p v-if="recognitionProbeProgress" class="validation-legacy-note">
             {{ recognitionProbeProgress }}
           </p>
