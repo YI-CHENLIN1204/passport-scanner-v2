@@ -73,7 +73,7 @@ export async function smokeTestServerRecognition(): Promise<ServerRecognitionSmo
   try {
     const prediction = await instance.predict(await syntheticImage())
     const result = Array.isArray(prediction) ? prediction[0] : prediction
-    const obj = result as Record<string, unknown> | null
+    const obj = result as unknown as Record<string, unknown> | null
     const texts = obj?.rec_texts ?? obj?.texts
     return {
       initialized: true,
