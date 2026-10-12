@@ -3276,6 +3276,13 @@ async function predictOne(
       best.totalMs = performance.now() - totalStartedAt
 
       if (vizName) {
+        // The strict adjacent-Han fallback can produce a new complete name
+        // from two separate OCR boxes. Include it in this run's transient
+        // candidate diagnosis, otherwise Validation falsely classifies the
+        // successfully recovered name as a recognition miss.
+        if (!diagnostic.candidateTexts.includes(vizName.text)) {
+          diagnostic.candidateTexts.push(vizName.text)
+        }
         if (!provisionalName) {
           provisionalName = vizName
           best.chineseName = vizName.text

@@ -784,3 +784,9 @@ probe 僅顯示匿名 Mobile / Server exact candidate、detected boxes、recogni
 - 在 `chooseTaiwanChineseName()` 新增只限原本 `best` 不存在或低於原門檻的受限兩框拼接 fallback：每框 1–2 個漢字、score >= .82、水平接近且同行、鄰近「姓名」或 MRZ 對應拉丁姓名錨點，整個合併姓名必須使用原本嚴格 `compareChineseNameToMrzRomanization` 得到 `compatible`；多個不同合格合併結果則不使用。原既有成功候選不被覆蓋。
 - 不變更台胞證、身分證或任何背景 OCR 模型；正式版本號維持 `2026.10.11.29` 以避免聲稱已提高準確率。新增 `test-passport-joined-han-name.mjs` 並接入 `verify:ocr` 靜態防回歸。
 - 注意：此假設**尚無證據證實**四張失敗護照有相鄰完整漢字框。沒有新一輪 32 張 Windows 真實 Validation，也未完成本地 npm build / regression，不得把這批視為已驗證改善；先測編譯，再評估是否真實救回且沒有其他欄位退步。禁止 GitHub Actions 與個資提交。
+
+### 2026-10-12 — Joined-Han candidate must be visible to Validation (source consistency fix)
+- Review of previous main `b459f08a` identified a measurement defect: `chooseTaiwanChineseName()` may return a unique strict-MRZ-compatible name formed by two adjacent Han OCR boxes, but `predictOne()` only collected candidateTexts from individual OCR items and assembled raw rows before selection. The correct joined fallback could therefore be absent from the Validation candidate set and incorrectly classified as a recognition miss.
+- Fix: after `vizName` is returned, add its exact normalized name to the **transient** diagnostic candidateTexts if missing. The actual selector result, confidence, rank, production output and strict romanization remain unchanged by this diagnostic bookkeeping. No names/IDs persist or leave browser. Add regression guard in `test-passport-joined-han-name.mjs`.
+- This is an accuracy-evaluation correctness fix, **not** evidence of new correct scans. No new 32-sample Windows Validation, npm compilation or browser runtime result. Keep formal best observed passport 14/19 and permit 13/13 until retested; never run GitHub Actions.
+

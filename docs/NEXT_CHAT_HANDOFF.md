@@ -1,5 +1,11 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — Joined-Han candidate must be visible to Validation (source consistency fix)
+- Review of previous main `b459f08a` identified a measurement defect: `chooseTaiwanChineseName()` may return a unique strict-MRZ-compatible name formed by two adjacent Han OCR boxes, but `predictOne()` only collected candidateTexts from individual OCR items and assembled raw rows before selection. The correct joined fallback could therefore be absent from the Validation candidate set and incorrectly classified as a recognition miss.
+- Fix: after `vizName` is returned, add its exact normalized name to the **transient** diagnostic candidateTexts if missing. The actual selector result, confidence, rank, production output and strict romanization remain unchanged by this diagnostic bookkeeping. No names/IDs persist or leave browser. Add regression guard in `test-passport-joined-han-name.mjs`.
+- This is an accuracy-evaluation correctness fix, **not** evidence of new correct scans. No new 32-sample Windows Validation, npm compilation or browser runtime result. Keep formal best observed passport 14/19 and permit 13/13 until retested; never run GitHub Actions.
+
+
 ## 2026-10-12 — 保守相鄰漢字框候選恢復（待真實 Validation）
 - 假設：部分護照中文姓名可能已被 PP-OCRv5 Mobile 辨為相鄰獨立漢字框，但正式姓名 selector 僅處理單個文字框；原有同行 raw-row 診斷不會成為 selector 候選。這是新候選產生路徑，不是重試先前失敗的 VIZ 裁切、放寬拼音或更換插值。
 - 在 `chooseTaiwanChineseName()` 新增只限原本 `best` 不存在或低於原門檻的受限兩框拼接 fallback：每框 1–2 個漢字、score >= .82、水平接近且同行、鄰近「姓名」或 MRZ 對應拉丁姓名錨點，整個合併姓名必須使用原本嚴格 `compareChineseNameToMrzRomanization` 得到 `compatible`；多個不同合格合併結果則不使用。原既有成功候選不被覆蓋。

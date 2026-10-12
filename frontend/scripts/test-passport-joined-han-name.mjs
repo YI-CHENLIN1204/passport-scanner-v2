@@ -22,5 +22,9 @@ const selector = source.slice(to, source.indexOf('function passportOrientationQu
 assert.match(selector, /if \(!best \|\| best\.score < 0\.65\)/)
 assert.match(selector, /distinctJoins\.size === 1/)
 assert.match(selector, /guardedOfficialNameSuggestion/)
+// A recovered two-box name must enter transient Validation candidate lists.
+// Otherwise it is misclassified as a recognition miss and sent to Server A/B.
+assert.match(source,
+  /if \(vizName\) \{[\s\S]*?diagnostic\.candidateTexts\.includes\(vizName\.text\)[\s\S]*?diagnostic\.candidateTexts\.push\(vizName\.text\)/)
 assert.match(source, /OCR_PIPELINE_VERSION\s*=\s*'2026\.10\.11\.29'/)
 console.log('Strict joined Han name fallback is unique, anchored, high-confidence and exact-MRZ only')
