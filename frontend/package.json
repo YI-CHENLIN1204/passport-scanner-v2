@@ -38,7 +38,8 @@
     "test:ocr-model-preflight": "node scripts/test-ocr-model-tar-preflight.mjs",
     "inspect:ocr-model": "node scripts/inspect-ocr-model-tar.mjs",
     "package:ocr-server-model": "node scripts/package-ocr-server-model.mjs",
-    "test:ocr-server-package": "node scripts/test-package-ocr-server-model.mjs"
+    "test:ocr-server-package": "node scripts/test-package-ocr-server-model.mjs",
+    "download:ocr-server-model": "node scripts/download-official-ocr-server-model.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
