@@ -48,6 +48,7 @@ async function runServerRecognitionComparison() {
   serverComparisonError.value = ''
   serverComparisonSummary.value = ''
   let instance: ValidationPaddleInstance | undefined
+  let mobileInstance: ValidationPaddleInstance | undefined
   let compared = 0
   let mobileCorrect = 0
   let serverCorrect = 0
@@ -64,7 +65,6 @@ async function runServerRecognitionComparison() {
       .slice(0, 1)
     if (!samples.length) throw new Error('Validation 沒有護照樣本')
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
-    instance = await createServerRecognitionValidationInstance()
     for (const [index, sample] of samples.entries()) {
       if (serverComparisonStop.value) break
       serverComparisonProgress.value = `護照 Validation ${index + 1}/${samples.length}`
@@ -73,10 +73,24 @@ async function runServerRecognitionComparison() {
         const file = await getTrainingSampleImageFile(sample.trainingSampleId)
         const truth = groundTruthForSample(sample).nameZh
         const before = performance.now()
-        // Same orientation, MRZ, parser and selector via the production function;
-        // only the injected recognition model differs.
-        const mobile = await recognizePassportWithPaddle(file)
+        // Both candidates now run with isolated WASM Workers. Releasing
+        // the Mobile instance before initializing the larger Server one
+        // avoids keeping two full models alive on the UI thread.
+        serverComparisonProgress.value = '單張：啟動 Mobile WASM Worker…'
+        mobileInstance = await createValidationPaddleInstance(true)
+        serverComparisonProgress.value = '單張：執行 Mobile OCR…'
+        const mobile = await recognizePassportWithPaddle(file, undefined, mobileInstance)
+        serverComparisonProgress.value = '單張：釋放 Mobile Worker…'
+        await mobileInstance.dispose()
+        mobileInstance = undefined
+        if (serverComparisonStop.value) break
+        serverComparisonProgress.value = '單張：啟動 Server WASM Worker…'
+        instance = await createServerRecognitionValidationInstance()
+        serverComparisonProgress.value = '單張：執行 Server OCR…'
         const server = await recognizePassportWithPaddle(file, undefined, instance)
+        serverComparisonProgress.value = '單張：釋放 Server Worker…'
+        await instance.dispose()
+        instance = undefined
         elapsed.push(performance.now() - before)
         const mobileOk = evalFieldEquals('nameZh', mobile.chineseName, truth)
         const serverOk = evalFieldEquals('nameZh', server.chineseName, truth)
@@ -98,6 +112,7 @@ async function runServerRecognitionComparison() {
   } catch (error) {
     serverComparisonError.value = error instanceof Error ? error.message : 'A/B 比較失敗'
   } finally {
+    if (mobileInstance) await mobileInstance.dispose()
     if (instance) await instance.dispose()
     serverComparisonRunning.value = false
     serverComparisonProgress.value = ''
@@ -2391,7 +2406,7 @@ onMounted(load)
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
-          <p>安全模式每次只取 Validation 的 1 張護照；沿用相同解析與姓名選擇規則，Server 模型採獨立 WASM Worker 實例。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <p>安全模式每次只取 Validation 的 1 張護照；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
