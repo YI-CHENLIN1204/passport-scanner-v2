@@ -71,15 +71,25 @@ async function runRecognitionRoiProbe() {
   let serverDisposeMs = 0
 
   try {
-    const passportSamples = (
+    const allPassportSamples = (
       await getTrainingEvaluationSamples('validation')
     ).filter(sample => sample.documentType === 'PASSPORT')
+    // Prefer the five true .29 end-to-end errors when the same-page
+    // production Validation index is available; never infer from old baselines.
+    const prioritizeKnownErrors =
+      currentPageWrongIndexReady.value &&
+      currentPageWrongPassportSamples.value.size > 0
+    const passportSamples = prioritizeKnownErrors
+      ? allPassportSamples.filter(sample =>
+          currentPageWrongPassportSamples.value.has(sample.trainingSampleId))
+      : allPassportSamples
 
     if (!passportSamples.length) {
       throw new Error('Validation 沒有護照樣本')
     }
 
-    const maxMobileScan = 5
+    // One bounded sweep per click. Still at most one Server invocation.
+    const maxMobileScan = 19
     const startCursor =
       recognitionProbeCursor.value % passportSamples.length
     const scanLimit = Math.min(
@@ -176,7 +186,7 @@ async function runRecognitionRoiProbe() {
         (startCursor + Math.max(1, scanned)) %
         passportSamples.length
       recognitionProbeSummary.value =
-        `同 ROI probe：Mobile 掃描 ${scanned} 張；已有 exact 姓名候選 ${mobileExactSkipped} 張；缺人工答案 ${missingTruth} 張；本輪沒有找到適合測 Server 的 Mobile miss，因此 Server 完全未啟動。Mobile 初始化 ${mobileInitMs}ms、釋放 ${mobileDisposeMs}ms。這不是完整 .29 準確率測試。`
+        `同 ROI probe：${prioritizeKnownErrors ? '優先本頁 .29 姓名錯誤索引' : '逐張掃描 Validation 護照（非 .29 錯誤索引）'}；Mobile 掃描 ${scanned} 張；已有 exact 姓名候選 ${mobileExactSkipped} 張；缺人工答案 ${missingTruth} 張；本輪沒有找到 broad VIZ ROI 的 Mobile miss，因此 Server 完全未啟動。Mobile 初始化 ${mobileInitMs}ms、釋放 ${mobileDisposeMs}ms。即使姓名候選 exact，也不表示正式最終姓名正確；這不是完整 .29 準確率測試。`
       return
     }
 
@@ -216,7 +226,7 @@ async function runRecognitionRoiProbe() {
       (selectedIndex + 1) % passportSamples.length
 
     recognitionProbeSummary.value =
-      `相同 broad VIZ ROI A/B：Mobile 篩選掃描 ${scanned} 張（其中 exact 已存在 ${mobileExactSkipped} 張）；選中的 Mobile miss：Mobile exact 0、Server exact ${serverExact ? 1 : 0}、Recognition 候選救回 ${serverExact ? 1 : 0}。Mobile：init ${mobileInitMs}ms、ROI wall ${selectedMobile.wallMs}ms（det ${selectedMobile.detMs}ms / rec ${selectedMobile.recMs}ms / SDK total ${selectedMobile.pipelineMs}ms）、dispose ${mobileDisposeMs}ms、boxes ${selectedMobile.detectedBoxes}、recognized ${selectedMobile.recognizedCount}。Server：init ${serverInitMs}ms、ROI wall ${server.wallMs}ms（det ${server.detMs}ms / rec ${server.recMs}ms / SDK total ${server.pipelineMs}ms）、dispose ${serverDisposeMs}ms、boxes ${server.detectedBoxes}、recognized ${server.recognizedCount}。兩模型使用同一個記憶體 ROI 與同一 PP-OCRv5 mobile detector；此結果只回答 Recognition 候選品質，不等於完整 .29 最終姓名或整張護照準確率。`
+      `相同 broad VIZ ROI A/B（${prioritizeKnownErrors ? '本頁 .29 錯誤索引優先' : 'Validation ROI 篩選，非 .29 錯誤索引'}）：Mobile 篩選掃描 ${scanned} 張（其中 exact 已存在 ${mobileExactSkipped} 張）；選中的 Mobile miss：Mobile exact 0、Server exact ${serverExact ? 1 : 0}、Recognition 候選救回 ${serverExact ? 1 : 0}。Mobile：init ${mobileInitMs}ms、ROI wall ${selectedMobile.wallMs}ms（det ${selectedMobile.detMs}ms / rec ${selectedMobile.recMs}ms / SDK total ${selectedMobile.pipelineMs}ms）、dispose ${mobileDisposeMs}ms、boxes ${selectedMobile.detectedBoxes}、recognized ${selectedMobile.recognizedCount}。Server：init ${serverInitMs}ms、ROI wall ${server.wallMs}ms（det ${server.detMs}ms / rec ${server.recMs}ms / SDK total ${server.pipelineMs}ms）、dispose ${serverDisposeMs}ms、boxes ${server.detectedBoxes}、recognized ${server.recognizedCount}。兩模型使用同一個記憶體 ROI 與同一 PP-OCRv5 mobile detector；此結果只回答 Recognition 候選品質，不等於完整 .29 最終姓名或整張護照準確率。`
   } catch (error) {
     recognitionProbeError.value =
       error instanceof Error
@@ -2648,8 +2658,9 @@ onMounted(load)
           <h2>護照 Validation：相同 broad VIZ ROI Recognition 比較</h2>
           <p>
             不需要先重跑 32 張正式 Validation。每次最多先用 Mobile WASM Worker
-            掃描 5 張 Validation 護照的既有 broad VIZ ROI，只為找到一張
-            Mobile 沒有 exact 中文姓名候選的樣本；找到後才啟動 Server，
+            掃描 19 張 Validation 護照（找到第一張 miss 就提前停止）的既有 broad VIZ ROI，只為找到一張
+            Mobile 沒有 exact 中文姓名候選的樣本；若本頁有完整 .29 錯誤索引，
+            則優先只掃那些正式判錯的護照；找到後才啟動 Server，
             而且 Server 直接吃同一個記憶體 ROI。這不新增任何裁切，也不跑
             整套旋轉、MRZ、Tesseract 或完整護照 parser。
           </p>
@@ -2675,7 +2686,7 @@ onMounted(load)
             {{
               recognitionProbeRunning
                 ? '同 ROI Recognition 比較中…'
-                : '執行同 ROI Recognition A/B（最多 Mobile 掃 5 張）'
+                : '執行同 ROI Recognition A/B（最多 Mobile 掃 19 張）'
             }}
           </button>
           <p v-if="recognitionProbeProgress" class="validation-legacy-note">
