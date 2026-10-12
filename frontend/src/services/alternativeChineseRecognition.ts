@@ -38,10 +38,10 @@ export function containsStandaloneChineseName(
   recognized: string,
   expected: string,
 ) {
-  const target = expected.replace(/\\s+/g, '').trim()
-  if (!/^[\\p{Script=Han}]{2,6}$/u.test(target)) return false
+  const target = expected.replace(/\s+/g, '').trim()
+  if (!/^[\p{Script=Han}]{2,6}$/u.test(target)) return false
   return recognized
-    .split(/[\\r\\n]+/)
-    .map(line => line.replace(/\\s+/g, '').replace(/[：:，,。．.]/g, ''))
+    .split(/[\r\n]+/)
+    .map(line => line.replace(/\s+/g, '').replace(/[：:，,。．.]/g, ''))
     .some(line => line === target || line === `姓名${target}`)
 }
