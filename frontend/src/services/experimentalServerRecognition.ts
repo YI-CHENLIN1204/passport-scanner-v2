@@ -63,6 +63,7 @@ export async function createServerRecognitionValidationInstance() {
     textDetectionModelAsset: { url: mobileDetection },
     textRecognitionModelName: manifest.modelName,
     textRecognitionModelAsset: { url: base + manifest.archive },
+    worker: true,
     ortOptions: { backend: 'wasm', numThreads: 1, wasmPaths: '/ort-wasm/' },
   })
 }
