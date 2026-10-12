@@ -47,7 +47,7 @@ async function runServerModelSmoke() {
   try {
     const result = await smokeTestServerRecognition()
     serverModelSmokeSummary.value =
-      `Server Recognition 模型初始化成功；合成圖片辨識框數 ${result.detections}；耗時 ${result.elapsedMs} ms。`
+      `Server Recognition 合成圖執行成功；backend ${result.backend}${result.webgpuFallback ? '（WebGPU MaxPool 不支援，已轉 WASM）' : ''}；辨識框數 ${result.detections}；耗時 ${result.elapsedMs} ms。`
   } catch (error) {
     serverModelSmokeError.value = error instanceof Error ? error.message : '未知模型初始化錯誤'
   } finally {
