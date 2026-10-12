@@ -646,3 +646,11 @@ GitHub 寄送已用 2,700 / 3,000 included Actions 分鐘（90%）通知；使�
 - PR #21（MRZ 姓名／性別未受檢查碼涵蓋的信任問題）CI #800 Success，已合併 main；候選 `2026.10.11.4` 尚未經本機 Validation。
 - 分支 `fix/permit-name-crop-label-first` 將姓名重試的 ROI 錨點從「優先 Latin」改為「優先明確姓名標籤」，預計版本 `2026.10.11.5`，待 CI／合併；兩個改動合併後**只需一次**本機正式 auto Validation，驗證台胞證中文姓名、性別、全對率、執行時間與護照回歸是否退步。
 - 若仍 46%／77% 不變，停止再改候選門檻，直接評估圖像輸入、真實 crop 錯誤資料及不同中文字形辨識模型；不得以推測取代精確的 sample 診斷。
+
+## 2026-10-12 — 單張 A/B 仍卡在 1/1：修正 Mobile 主執行緒遺漏
+
+使用者已更新先前 Worker／單張安全模式，但畫面仍停在「護照 Validation 1/1」，沒有完成比較。進一步查碼確認上一版只有 Server instance 使用 `worker: true`；Mobile 比較基準仍是 `recognizePassportWithPaddle(file)`，依賴 production 主執行緒 SDK。這是單張仍可能卡住的重要架構缺口，尚不能斷定唯一成因。
+
+本批已修正 OCR 品質頁的 Validation-only A/B：Mobile 改由 `createValidationPaddleInstance(true)` 獨立 WASM Worker 執行，取得結果後先 dispose、釋放資源，再初始化 Server 的 WASM Worker、執行同一張照片，最後 dispose。避免兩組大型模型同時佔用記憶體；正式 production OCR 完全不變。新增啟動 Mobile、推論 Mobile、釋放 Mobile、啟動 Server、推論 Server、釋放 Server 逐階段提示，更新 regression guard。單張限制仍保留，不執行 19 張或 Test cohort，不持久化姓名與 OCR 原文。
+
+**修正尚未經 Windows build 或瀏覽器 runtime 證實。** 若再次無回應，應停止同種主頁推論測試，改設計完全可中止的隔離工作流程；目前停止按鈕只能停止後續樣本，不能強制終止目前同步卡住的 OCR。基線仍 `.29` 護照 14/19、台胞證 13/13；GitHub Actions 禁止執行。
