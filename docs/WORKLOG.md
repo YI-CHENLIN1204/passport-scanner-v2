@@ -640,3 +640,9 @@ main 新候選 2026.10.11.29 不增加任何 OCR 推論／裁切，不變更原�
 
 **尚未取得並驗證 browser-compatible server-rec ONNX tar，也尚未實作可執行的新模型推論 A/B；正式 pipeline 仍是 `.29`，不可現在要求使用者跑固定 32 張。** 模型資料與證件照片不得上傳 GitHub；GitHub Actions 禁止執行。固定 legacy Validation 缺當初真實 OCR 工作圖像，不可宣稱 production 泛化準確率。
 
+## 2026-10-12 — 模型 A/B 準備重大更新：官方 server-rec ONNX 已找到
+
+已在 PaddlePaddle 官方 Hugging Face 頁面找到 PP-OCRv5_server_rec_onnx，含 inference.onnx (約 84.5MB) 與 inference.yml，Apache-2.0。來源：https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx/tree/main。原先所稱「需要自行轉 ONNX」已不再成立。新增本地打包工具 frontend/scripts/package-ocr-server-model.mjs、synthetic regression test 與 verify:ocr 入口，能將本機下載的官方檔案串流封裝為 SDK 所需 uncompressed tar，並透過既有 inspector 驗證結構與 model_name。詳見 docs/OCR_MODEL_AB_PLAN.md。
+
+正式 PP-OCRv5 mobile OCR pipeline 仍為 2026.10.11.29，已實測護照 14/19、台胞證 13/13。尚未真的下載、實際封裝或瀏覽器初始化 server-rec ONNX，也未做模型 A/B。接下來應完成候選模型相容性及隔離測試，再要求一次有意義的本機驗證。不得上傳模型二進位、任何真實證件影像或個資，不得執行 GitHub Actions。
+
