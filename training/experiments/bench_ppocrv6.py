@@ -3,13 +3,18 @@
 import argparse, json, statistics, sys, time, zipfile
 from pathlib import Path, PurePosixPath
 
+STAGE = 'startup'
+
 def safe(z, name):
     if not isinstance(name,str) or not name or '..' in PurePosixPath(name).parts or name not in z.namelist(): raise ValueError('invalid archive path')
     return z.read(name)
 
 def evaluate(zip_path,limit):
+    global STAGE
+    STAGE = 'dependencies'
     import cv2, numpy as np
     from rapidocr import RapidOCR
+    STAGE = 'model-initialization'
     begin=time.monotonic()
     # Model vocabulary and preprocessing both controlled by RapidOCR,
     # unlike swapping a v6 ONNX into the browser v5 SDK.
@@ -19,17 +24,21 @@ def evaluate(zip_path,limit):
     startup=round((time.monotonic()-begin)*1000)
     total=exact=substring=failed=0
     timings=[]
+    STAGE = 'zip-manifest'
     with zipfile.ZipFile(zip_path) as z:
-      records=safe(z,'splits/validation.jsonl').decode('utf-8').splitlines()
+      records=safe(z,'splits/validation.jsonl').decode('utf-8-sig').splitlines()
       for line in records:
         if total+failed>=limit: break
         if not line.strip(): continue
-        row=json.loads(line)
+        STAGE = 'manifest-row-json'
+        row=json.loads(line.strip().lstrip('\ufeff'))
         if row.get('documentType')!='PASSPORT' or row.get('split')!='validation':continue
-        label=json.loads(safe(z,row['label']))
+        STAGE = 'ground-truth-json'
+        label=json.loads(safe(z,row['label']).decode('utf-8-sig'))
         truth=''.join(str((label.get('groundTruth') or {}).get('nameZh') or '').split())
         if not truth: failed+=1;continue
         try:
+          STAGE = 'roi-prediction'
           raw=safe(z,row.get('ocrInputImage') or row['image'])
           if len(raw)>25*1024*1024: raise ValueError('image too big')
           image=cv2.imdecode(np.frombuffer(raw,dtype=np.uint8),cv2.IMREAD_COLOR)
@@ -77,6 +86,7 @@ if __name__=='__main__':
       sys.exit(2)
     except Exception as error:
       # Exception class only: error messages may contain sensitive ZIP paths.
+      print('EXPERIMENT_STAGE: '+STAGE,file=sys.stderr)
       print('EXPERIMENT_ERROR_TYPE: '+type(error).__name__,file=sys.stderr)
-      print('To localize failure, run --check first (no private ZIP reads).',file=sys.stderr)
+      print('Only stage/type are printed; no labels or images.',file=sys.stderr)
       sys.exit(1)
