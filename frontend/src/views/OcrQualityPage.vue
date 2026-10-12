@@ -65,7 +65,7 @@ async function auditPassportBaselineCoverage() {
 }
 // Only ephemeral sample references from the completed current-page Validation.
 // Never persist identifiers, OCR text or per-person outcomes.
-const currentPageWrongPassportSamples = ref<Set<number>>(new Set())
+const currentPageWrongPassportSamples = ref<Set<string>>(new Set())
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
 const serverComparisonStop = ref(false)
@@ -1439,7 +1439,7 @@ async function profileValidationOnly() {
   }
 
   const outcomes: ValidationProfileSample[] = []
-  const currentProfileWrong = new Set<number>()
+  const currentProfileWrong = new Set<string>()
   currentPageWrongPassportSamples.value = new Set()
   const failures: Record<string, number> = {}
   let warmupMs = 0
