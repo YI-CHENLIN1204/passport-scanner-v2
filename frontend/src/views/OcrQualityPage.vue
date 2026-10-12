@@ -66,6 +66,7 @@ async function auditPassportBaselineCoverage() {
 // Only ephemeral sample references from the completed current-page Validation.
 // Never persist identifiers, OCR text or per-person outcomes.
 const currentPageWrongPassportSamples = ref<Set<string>>(new Set())
+const currentPageWrongIndexReady = ref(false)
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
 const serverComparisonStop = ref(false)
@@ -73,7 +74,7 @@ const serverComparisonProgress = ref('')
 const serverComparisonError = ref('')
 const serverComparisonSummary = ref('')
 async function runServerRecognitionComparison() {
-  if (serverComparisonRunning.value || profilingValidation.value || retesting.value) return
+  if (serverComparisonRunning.value || profilingValidation.value || retesting.value || !currentPageWrongIndexReady.value || currentPageWrongPassportSamples.value.size === 0) return
   serverComparisonRunning.value = true
   serverComparisonStop.value = false
   serverComparisonError.value = ''
@@ -94,32 +95,13 @@ async function runServerRecognitionComparison() {
     // Safety gate: do not restart a 19-passport inference marathon.
     // Run one validation passport per click until Worker stability is proven.
     const passportSamples = (await getTrainingEvaluationSamples('validation'))
-      .filter(item => item.documentType === 'PASSPORT')
-      .map((sample, originalIndex) => {
-        const prior = evaluationBaselineFieldsForSample(sample)
-        const truth = groundTruthForSample(sample).nameZh
-        const priorName = prior?.nameZh
-        return {
-          sample,
-          originalIndex,
-          priority: currentPageWrongPassportSamples.value.has(sample.trainingSampleId)
-            ? 2
-            : prior !== null && !evalFieldEquals('nameZh', priorName, truth) ? 1 : 0,
-          suspectedWrong: currentPageWrongPassportSamples.value.has(sample.trainingSampleId) ||
-            (prior !== null && !evalFieldEquals('nameZh', priorName, truth)),
-        }
-      })
-      .sort((left, right) =>
-        right.priority - left.priority ||
-        left.originalIndex - right.originalIndex,
-      )
+      .filter(item => item.documentType === 'PASSPORT' &&
+        currentPageWrongPassportSamples.value.has(item.trainingSampleId))
     if (!passportSamples.length) throw new Error('Validation 沒有護照樣本')
     const cursor = serverComparisonCursor.value % passportSamples.length
     const chosen = passportSamples[cursor]!
-    const samples = [chosen.sample]
-    const samplePriority = currentPageWrongPassportSamples.value.has(chosen.sample.trainingSampleId)
-      ? '本頁最新正式 Validation 姓名錯誤'
-      : chosen.suspectedWrong ? '歷史 baseline 疑似錯誤' : '一般／無錯誤證據'
+    const samples = [chosen]
+    const samplePriority = '本頁最新正式 Validation 姓名錯誤'
     serverComparisonProgress.value = `護照 Validation ${cursor + 1}/${passportSamples.length}（${samplePriority}）`
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
     for (const [index, sample] of samples.entries()) {
@@ -1444,6 +1426,7 @@ async function profileValidationOnly() {
   const outcomes: ValidationProfileSample[] = []
   const currentProfileWrong = new Set<string>()
   currentPageWrongPassportSamples.value = new Set()
+  currentPageWrongIndexReady.value = false
   const failures: Record<string, number> = {}
   let warmupMs = 0
   let runtimeSummary:
@@ -1955,9 +1938,10 @@ async function profileValidationOnly() {
       ),
     ].slice(0, 3)
 
-    currentPageWrongPassportSamples.value = stopValidationRequested.value || failedCount > 0 || selectedMode !== 'production'
-      ? new Set()
-      : currentProfileWrong
+    currentPageWrongIndexReady.value = !stopValidationRequested.value && failedCount === 0 && selectedMode === 'production'
+    currentPageWrongPassportSamples.value = currentPageWrongIndexReady.value
+      ? currentProfileWrong
+      : new Set()
     validationProfileAttempt.value = {
       mode: selectedMode,
       status: stopValidationRequested.value
@@ -2480,7 +2464,7 @@ onMounted(load)
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
-          <p>安全模式若本頁已跑完正式 32 張 Validation，優先選取當次姓名錯誤的護照；否則退回歷史 baseline 排序，每輪僅 1 張；歷史 baseline 不一定等於最新 `.29` 結果，仍以實際 A/B 判定。；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <p>先在同一頁完成正式 32 張 Validation，才會形成僅存在記憶體的護照中文姓名錯誤索引；A/B 只對這些已知錯誤的護照每次測試一張，不再耗時盲測正確樣本。重新整理會清空索引。Mobile、Server 依序使用獨立 WASM Worker，不更動正式 OCR 與固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
@@ -2489,8 +2473,9 @@ onMounted(load)
             @click="auditPassportBaselineCoverage">先檢查匿名歷史基準覆蓋率（不執行 OCR）</button>
           <p v-if="passportBaselineAudit" class="validation-legacy-note">{{ passportBaselineAudit }}</p>
           <p v-if="passportBaselineAuditError" class="validation-legacy-note">{{ passportBaselineAuditError }}</p>
+          <p class="validation-legacy-note">{{ currentPageWrongIndexReady ? `本頁已建立匿名錯誤索引：${currentPageWrongPassportSamples.size} 張護照姓名錯誤。` : '尚未建立本頁錯誤索引；請先完成一次正式 Validation。' }}</p>
           <button type="button" class="secondary-action"
-            :disabled="serverComparisonRunning || profilingValidation || retesting"
+            :disabled="serverComparisonRunning || profilingValidation || retesting || !currentPageWrongIndexReady || currentPageWrongPassportSamples.size === 0"
             @click="runServerRecognitionComparison">
             {{ serverComparisonRunning ? '候選模型比較中…' : '執行單張護照模型 A/B（安全測試）' }}
           </button>
