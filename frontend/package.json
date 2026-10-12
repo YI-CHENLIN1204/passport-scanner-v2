@@ -19,7 +19,7 @@
     "test:permit-broad-crop": "node scripts/test-permit-broad-name-crop.mjs",
     "test:permit-retry-detection": "node scripts/test-permit-retry-detection.mjs",
     "test:permit-retry-evidence": "node scripts/test-permit-retry-evidence.mjs",
-    "test:ocr-regression": "node scripts/test-romanization.mjs && node scripts/test-permit-evidence.mjs && node scripts/test-permit-sex-evidence.mjs && node scripts/test-permit-sex-retry.mjs && node scripts/test-permit-image-consistency.mjs && node scripts/test-permit-validation-buckets.mjs && node scripts/test-permit-roi-source.mjs && node scripts/test-permit-name-roi-priority.mjs && node scripts/test-permit-source-evidence.mjs && node scripts/test-permit-latin-name.mjs && node scripts/test-permit-raw-name-romanization.mjs && node scripts/test-permit-raw-name-evidence.mjs && node scripts/test-permit-raw-name-diagnostics.mjs && node scripts/test-permit-broad-name-crop.mjs && node scripts/test-permit-retry-detection.mjs && node scripts/test-permit-retry-evidence.mjs && node scripts/test-passport-viz-crop.mjs && node scripts/test-passport-crop-diagnostics.mjs && node scripts/test-passport-unknown-viz.mjs && node scripts/test-passport-exact-source.mjs && node scripts/test-passport-one-syllable-shadow.mjs && node scripts/test-passport-shadow-merge.mjs && node scripts/test-passport-focused-viz.mjs",
+    "test:ocr-regression": "node scripts/test-romanization.mjs && node scripts/test-permit-evidence.mjs && node scripts/test-permit-sex-evidence.mjs && node scripts/test-permit-sex-retry.mjs && node scripts/test-permit-image-consistency.mjs && node scripts/test-permit-validation-buckets.mjs && node scripts/test-permit-roi-source.mjs && node scripts/test-permit-name-roi-priority.mjs && node scripts/test-permit-source-evidence.mjs && node scripts/test-permit-latin-name.mjs && node scripts/test-permit-raw-name-romanization.mjs && node scripts/test-permit-raw-name-evidence.mjs && node scripts/test-permit-raw-name-diagnostics.mjs && node scripts/test-permit-broad-name-crop.mjs && node scripts/test-permit-retry-detection.mjs && node scripts/test-permit-retry-evidence.mjs && node scripts/test-passport-viz-crop.mjs && node scripts/test-passport-crop-diagnostics.mjs && node scripts/test-passport-unknown-viz.mjs && node scripts/test-passport-exact-source.mjs && node scripts/test-passport-one-syllable-shadow.mjs && node scripts/test-passport-shadow-merge.mjs && node scripts/test-passport-focused-viz.mjs && node scripts/test-passport-resize-quality.mjs",
     "verify:ocr": "npm run test:ocr-regression && npm run build",
     "test:permit-raw-name": "node scripts/test-permit-raw-name-evidence.mjs",
     "test:permit-latin-name": "node scripts/test-permit-latin-name.mjs",
@@ -33,7 +33,8 @@
     "test:passport-exact-source": "node scripts/test-passport-exact-source.mjs",
     "test:passport-one-syllable-shadow": "node scripts/test-passport-one-syllable-shadow.mjs",
     "test:passport-shadow-merge": "node scripts/test-passport-shadow-merge.mjs",
-    "test:passport-focused-viz": "node scripts/test-passport-focused-viz.mjs"
+    "test:passport-focused-viz": "node scripts/test-passport-focused-viz.mjs",
+    "test:passport-resize-quality": "node scripts/test-passport-resize-quality.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
