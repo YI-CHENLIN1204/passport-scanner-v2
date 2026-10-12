@@ -1,5 +1,13 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-13 — 新增不同中文 OCR 引擎的 4 張缺候選護照隔離實驗（待 Windows 實測）
+- 先前真實 32/32 Validation 再次確認護照 14/19、台胞證 13/13；已實驗的 PP-OCRv5 Server Recognition 在一張真實缺候選樣本上救回 0，耗時高，不再投入相同模型。
+- 這輪使用現有 `tesseract.js@^7` 新增**不同於 PaddleOCR**的繁體中文 `chi_tra` LSTM Worker。獨立服務 `alternativeChineseRecognition.ts` 重用既有 broad VIZ ROI（不是正式姓名選取），只在同頁完成 production Validation 後讀取其 session-only `currentPageRecognitionMissPassportSamples`，最多四張護照，使用同一 Worker 依序運行；不讀 Test、不更新正式旅客與 OCR、不上傳證件照片、不保留 OCR 全文、不顯示姓名。
+- 品質頁新增 `INDEPENDENT CHINESE OCR` 比較按鈕，匿名顯示比較張數、完整獨立姓名候選命中張數、錯誤數、模型 init / ROI 推論耗時。每次用完 terminate Worker、撤銷 Blob URL。中文語言包由 Tesseract.js 在首次執行時取得，可能需要網路；不得將這種本地運算誤稱無外部下載。
+- 此實驗只衡量 Tesseract 是否能產出 Paddle 缺少的獨立完整姓名文字；它不是 production .29 的新準確率，更不是確認 MRZ selector 能接受。只有觀測到額外正確候選，後續才考慮嚴格錨點、拼音、效能及真實安全整合。
+- 加入 `test-alternative-chinese-recognition.mjs` 靜態 isolation/privacy guard 與 `verify:ocr`。尚未執行 Windows npm verify / docker / browser 測試；沒有 GitHub Actions，沒有個資進版控。
+
+
 ## 2026-10-12 — Joined-Han selector executable synthetic test (unverified locally)
 - Follow-up to `b459f08a` and `83068160`: existing `test-passport-joined-han-name.mjs` only regex-scanned code. New `frontend/scripts/test-passport-joined-han-functional.mjs` reads the actual `chooseTaiwanChineseName()` function source, transpiles that TypeScript function with the existing `typescript` dependency, injects synthetic geometry and controlled phonetic matcher, and asserts output behavior instead of merely checking text patterns.
 - Synthetic scenarios include an adjacent Han split, weak second box, horizontally distant box, wrong row, strict MRZ mismatch, missing name anchor and already-accepted full box. No real names/documents are read; any synthetic Chinese names are fictitious.

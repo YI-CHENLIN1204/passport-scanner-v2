@@ -34,6 +34,7 @@ import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../ser
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
+import { createAlternativeChineseRecognition, containsStandaloneChineseName } from '../services/alternativeChineseRecognition'
 import {
   smokeTestServerRecognition,
   createServerRecognitionValidationInstance,
@@ -43,6 +44,67 @@ import {
   type PassportBroadVizRecognitionProbeResult,
 } from '../services/experimentalServerRecognition'
 
+
+const alternativeRecognitionRunning = ref(false)
+const alternativeRecognitionSummary = ref('')
+const alternativeRecognitionError = ref('')
+const alternativeRecognitionProgress = ref('')
+async function runAlternativeChineseRecognition() {
+  if (alternativeRecognitionRunning.value || profilingValidation.value ||
+      retesting.value || serverComparisonRunning.value ||
+      recognitionProbeRunning.value) return
+  alternativeRecognitionRunning.value = true
+  alternativeRecognitionSummary.value = ''
+  alternativeRecognitionError.value = ''
+  let alt: Awaited<ReturnType<typeof createAlternativeChineseRecognition>> | undefined
+  try {
+    if (!currentPageWrongIndexReady.value) {
+      throw new Error('請先在同頁完成正式 Validation；不對任意未證實樣本執行替代 OCR。')
+    }
+    const samples = (await getTrainingEvaluationSamples('validation'))
+      .filter(item => item.documentType === 'PASSPORT' &&
+        currentPageRecognitionMissPassportSamples.value.has(item.trainingSampleId))
+    if (!samples.length) {
+      alternativeRecognitionSummary.value = '當頁沒有缺正確姓名候選的護照。'
+      return
+    }
+    alternativeRecognitionProgress.value = '正在初始化獨立繁體中文 OCR Worker…'
+    alt = await createAlternativeChineseRecognition()
+    const initMs = alt.initMs
+    let compared = 0
+    let rescued = 0
+    let errors = 0
+    let sumMs = 0
+    for (const sample of samples.slice(0, 4)) {
+      alternativeRecognitionProgress.value =
+        `不同引擎繁體 OCR：${compared + errors + 1}/${Math.min(samples.length, 4)}`
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      try {
+        const expected = groundTruthForSample(sample).nameZh
+        if (!expected) { errors++; continue }
+        const image = await getTrainingSampleImageFile(sample.trainingSampleId)
+        const result = await alt.recognize(image)
+        compared++
+        sumMs += result.wallMs
+        if (containsStandaloneChineseName(result.text, expected)) rescued++
+      } catch {
+        // Never log user images, real OCR text, or other identifying data.
+        errors++
+      }
+    }
+    alternativeRecognitionSummary.value =
+      `繁體中文獨立 OCR：已比較 ${compared} 張、完整姓名獨立候選 ${rescued} 張、錯誤 ${errors} 張；Worker 初始化 ${initMs}ms、ROI 推論合計 ${sumMs}ms。僅量測是否產生獨立候選，不代表已整合正式 .29 或通過 MRZ selector。`
+  } catch (error) {
+    alternativeRecognitionError.value =
+      error instanceof Error ? error.message : '獨立繁體 OCR 失敗'
+  } finally {
+    if (alt) {
+      try { await alt.dispose() } catch { /* no sensitive logging */ }
+    }
+    alternativeRecognitionProgress.value = ''
+    alternativeRecognitionRunning.value = false
+  }
+}
 
 const recognitionProbeCursor = ref(0)
 const recognitionProbeRunning = ref(false)
@@ -2694,6 +2756,25 @@ onMounted(load)
           <p v-if="serverModelSmokeError" class="validation-legacy-note">
             啟動失敗：{{ serverModelSmokeError }}
           </p>
+        </div>
+      </section>
+
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">INDEPENDENT CHINESE OCR</p>
+          <h2>護照中文姓名：繁體中文 Tesseract 獨立辨識</h2>
+          <p>使用不同於 PP-OCRv5 的 Tesseract chi_tra 辨識模型，僅針對當頁正式 Validation 確認缺少完整正確姓名候選的最多四張護照。只回報匿名完整姓名候選救回數和耗時；不更新正式 OCR、不上傳證件影像、不讀固定 Test。</p>
+          <small>第一次可能下載繁體中文語言資料；需要網路連線。OCR 運算在瀏覽器 Worker 執行，結果只用於本次 A/B 計數，不顯示真實姓名。已有正確候選但被拼音阻擋的護照不參與此測試。</small>
+        </div>
+        <div class="retest-action">
+          <button type="button" class="secondary-action"
+            :disabled="alternativeRecognitionRunning || profilingValidation || retesting || !currentPageWrongIndexReady || currentPageRecognitionMissPassportSamples.size === 0"
+            @click="runAlternativeChineseRecognition">
+            {{ alternativeRecognitionRunning ? '獨立中文 OCR 辨識中…' : '一次比較 4 張缺候選護照（不同 OCR 引擎）' }}
+          </button>
+          <p v-if="alternativeRecognitionProgress" class="validation-legacy-note">{{ alternativeRecognitionProgress }}</p>
+          <p v-if="alternativeRecognitionSummary" class="validation-legacy-note">{{ alternativeRecognitionSummary }}</p>
+          <p v-if="alternativeRecognitionError" class="validation-legacy-note">{{ alternativeRecognitionError }}</p>
         </div>
       </section>
 
