@@ -13,10 +13,9 @@ def evaluate(zip_path,limit):
     begin=time.monotonic()
     # Model vocabulary and preprocessing both controlled by RapidOCR,
     # unlike swapping a v6 ONNX into the browser v5 SDK.
-    engine=RapidOCR(params={
-      'Det.ocr_version':'PP-OCRv6','Det.model_type':'small',
-      'Rec.ocr_version':'PP-OCRv6','Rec.model_type':'small',
-      'Rec.lang_type':'ch','Global.use_cls':False})
+    # RapidOCR >= 3.9 already defaults to PP-OCRv6 Small for Det/Rec.
+    # Keep model defaults instead of fragile string-valued overrides.
+    engine=RapidOCR(params={'Global.use_cls': False})
     startup=round((time.monotonic()-begin)*1000)
     total=exact=substring=failed=0
     timings=[]
@@ -54,11 +53,30 @@ def evaluate(zip_path,limit):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser()
-    p.add_argument('dataset_zip',type=Path)
+    p.add_argument('dataset_zip',type=Path,nargs='?')
     p.add_argument('--limit',type=int,default=19)
+    p.add_argument('--check',action='store_true',
+      help='Check local packages and v6 config without reading the private ZIP')
     args=p.parse_args()
-    if not args.dataset_zip.is_file() or not 1<=args.limit<=19: p.error('Private ZIP required; limit 1..19')
-    try: print(json.dumps(evaluate(args.dataset_zip,args.limit),ensure_ascii=False))
-    except Exception:
-      print('PP-OCRv6 experiment failed; no private records printed.',file=sys.stderr)
+    if args.check:
+      from importlib.util import find_spec
+      print(json.dumps({
+        'rapidocr':find_spec('rapidocr') is not None,
+        'opencv':find_spec('cv2') is not None,
+        'onnxruntime':find_spec('onnxruntime') is not None,
+        'numpy':find_spec('numpy') is not None,
+      }))
+      sys.exit(0)
+    if not args.dataset_zip or not args.dataset_zip.is_file() or not 1<=args.limit<=19: p.error('Private ZIP required; limit 1..19')
+    try:
+      print(json.dumps(evaluate(args.dataset_zip,args.limit),ensure_ascii=False))
+    except ImportError as error:
+      # Package name only: don't echo private paths or image contents.
+      print('IMPORT_ERROR: '+str(error).split(':')[0][:100],file=sys.stderr)
+      print('Try: .\\.venv\\Scripts\\python.exe -m pip install onnxruntime',file=sys.stderr)
+      sys.exit(2)
+    except Exception as error:
+      # Exception class only: error messages may contain sensitive ZIP paths.
+      print('EXPERIMENT_ERROR_TYPE: '+type(error).__name__,file=sys.stderr)
+      print('To localize failure, run --check first (no private ZIP reads).',file=sys.stderr)
       sys.exit(1)
