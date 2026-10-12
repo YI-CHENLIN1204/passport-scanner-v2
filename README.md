@@ -224,3 +224,4 @@ OCR 品質頁面已新增完全隔離的「執行合成圖模型啟動測試」�
 
 目前候選尚未於使用者 Windows 實際下載或完成合成 smoke；原 production pipeline 2026.10.11.29 完全不變，正式最佳已實測護照 14/19、台胞證 13/13。下一驗收先看 npm.cmd run verify:ocr、Docker frontend rebuild、合成 smoke 是否成功，**不要求立即跑固定 32 張 Validation**。只有獨立模型可確定載入且比較設計完成，才進入真正 A/B。禁止 GitHub Actions；不得上傳模型二進位或護照個資。
 
+> 2026-10-12：官方 Server Recognition WASM 合成中文字 smoke 成功（1 框、完全相符、3552ms）。現有 main 已新增純 Validation 護照的 Mobile vs Server read-only A/B 入口，尚未本機編譯與跑實測，不能宣稱護照準確率提高。production pipeline 仍 `.29`（護照 14/19、台胞證 13/13）；詳情見 docs/OCR_MODEL_AB_PLAN.md。禁止 GitHub Actions／上傳個資。
