@@ -461,3 +461,4 @@ frontend/public/ort-wasm/
 frontend/.local-ocr-models/
 frontend/*.tar
 frontend/*.onnx
+frontend/public/paddle-models/experiments/
