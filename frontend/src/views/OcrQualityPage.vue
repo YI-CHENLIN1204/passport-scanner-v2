@@ -57,8 +57,11 @@ async function runServerRecognitionComparison() {
   const elapsed: number[] = []
   try {
     // Only validation cohort. Never touch the held-out fixed Test cohort.
+    // Safety gate: do not restart a 19-passport inference marathon.
+    // Run one validation passport per click until Worker stability is proven.
     const samples = (await getTrainingEvaluationSamples('validation'))
       .filter(item => item.documentType === 'PASSPORT')
+      .slice(0, 1)
     if (!samples.length) throw new Error('Validation 沒有護照樣本')
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
     instance = await createServerRecognitionValidationInstance()
@@ -2387,15 +2390,15 @@ onMounted(load)
       <section class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
-          <h2>護照 Validation：Mobile / Server Recognition 對照</h2>
-          <p>只使用 Validation 護照；沿用相同的護照解析與姓名選擇規則，Server 模型採獨立 WASM 實例。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
-          <small>本次模型級 A/B 可能比正式掃描慢，且需額外載入約 85 MB 模型。按鈕需人工啟動。</small>
+          <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
+          <p>安全模式每次只取 Validation 的 1 張護照；沿用相同解析與姓名選擇規則，Server 模型採獨立 WASM Worker 實例。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
           <button type="button" class="secondary-action"
             :disabled="serverComparisonRunning || profilingValidation || retesting"
             @click="runServerRecognitionComparison">
-            {{ serverComparisonRunning ? '候選模型比較中…' : '執行護照 Validation 模型 A/B' }}
+            {{ serverComparisonRunning ? '候選模型比較中…' : '執行單張護照模型 A/B（安全測試）' }}
           </button>
           <button v-if="serverComparisonRunning" type="button"
             class="secondary-action" :disabled="serverComparisonStop"
