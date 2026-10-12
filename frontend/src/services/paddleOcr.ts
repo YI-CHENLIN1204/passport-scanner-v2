@@ -854,7 +854,7 @@ const paddleModelBaseUrl =
   '/paddle-models'
 
 export const OCR_PIPELINE_VERSION =
-  '2026.10.11.28'
+  '2026.10.11.29'
 
 const paddleModelAssetVersion =
   'ppocrv5-onnx-20261003-canonical-3'
@@ -1371,6 +1371,10 @@ async function createPixelCrop(
     throw new Error('無法建立護照姓名欄裁切 Canvas。')
   }
 
+  // High-quality interpolation helps retain small Han strokes when
+  // the passport VIZ crop must be enlarged for recognition.
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
   context.fillStyle = '#ffffff'
   context.fillRect(0, 0, targetWidth, targetHeight)
   context.drawImage(
