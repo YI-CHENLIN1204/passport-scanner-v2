@@ -40,3 +40,14 @@
 ## 進度
 
 2026-10-12 已完成 SDK API 與官方模型研究、建立本機 model tar structural preflight 及 synthetic tests，納入 `verify:ocr`。**尚無 server-rec 可用資產、沒有導入候選推論、未執行新模型 A/B**；production OCR 仍是 `.29`，最佳已實測為 `14/19 / 13/13`。
+
+## 2026-10-12 — 官方 ONNX 模型來源已確認
+
+官方 PaddlePaddle 在 Hugging Face 已發布 PP-OCRv5_server_rec_onnx：https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx/tree/main
+內容含約 84.5 MB inference.onnx 與 inference.yml，授權 Apache-2.0。
+官方 inference.onnx 頁面所列 SHA256：d9dc333c9c7b042c6dffb8e33d72b6f65c9c1d463d0a3c2f78174fea55e94752；下載後仍須在本地核對。
+
+新增 frontend/scripts/package-ocr-server-model.mjs：在本地將官方 ONNX 與 YAML 封裝為 SDK 所需的未壓縮 tar；支援 model_name 為 PP-OCRv5_server_rec 或 PP-OCRv5_server_rec_onnx，必須用 YAML 真正的 model_name 初始化 SDK。
+使用：cd frontend；node scripts/package-ocr-server-model.mjs <model-directory> <output.tar>；再用 node scripts/inspect-ocr-model-tar.mjs <output.tar> <actual-model-name> 做結構檢查。
+新增 synthetic model packaging regression；模型二進位、私人證件及個資不提交 GitHub。
+尚未完成實際模型下載、瀏覽器 SDK 初始化、ONNX 相容性或 A/B Validation。正式 OCR 仍 .29，不要現在重跑 32 張。
