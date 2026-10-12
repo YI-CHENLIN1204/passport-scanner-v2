@@ -80,15 +80,11 @@ async function runServerRecognitionComparison() {
   serverComparisonError.value = ''
   serverComparisonSummary.value = ''
   let instance: ValidationPaddleInstance | undefined
-  let mobileInstance: ValidationPaddleInstance | undefined
   let compared = 0
-  let mobileCorrect = 0
   let serverCorrect = 0
   let rescued = 0
-  let regressed = 0
   let errors = 0
   const elapsed: number[] = []
-  const mobileElapsed: number[] = []
   const serverElapsed: number[] = []
   try {
     // Only validation cohort. Never touch the held-out fixed Test cohort.
@@ -112,18 +108,13 @@ async function runServerRecognitionComparison() {
         const file = await getTrainingSampleImageFile(sample.trainingSampleId)
         const truth = groundTruthForSample(sample).nameZh
         const before = performance.now()
-        // Both candidates now run with isolated WASM Workers. Releasing
-        // the Mobile instance before initializing the larger Server one
-        // avoids keeping two full models alive on the UI thread.
-        const mobileStarted = performance.now()
-        serverComparisonProgress.value = '單張：啟動 Mobile WASM Worker…'
-        mobileInstance = await createValidationPaddleInstance(true)
-        serverComparisonProgress.value = '單張：執行 Mobile OCR…'
-        const mobile = await recognizePassportWithPaddle(file, undefined, mobileInstance)
-        serverComparisonProgress.value = '單張：釋放 Mobile Worker…'
-        await mobileInstance.dispose()
-        mobileInstance = undefined
-        mobileElapsed.push(performance.now() - mobileStarted)
+        // This sample was proven wrong by the completed production Validation
+        // in the same page session. Do NOT rerun the Mobile baseline.
+        // Server correctness is compared to the same ground truth, not to
+        // an unverified historical baseline.
+        if (!currentPageWrongPassportSamples.value.has(sample.trainingSampleId)) {
+          throw new Error('Validation failure index no longer matches selected sample')
+        }
         if (serverComparisonStop.value) break
         const serverStarted = performance.now()
         serverComparisonProgress.value = '單張：啟動 Server WASM Worker…'
@@ -135,13 +126,12 @@ async function runServerRecognitionComparison() {
         instance = undefined
         serverElapsed.push(performance.now() - serverStarted)
         elapsed.push(performance.now() - before)
-        const mobileOk = evalFieldEquals('nameZh', mobile.chineseName, truth)
         const serverOk = evalFieldEquals('nameZh', server.chineseName, truth)
         compared++
-        if (mobileOk) mobileCorrect++
-        if (serverOk) serverCorrect++
-        if (!mobileOk && serverOk) rescued++
-        if (mobileOk && !serverOk) regressed++
+        if (serverOk) {
+          serverCorrect++
+          rescued++
+        }
       } catch {
         // Aggregate error counts only, never names, images, identifiers or raw OCR.
         errors++
@@ -153,14 +143,12 @@ async function runServerRecognitionComparison() {
     if (compared > 0 || errors > 0) {
       serverComparisonCursor.value = (serverComparisonCursor.value + 1) % passportSamples.length
     }
-    const mobileMs = mobileElapsed.length ? Math.round(mobileElapsed[0]!) : 0
     const serverMs = serverElapsed.length ? Math.round(serverElapsed[0]!) : 0
     serverComparisonSummary.value =
-      `本次樣本 ${cursor + 1}/${passportSamples.length}（${samplePriority}）；比較 ${compared} 張；Mobile 正確 ${mobileCorrect}；Server 正確 ${serverCorrect}；救回 ${rescued}；退步 ${regressed}；錯誤 ${errors}；Mobile 含初始化/釋放 ${mobileMs}ms；Server 含初始化/釋放 ${serverMs}ms；兩模型總耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。`
+      `本次樣本 ${cursor + 1}/${passportSamples.length}（${samplePriority}）；比較 ${compared} 張；正式 .29 當頁判錯 ${compared}；Server 正確 ${serverCorrect}；候選救回 ${rescued}；處理錯誤 ${errors}；Server 含初始化/釋放 ${serverMs}ms；本次 Server 耗時 P50 ${percentile(.5)}ms / P90 ${percentile(.9)}ms。此為既有正式結果對 Server WASM 的跨 backend 比較，非同時重跑雙模型。`
   } catch (error) {
     serverComparisonError.value = error instanceof Error ? error.message : 'A/B 比較失敗'
   } finally {
-    if (mobileInstance) await mobileInstance.dispose()
     if (instance) await instance.dispose()
     serverComparisonRunning.value = false
     serverComparisonProgress.value = ''
@@ -2463,8 +2451,8 @@ onMounted(load)
       <section class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
-          <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
-          <p>先在同一頁完成正式 32 張 Validation，才會形成僅存在記憶體的護照中文姓名錯誤索引；A/B 只對這些已知錯誤的護照每次測試一張，不再耗時盲測正確樣本。重新整理會清空索引。Mobile、Server 依序使用獨立 WASM Worker，不更動正式 OCR 與固定 Test。</p>
+          <h2>護照 Validation：Server Recognition 錯誤樣本救援測試</h2>
+          <p>先在同一頁完成正式 32 張 Validation，才會形成僅存在記憶體的護照中文姓名錯誤索引；A/B 只對這些已知錯誤的護照每次測試一張，不再耗時盲測正確樣本。重新整理會清空索引。因正式 Validation 已確定樣本姓名錯誤，本功能只執行 Server WASM Worker，直接測試能否救回；省略重複 Mobile 推論，不更動正式 OCR 與固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
