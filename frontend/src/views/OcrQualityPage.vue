@@ -281,6 +281,14 @@ const currentPageWrongPassportSamples = ref<Set<string>>(new Set())
 // Never persist sample keys, recognized strings, or ground truth.
 const currentPageRecognitionMissPassportSamples = ref<Set<string>>(new Set())
 const currentPageSelectorBlockedPassportSamples = ref<Set<string>>(new Set())
+// Aggregate only; never persist or display document identity/recognized text.
+const currentPageSelectorReasonCounts = ref<Record<string, number>>({})
+const currentPageSelectorReasonSummary = computed(() =>
+  Object.entries(currentPageSelectorReasonCounts.value)
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `${reason}: ${count}`)
+    .join('；'),
+)
 const currentPageWrongIndexReady = ref(false)
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
@@ -289,7 +297,7 @@ const serverComparisonProgress = ref('')
 const serverComparisonError = ref('')
 const serverComparisonSummary = ref('')
 async function runServerRecognitionComparison() {
-  if (serverComparisonRunning.value || profilingValidation.value || retesting.value || !currentPageWrongIndexReady.value || currentPageWrongPassportSamples.value.size === 0) return
+  if (serverComparisonRunning.value || profilingValidation.value || retesting.value || !currentPageWrongIndexReady.value || currentPageRecognitionMissPassportSamples.value.size === 0) return
   serverComparisonRunning.value = true
   serverComparisonStop.value = false
   serverComparisonError.value = ''
@@ -312,7 +320,7 @@ async function runServerRecognitionComparison() {
     const cursor = serverComparisonCursor.value % passportSamples.length
     const chosen = passportSamples[cursor]!
     const samples = [chosen]
-    const samplePriority = '本頁最新正式 Validation 姓名錯誤'
+    const samplePriority = '本頁正式 Validation 缺完整正確姓名候選'
     serverComparisonProgress.value = `護照 Validation ${cursor + 1}/${passportSamples.length}（${samplePriority}）`
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
     for (const [index, sample] of samples.entries()) {
@@ -327,7 +335,7 @@ async function runServerRecognitionComparison() {
         // in the same page session. Do NOT rerun the Mobile baseline.
         // Server correctness is compared to the same ground truth, not to
         // an unverified historical baseline.
-        if (!currentPageWrongPassportSamples.value.has(sample.trainingSampleId)) {
+        if (!currentPageRecognitionMissPassportSamples.value.has(sample.trainingSampleId)) {
           throw new Error('Validation failure index no longer matches selected sample')
         }
         if (serverComparisonStop.value) break
@@ -1630,9 +1638,11 @@ async function profileValidationOnly() {
   const currentProfileWrong = new Set<string>()
   const currentProfileRecognitionMiss = new Set<string>()
   const currentProfileSelectorBlocked = new Set<string>()
+  const currentProfileSelectorReasonCounts: Record<string, number> = {}
   currentPageWrongPassportSamples.value = new Set()
   currentPageRecognitionMissPassportSamples.value = new Set()
   currentPageSelectorBlockedPassportSamples.value = new Set()
+  currentPageSelectorReasonCounts.value = {}
   currentPageWrongIndexReady.value = false
   const failures: Record<string, number> = {}
   let warmupMs = 0
@@ -1813,6 +1823,9 @@ async function profileValidationOnly() {
           currentProfileWrong.add(sample.trainingSampleId)
           if (passportNameFailure === 'exact-candidate') {
             currentProfileSelectorBlocked.add(sample.trainingSampleId)
+            const reason = passportExactDecision ?? 'not-in-selector-trace'
+            currentProfileSelectorReasonCounts[reason] =
+              (currentProfileSelectorReasonCounts[reason] ?? 0) + 1
           } else {
             // Exact full name absent from eligible diagnostic candidates.
             // This is a recognition candidate miss, not proof of a bad
@@ -2163,6 +2176,9 @@ async function profileValidationOnly() {
     currentPageSelectorBlockedPassportSamples.value = currentPageWrongIndexReady.value
       ? currentProfileSelectorBlocked
       : new Set()
+    currentPageSelectorReasonCounts.value = currentPageWrongIndexReady.value
+      ? currentProfileSelectorReasonCounts
+      : {}
     validationProfileAttempt.value = {
       mode: selectedMode,
       status: stopValidationRequested.value
@@ -2744,7 +2760,7 @@ onMounted(load)
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Server Recognition 錯誤樣本救援測試</h2>
-          <p>先在同一頁完成正式 32 張 Validation，才會形成僅存在記憶體的護照中文姓名錯誤索引；A/B 只對這些已知錯誤的護照每次測試一張，不再耗時盲測正確樣本。重新整理會清空索引。因正式 Validation 已確定樣本姓名錯誤，本功能只執行 Server WASM Worker，直接測試能否救回；省略重複 Mobile 推論，不更動正式 OCR 與固定 Test。</p>
+          <p>先在同一頁完成正式 32 張 Validation，才會形成僅存在記憶體的護照中文姓名錯誤索引；A/B 只對已確認缺完整正確姓名候選的護照每次測試一張，不再耗時盲測正確樣本。重新整理會清空索引。因正式 Validation 已確定樣本姓名錯誤，本功能只執行 Server WASM Worker，直接測試能否救回；省略重複 Mobile 推論，不更動正式 OCR 與固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
@@ -2753,9 +2769,12 @@ onMounted(load)
             @click="auditPassportBaselineCoverage">先檢查匿名歷史基準覆蓋率（不執行 OCR）</button>
           <p v-if="passportBaselineAudit" class="validation-legacy-note">{{ passportBaselineAudit }}</p>
           <p v-if="passportBaselineAuditError" class="validation-legacy-note">{{ passportBaselineAuditError }}</p>
-          <p class="validation-legacy-note">{{ currentPageWrongIndexReady ? `本頁已建立匿名錯誤索引：${currentPageWrongPassportSamples.size} 張護照姓名錯誤。` : '尚未建立本頁錯誤索引；請先完成一次正式 Validation。' }}</p>
+          <p v-if="currentPageWrongIndexReady && currentPageSelectorReasonSummary" class="validation-legacy-note">
+            已有正確姓名候選的匿名阻擋原因：{{ currentPageSelectorReasonSummary }}
+          </p>
+          <p class="validation-legacy-note">{{ currentPageWrongIndexReady ? `本頁姓名錯誤 ${currentPageWrongPassportSamples.size} 張；缺完整正確候選 ${currentPageRecognitionMissPassportSamples.size} 張；已有正確候選但被阻擋 ${currentPageSelectorBlockedPassportSamples.size} 張。` : '尚未建立本頁錯誤索引；請先完成一次正式 Validation。' }}</p>
           <button type="button" class="secondary-action"
-            :disabled="serverComparisonRunning || profilingValidation || retesting || !currentPageWrongIndexReady || currentPageWrongPassportSamples.size === 0"
+            :disabled="serverComparisonRunning || profilingValidation || retesting || !currentPageWrongIndexReady || currentPageRecognitionMissPassportSamples.size === 0"
             @click="runServerRecognitionComparison">
             {{ serverComparisonRunning ? '候選模型比較中…' : '執行單張護照模型 A/B（安全測試）' }}
           </button>

@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — 收斂完整 Server A/B 與匿名 selector 原因（待本機 verify）
+- 程式檢查發現：ROI A/B 已限制為當頁正式 Validation 的缺正確候選護照，但舊完整版 Server A/B 按鈕仍依全體姓名錯誤啟用，會浪費 Server 對已存在正確候選卻遭 selector 阻擋的護照做完整 OCR。
+- 現已將完整版 Server A/B 的啟用條件、session 選樣及執行前索引再確認，統一改為 `currentPageRecognitionMissPassportSamples`，維持一次最多一張、獨立 WASM Worker、使用原始 Validator 真實答案、無個資持久化。
+- 同次完整 production Validation 的錯誤樣本，對 `exact-candidate` 另以既有 `passportExactDecision` 統計匿名阻擋原因（例如 one-syllable-mismatch、no-anchor、unknown-threshold）；只在完整無失敗 production Validation 後顯示 aggregate counts，重新整理消失，不保存原因對樣本的對應。
+- 正式 pipeline 仍 `2026.10.11.29`、護照最新實測 14/19、台胞證 13/13；此批為診斷決策收斂，未宣稱辨識提升。新 source 回歸守衛已補，尚未跑 Windows `npm.cmd run verify:ocr` / browser Validation；未執行 GitHub Actions。
+
+
 ### 2026-10-12 — Separate confirmed recognition misses from selector blocks before future A/B
 - After same-ROI Server took 17,989ms recognition vs Mobile 2,269ms and rescued 0/1, the unaudited ROI scan is a poor signal: it found a miss after screening 12 passports without knowing whether it was among five .29 end-to-end failures.
 - Change the existing session-only complete production Validation index to capture two disjoint anonymous sample-key sets: `exact-candidate` (selector issue) and the remaining errors (no exact candidate in eligible OCR diagnostics). Do not persist keys, names or images; discard on incomplete Validation/page refresh.

@@ -23,12 +23,16 @@ assert.match(fn,/const samples = \[chosen\]/)
 
 assert.match(page,/currentPageWrongPassportSamples = ref<Set<string>>/)
 assert.match(page,/currentPageWrongIndexReady = ref\(false\)/)
+assert.match(page,/currentPageSelectorReasonCounts = ref/)
+assert.match(page,/currentProfileSelectorReasonCounts\[reason\]/)
+assert.match(page,/currentPageSelectorReasonCounts\.value = currentPageWrongIndexReady\.value/)
 assert.match(page,/currentProfileWrong\.add\(sample\.trainingSampleId\)/)
 assert.match(page,/currentPageWrongPassportSamples\.value = currentPageWrongIndexReady\.value/)
 
-assert.match(fn,/本頁最新正式 Validation 姓名錯誤/)
-assert.match(fn,/currentPageWrongPassportSamples\.value\.has\(item\.trainingSampleId\)/)
+assert.match(fn,/本頁正式 Validation 缺完整正確姓名候選/)
+assert.match(fn,/currentPageRecognitionMissPassportSamples\.value\.has\(item\.trainingSampleId\)/)
 assert.match(fn,/!currentPageWrongIndexReady\.value/)
+assert.match(fn,/!currentPageRecognitionMissPassportSamples\.value\.has\(sample\.trainingSampleId\)/)
 
 
 
