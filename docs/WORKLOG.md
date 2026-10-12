@@ -661,3 +661,7 @@ OCR 品質頁面已新增完全隔離的「執行合成圖模型啟動測試」�
 ## 2026-10-12 — Server-rec WASM fallback 未觸發的根因修復
 
 使用者再次回報合成圖 smoke 仍顯示原始 `ceil_mode ... WebGPU MaxPool kernel` 錯誤。追查原始 `experimentalServerRecognition.ts` 發現上次 regex literal 寫成 `[\\s\\S]`（雙重反斜線），無法比對跨字元錯誤訊息，於是 auto/WebGPU 直接 throw，從未進入 WASM retry。現已改用 `message.includes('ceil_mode') && message.includes('WebGPU MaxPool')`，並在 regression 測試用使用者截圖的實際錯誤字串檢查；若 WASM 亦失敗，UI 現在會看到 `Auto/WebGPU ...；WASM fallback 亦失敗：...`，可辨別實際第二階段錯誤。正式 production OCR `.29` 完全不動，沒有讀證件、沒有更動 32 張 Validation。此修復尚待使用者本機編譯／合成圖 smoke 驗證；不得預先宣稱 WASM 已成功。
+
+## 2026-10-12 — Server-rec 合成 WASM 執行成功，但原本 0 框統計讀錯 SDK 欄位
+
+使用者最新合成圖 smoke 截圖顯示：WebGPU MaxPool ceil_mode 不支援後，WASM fallback **成功執行**，總耗時約 2963ms，但 UI 顯示辨識框數 0。檢查發現實驗程式原先讀 `rec_texts/texts`，而現行 PaddleOCR.js 在正式 `paddleOcr.ts` 中的實際使用方式是 `prediction.items`，故該 0 不可靠，不代表 Detection 失敗。已將隔離實驗改用 `prediction.items` 計算框數與擷取合成文字，UI 顯示實際 synthetic 文字（不含真實旅客資料），並補 regression guard。正式 production `.29` 不改；尚未確定合成字辨識正確，也沒有執行真實模型 A/B；下一步只需 pull、verify:ocr、frontend Docker rebuild、重新按合成圖測試，不要再跑 32 張 Validation。禁止 GitHub Actions 與個資上傳。
