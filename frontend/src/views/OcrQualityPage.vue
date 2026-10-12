@@ -375,6 +375,28 @@ const currentPageSelectorReasonSummary = computed(() =>
     .join('；'),
 )
 const currentPageWrongIndexReady = ref(false)
+function downloadProductionErrorIndex() {
+  if (!currentPageWrongIndexReady.value) return
+  // Contains opaque local training sample IDs, NOT names or OCR text.
+  // Keep locally only; never upload this file to GitHub or share it.
+  const content = JSON.stringify({
+    pipelineVersion: OCR_PIPELINE_VERSION,
+    missingCandidateSampleIds: [...currentPageRecognitionMissPassportSamples.value],
+    selectorBlockedSampleIds: [...currentPageSelectorBlockedPassportSamples.value],
+  })
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
+  try {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'passport-local-production29-errors.json'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
 const serverComparisonStop = ref(false)
@@ -2873,6 +2895,12 @@ onMounted(load)
             @click="auditPassportBaselineCoverage">先檢查匿名歷史基準覆蓋率（不執行 OCR）</button>
           <p v-if="passportBaselineAudit" class="validation-legacy-note">{{ passportBaselineAudit }}</p>
           <p v-if="passportBaselineAuditError" class="validation-legacy-note">{{ passportBaselineAuditError }}</p>
+          <button type="button" class="secondary-action"
+            :disabled="!currentPageWrongIndexReady || profilingValidation || retesting"
+            @click="downloadProductionErrorIndex">
+            匯出本頁 .29 錯誤索引（僅存本機）
+          </button>
+          <p class="validation-legacy-note">此 JSON 只供本機 PP-OCRv6 同樣本比較，含不透明樣本識別碼。請勿上傳 GitHub 或分享。</p>
           <p v-if="currentPageWrongIndexReady && currentPageSelectorReasonSummary" class="validation-legacy-note">
             已有正確姓名候選的匿名阻擋原因：{{ currentPageSelectorReasonSummary }}
           </p>

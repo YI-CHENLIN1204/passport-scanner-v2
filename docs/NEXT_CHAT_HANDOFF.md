@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-13 — v6 paired same-sample verification
+- Windows v6 Small pilot verified: 19 Validation PASSPORT, standalone exact 14, substring-only 2, failures 0, median ROI 610ms. This is not 16/19 production accuracy. Historical export original OCR proxy is mostly unknown and cannot prove .29 rescues.
+- Add one-time local-only export of the current-page complete production .29 missing-candidate and selector-blocked sample IDs. Export is available only when the current production Validation finished without failure; it contains opaque sample IDs, not names, ground truth or photos. Do not share/upload index to GitHub. Refresh clears page index.
+- Python PP-OCRv6 pilot accepts `--production-index <local-json>` and joins with private ZIP manifest IDs locally; reports aggregate number of confirmed .29 missing-candidate passports rescued as standalone or substring-only, plus whether index membership matched. Both inputs stay local; no identifying strings displayed. Do not treat substring-only as selected name.
+- Requires redoing one formal .29 Validation in browser to re-create the session-only index (unless that completed page is still open), but does not require rerunning Python v5. Production OCR and Test are unchanged. No GitHub Actions. Windows build pending.
+
+
 ## 2026-10-13 — PP-OCRv6 Small local RapidOCR pilot (new candidate architecture, untested on personal data)
 
 Literature gate: RapidOCR v3.9+ officially supports PP-OCRv6 small/medium ONNX multilingual recognition with Traditional Chinese. RapidOCR project reported recognition standalone exact accuracy 0.8419 for PP-OCRv6 small vs 0.7355 for PP-OCRv5 mobile on their public recognition dataset; **these are not our passport measurements** and model/version/config comparisons need caution. Sources: https://rapidai.github.io/RapidOCRDocs/latest/model_list/ and https://rapidai.github.io/RapidOCRDocs/latest/blog/2026/06/18/rapidocr-%E9%9B%86%E6%88%90-pp-ocrv6-rec-%E6%A8%A1%E5%9E%8B%E8%AE%B0%E5%BD%95/

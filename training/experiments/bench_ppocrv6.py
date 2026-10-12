@@ -9,7 +9,7 @@ def safe(z, name):
     if not isinstance(name,str) or not name or '..' in PurePosixPath(name).parts or name not in z.namelist(): raise ValueError('invalid archive path')
     return z.read(name)
 
-def evaluate(zip_path,limit):
+def evaluate(zip_path,limit,production_index=None):
     global STAGE
     STAGE = 'dependencies'
     import cv2, numpy as np
@@ -25,6 +25,8 @@ def evaluate(zip_path,limit):
     total=exact=substring=failed=0
     timings=[]
     anonymous_rows=[]
+    overlap={'confirmed_missing_candidates':0,'v6_standalone_rescue':0,'v6_substring_potential':0,'v6_absent':0,'confirmed_selector_blocked':0}
+    indexed_seen=set()
     passport_ordinal=0
     STAGE = 'zip-manifest'
     with zipfile.ZipFile(zip_path) as z:
@@ -69,13 +71,26 @@ def evaluate(zip_path,limit):
           old_status=('exact' if isinstance(old_name,str) and ''.join(old_name.split())==truth
                       else 'different' if isinstance(old_name,str) and old_name.strip()
                       else 'unknown')
+          if production_index is not None:
+            key=str(row.get('sampleId','')).replace('-','').lower()
+            if key in production_index['missingCandidateSampleIds']:
+              indexed_seen.add(key)
+              overlap['confirmed_missing_candidates']+=1
+              if status=='standalone-exact': overlap['v6_standalone_rescue']+=1
+              elif status=='substring-only':overlap['v6_substring_potential']+=1
+              else:overlap['v6_absent']+=1
+            if key in production_index['selectorBlockedSampleIds']:
+              overlap['confirmed_selector_blocked']+=1
           anonymous_rows.append({'validation_passport_index':passport_ordinal,
             'v6_roi_candidate':status,'exported_original_ocr_proxy':old_status})
         except Exception:
           failed+=1
+    if production_index is not None:
+      overlap['index_complete']=indexed_seen==set(production_index['missingCandidateSampleIds'])
     return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
+      production_29_overlap=overlap if production_index is not None else 'not_provided',
       init_ms=startup,median_roi_ms=round(statistics.median(timings)) if timings else 0,
       disclaimer='Original OCR in export is historical, NOT .29. Do not infer true rescue from this table. Validation ordering is not a stable sample identity.')
 
@@ -83,6 +98,8 @@ if __name__=='__main__':
     p=argparse.ArgumentParser()
     p.add_argument('dataset_zip',type=Path,nargs='?')
     p.add_argument('--limit',type=int,default=19)
+    p.add_argument('--production-index',type=Path,
+      help='Local anonymous index exported from the same-page complete production Validation')
     p.add_argument('--check',action='store_true',
       help='Check local packages and v6 config without reading the private ZIP')
     args=p.parse_args()
@@ -97,7 +114,15 @@ if __name__=='__main__':
       sys.exit(0)
     if not args.dataset_zip or not args.dataset_zip.is_file() or not 1<=args.limit<=19: p.error('Private ZIP required; limit 1..19')
     try:
-      print(json.dumps(evaluate(args.dataset_zip,args.limit),ensure_ascii=False))
+      index=None
+      if args.production_index:
+        index=json.loads(args.production_index.read_text(encoding='utf-8-sig'))
+        if index.get('pipelineVersion')!='2026.10.11.29': raise ValueError('wrong index version')
+        for group in ('missingCandidateSampleIds','selectorBlockedSampleIds'):
+          if not isinstance(index.get(group),list) or any(not isinstance(x,str) or len(x.replace('-',''))!=32 for x in index[group]):
+            raise ValueError('invalid local index')
+          index[group]=[x.replace('-','').lower() for x in index[group]]
+      print(json.dumps(evaluate(args.dataset_zip,args.limit,index),ensure_ascii=False))
     except ImportError as error:
       # Package name only: don't echo private paths or image contents.
       print('IMPORT_ERROR: '+str(error).split(':')[0][:100],file=sys.stderr)
