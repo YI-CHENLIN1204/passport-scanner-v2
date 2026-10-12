@@ -1,5 +1,14 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-12 — 19/19 baseline 缺失，改用本頁即時 Validation 暫存錯誤集合
+
+使用者的匿名稽核顯示：19 張 Validation 護照中，可解析歷史 baseline 0、缺少 baseline 19、缺少人工姓名答案 0。故先前「歷史錯誤優先」沒有證據可用。上一張 Worker A/B Mobile 與 Server 都正確，沒有救回與退步，兩模型耗時超過 56 秒，不能代表 Server 提升辨識率。
+
+已在 main 新增 session-only 記憶體集合：當本頁正式 production Validation 完整完成且沒有 OCR 失敗時，從該次逐張比對結果留下中文姓名判錯之樣本 key（非姓名、證號或 OCR 原文）；A/B 優先選該次失敗，再考慮歷史 baseline。若 Validation 中止、失敗或不是 production 模式便不用此集合。重新整理即清空，不寫資料庫、GitHub 或本機持久儲存；仍每次只跑一張、使用雙 WASM Worker。
+
+注意：既有 .29 的 14/19 聚合結果無法反推五張失敗樣本；本次改碼不能自動還原舊索引。只有同一頁再完成一次正式 Validation 才能形成精確錯誤排序。已加入靜態回歸守衛，尚待本機 verify/build。正式 production OCR .29 不變，台胞證基準 13/13。不啟動 GitHub Actions、不上傳真實證件與個資。
+
+
 ## 2026-10-12 — 單張模型 A/B 優先取歷史姓名錯誤樣本（待本機驗證）
 
 上一輪 Worker 隔離的實際 Validation 單張比較成功：Mobile 正確 1/1、Server 正確 1/1、救回 0、退步 0、錯誤 0，兩模型累計耗時約 57,455ms。這張本來就已正確，不能用以證明 Server 較好。正式 production OCR 仍 .29（固定 Validation 護照 14/19，台胞證 13/13）。
