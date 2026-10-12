@@ -63,6 +63,9 @@ async function auditPassportBaselineCoverage() {
     passportBaselineAuditError.value = error instanceof Error ? error.message : '統計失敗'
   }
 }
+// Only ephemeral sample references from the completed current-page Validation.
+// Never persist identifiers, OCR text or per-person outcomes.
+const currentPageWrongPassportSamples = ref<Set<number>>(new Set())
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
 const serverComparisonStop = ref(false)
@@ -99,8 +102,8 @@ async function runServerRecognitionComparison() {
         return {
           sample,
           originalIndex,
-          suspectedWrong: prior !== null &&
-            !evalFieldEquals('nameZh', priorName, truth),
+          suspectedWrong: currentPageWrongPassportSamples.value.has(sample.trainingSampleId) ||
+            (prior !== null && !evalFieldEquals('nameZh', priorName, truth)),
         }
       })
       .sort((left, right) =>
@@ -111,7 +114,9 @@ async function runServerRecognitionComparison() {
     const cursor = serverComparisonCursor.value % passportSamples.length
     const chosen = passportSamples[cursor]!
     const samples = [chosen.sample]
-    const samplePriority = chosen.suspectedWrong ? '歷史 baseline 疑似錯誤' : '一般／無歷史錯誤證據'
+    const samplePriority = currentPageWrongPassportSamples.value.has(chosen.sample.trainingSampleId)
+      ? '本頁最新正式 Validation 姓名錯誤'
+      : chosen.suspectedWrong ? '歷史 baseline 疑似錯誤' : '一般／無錯誤證據'
     serverComparisonProgress.value = `護照 Validation ${cursor + 1}/${passportSamples.length}（${samplePriority}）`
     serverComparisonProgress.value = '正在初始化獨立 Server Recognition WASM…'
     for (const [index, sample] of samples.entries()) {
@@ -1434,6 +1439,8 @@ async function profileValidationOnly() {
   }
 
   const outcomes: ValidationProfileSample[] = []
+  const currentProfileWrong = new Set<number>()
+  currentPageWrongPassportSamples.value = new Set()
   const failures: Record<string, number> = {}
   let warmupMs = 0
   let runtimeSummary:
@@ -1609,6 +1616,9 @@ async function profileValidationOnly() {
         const shadowNames = prediction.passportNameDiagnostics
           .map(item => item.shadowOneMismatchName)
           .filter((name): name is string => Boolean(name))
+        if (sample.documentType === 'PASSPORT' && !fieldExact.nameZh) {
+          currentProfileWrong.add(sample.trainingSampleId)
+        }
         const baselineNameCorrect = Boolean(fieldExact.nameZh)
         const shadowNameCorrect = shadowNames.length
           ? evalFieldEquals('nameZh', shadowNames[0], truth.nameZh)
@@ -1942,6 +1952,9 @@ async function profileValidationOnly() {
       ),
     ].slice(0, 3)
 
+    currentPageWrongPassportSamples.value = stopValidationRequested.value || failedCount > 0 || selectedMode !== 'production'
+      ? new Set()
+      : currentProfileWrong
     validationProfileAttempt.value = {
       mode: selectedMode,
       status: stopValidationRequested.value
@@ -2464,7 +2477,7 @@ onMounted(load)
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Mobile / Server Recognition 安全單張對照</h2>
-          <p>安全模式優先挑選歷史 baseline 姓名疑似錯誤的 Validation 護照，每輪僅 1 張；歷史 baseline 不一定等於最新 `.29` 結果，仍以實際 A/B 判定。；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
+          <p>安全模式若本頁已跑完正式 32 張 Validation，優先選取當次姓名錯誤的護照；否則退回歷史 baseline 排序，每輪僅 1 張；歷史 baseline 不一定等於最新 `.29` 結果，仍以實際 A/B 判定。；Mobile、Server 分別採用獨立 WASM Worker，依序啟動並釋放。只顯示匿名聚合統計，不寫入資料庫、不修改正式 OCR、也不動固定 Test。</p>
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
