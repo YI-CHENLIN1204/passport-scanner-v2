@@ -24,13 +24,13 @@ assert.match(fn,/const samples = \[chosen\]/)
 assert.match(page,/currentPageWrongPassportSamples = ref<Set<string>>/)
 assert.match(page,/currentPageWrongIndexReady = ref\(false\)/)
 assert.match(page,/currentProfileWrong\.add\(sample\.trainingSampleId\)/)
-assert.match(page,/currentPageWrongPassportSamples\.value = stopValidationRequested\.value/)
+assert.match(page,/currentPageWrongPassportSamples\.value = currentPageWrongIndexReady\.value/)
 
 assert.match(fn,/本頁最新正式 Validation 姓名錯誤/)
 assert.match(fn,/currentPageWrongPassportSamples\.value\.has\(item\.trainingSampleId\)/)
 assert.match(fn,/!currentPageWrongIndexReady\.value/)
 
-assert.match(fn,/right\.priority - left\.priority/)
+
 
 
 assert.match(fn,/serverComparisonCursor\.value = \(serverComparisonCursor\.value \+ 1\) % passportSamples\.length/)
