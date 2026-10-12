@@ -36,6 +36,33 @@ import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../servi
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
 import { smokeTestServerRecognition, createServerRecognitionValidationInstance } from '../services/experimentalServerRecognition'
 
+const passportBaselineAudit = ref('')
+const passportBaselineAuditError = ref('')
+async function auditPassportBaselineCoverage() {
+  passportBaselineAudit.value = ''
+  passportBaselineAuditError.value = ''
+  try {
+    const samples = (await getTrainingEvaluationSamples('validation'))
+      .filter(sample => sample.documentType === 'PASSPORT')
+    let hasBaseline = 0
+    let baselineWrong = 0
+    let baselineCorrect = 0
+    let noGroundTruth = 0
+    for (const sample of samples) {
+      const baseline = evaluationBaselineFieldsForSample(sample)
+      const truth = groundTruthForSample(sample).nameZh
+      if (!truth) noGroundTruth++
+      if (!baseline) continue
+      hasBaseline++
+      if (evalFieldEquals('nameZh', baseline.nameZh, truth)) baselineCorrect++
+      else baselineWrong++
+    }
+    passportBaselineAudit.value =
+      `護照 Validation ${samples.length} 張；有可解析歷史 baseline ${hasBaseline}；歷史姓名錯誤 ${baselineWrong}；歷史姓名正確 ${baselineCorrect}；無 baseline ${samples.length - hasBaseline}；無人工姓名答案 ${noGroundTruth}。此為歷史資料覆蓋率，不代表最新 OCR 正確率。`
+  } catch (error) {
+    passportBaselineAuditError.value = error instanceof Error ? error.message : '統計失敗'
+  }
+}
 const serverComparisonCursor = ref(0)
 const serverComparisonRunning = ref(false)
 const serverComparisonStop = ref(false)
@@ -2441,6 +2468,11 @@ onMounted(load)
           <small>為避免主執行緒無回應，暫時不允許一次執行 19 張。若單張仍卡住，直接關閉頁面並回報，不必反覆重試。此單張結果不可視為整組準確率。</small>
         </div>
         <div class="retest-action">
+          <button type="button" class="secondary-action"
+            :disabled="serverComparisonRunning || profilingValidation || retesting"
+            @click="auditPassportBaselineCoverage">先檢查匿名歷史基準覆蓋率（不執行 OCR）</button>
+          <p v-if="passportBaselineAudit" class="validation-legacy-note">{{ passportBaselineAudit }}</p>
+          <p v-if="passportBaselineAuditError" class="validation-legacy-note">{{ passportBaselineAuditError }}</p>
           <button type="button" class="secondary-action"
             :disabled="serverComparisonRunning || profilingValidation || retesting"
             @click="runServerRecognitionComparison">
