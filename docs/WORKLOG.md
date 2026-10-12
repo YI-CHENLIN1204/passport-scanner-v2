@@ -726,3 +726,6 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 
 注意：既有 .29 的 14/19 聚合結果無法反推五張失敗樣本；本次改碼不能自動還原舊索引。只有同一頁再完成一次正式 Validation 才能形成精確錯誤排序。已加入靜態回歸守衛，尚待本機 verify/build。正式 production OCR .29 不變，台胞證基準 13/13。不啟動 GitHub Actions、不上傳真實證件與個資。
 
+## 2026-10-12 — 限定已驗證錯誤護照的單張 Server A/B
+
+歷史 Validation 護照 19 張可解析 baseline 為 0，故不能用歷史錯誤排序。更新 main：未在同一頁完整完成 production Validation 時，模型 A/B 按鈕停用；成功且沒有 OCR 失敗時，僅用本頁記憶體中的姓名判錯樣本 key 集合輪流進行單張 A/B。索引不持久化，刷新頁面即失效。不再盲測原本正確的護照。沿用獨立 Mobile/Server WASM Worker，正式 OCR pipeline .29 不變。已更新靜態守衛，尚待本機 verify/build。禁止 GitHub Actions 與真實個資上傳。
