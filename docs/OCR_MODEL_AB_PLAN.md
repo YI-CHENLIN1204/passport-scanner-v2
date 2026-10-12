@@ -106,3 +106,12 @@ main 接續新增 `createServerRecognitionValidationInstance()`，由 `frontend/
 使用者本機完整跑完安全單張的 Validation 護照 Mobile / Server Recognition：比較 1 張，Mobile 中文姓名正確 1、Server 正確 1、救回 0、退步 0、錯誤 0；兩模型合計執行時間 57,455 ms（單張 P50/P90 均此值，不能視為各模型獨立 latency 或完整 Validation 指標）。此前網頁無回應問題此次未再發生。仍無證據表明 Server 比 Mobile 準確。合成字測試仍為 WASM 1 框正確。
 
 在 main 新增 session-only 單張 Validation 護照游標：每次人工按一次才跑一張，完成或計入錯誤後移到下一張，不再永遠重測第一張；重新整理頁面時游標會重置。保留雙 Worker 先後運行、匿名合計、只讀 Validation、不動 Test 與正式 OCR；測試守衛更新。尚未在 Windows build 驗證這項游標變更。下一步先由操作者驗證游標與單張運行穩定性，不要求一次跑 19 張。若要針對剩餘姓名錯誤樣本精準評估，應建立更有效率的基線／候選關聯與隔離測試設計，不能聲稱單張已驗證改善。正式 pipeline `.29`，護照 14/19、台胞證 13/13。禁止 GitHub Actions，不上傳證件個資。
+
+## 2026-10-12 — 單張模型 A/B 優先取歷史姓名錯誤樣本（待本機驗證）
+
+上一輪 Worker 隔離的實際 Validation 單張比較成功：Mobile 正確 1/1、Server 正確 1/1、救回 0、退步 0、錯誤 0，兩模型累計耗時約 57,455ms。這張本來就已正確，不能用以證明 Server 較好。正式 production OCR 仍 .29（固定 Validation 護照 14/19，台胞證 13/13）。
+
+main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `evaluationBaselineJson.fields.nameZh` 與人工 ground truth 進行 **匿名優先排序**；先選歷史 baseline 中文姓名不正確的護照，之後才是其他樣本。這只是排序 proxy：歷史 baseline 可能不同於現在的 .29，因此沒有直接假設這五張就是 .29 的五張錯誤，也不以 baseline 代替真正比較結果。選中的同一張仍依序在隔離 WASM Worker 跑 Mobile 及 Server，並以當次結果判斷 rescue/regression；每次最多一張、完成後 session 游標前進、不觸及 Test、不儲存個資、不中途改寫正式 OCR。UI 標示「歷史 baseline 疑似錯誤」或「一般／無歷史錯誤證據」。新增 static regression guard，尚未完成 Windows build 或實際執行。
+
+**效能瓶頸仍存在**：單張兩模型約 57.5 秒，排序只能提高測試資訊價值，不會降低單張模型推論成本。不要直接回到連續 19 張模式；未來需另行改善模型初始化／耗時隔離與 Worker 強制中止能力。GitHub Actions 禁止執行，真實證件圖片、姓名、證件號不提交 GitHub。
+
