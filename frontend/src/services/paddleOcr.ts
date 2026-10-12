@@ -1333,6 +1333,7 @@ async function createPixelCrop(
   sourceWidth: number,
   sourceHeight: number,
   minimumTargetWidth = 1200,
+  highQualityUpscale = false,
 ) {
   const bitmap = await createImageBitmap(image)
 
@@ -1373,8 +1374,10 @@ async function createPixelCrop(
 
   // High-quality interpolation helps retain small Han strokes when
   // the passport VIZ crop must be enlarged for recognition.
-  context.imageSmoothingEnabled = true
-  context.imageSmoothingQuality = 'high'
+  if (highQualityUpscale && scale > 1) {
+    context.imageSmoothingEnabled = true
+    context.imageSmoothingQuality = 'high'
+  }
   context.fillStyle = '#ffffff'
   context.fillRect(0, 0, targetWidth, targetHeight)
   context.drawImage(
@@ -1458,6 +1461,7 @@ async function createTaiwanNameFieldCrop(
     width,
     height,
     1400,
+    true,
   )
 }
 
@@ -1547,6 +1551,7 @@ async function createTaiwanVizCrop(image: File) {
     width * 0.74,
     height * 0.58,
     1500,
+    true,
   )
 }
 
