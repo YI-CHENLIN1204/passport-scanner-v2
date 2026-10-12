@@ -1,5 +1,11 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-12 — Joined-Han selector executable synthetic test (unverified locally)
+- Follow-up to `b459f08a` and `83068160`: existing `test-passport-joined-han-name.mjs` only regex-scanned code. New `frontend/scripts/test-passport-joined-han-functional.mjs` reads the actual `chooseTaiwanChineseName()` function source, transpiles that TypeScript function with the existing `typescript` dependency, injects synthetic geometry and controlled phonetic matcher, and asserts output behavior instead of merely checking text patterns.
+- Synthetic scenarios include an adjacent Han split, weak second box, horizontally distant box, wrong row, strict MRZ mismatch, missing name anchor and already-accepted full box. No real names/documents are read; any synthetic Chinese names are fictitious.
+- Wired this test into `test:ocr-regression`, hence `verify:ocr`. No production selector/model/version change, no GitHub Actions. **Important:** these tests were authored but not executed in a checked-out npm environment here; full `npm.cmd run verify:ocr`, typecheck and true Validation are still pending. Do not treat synthetic tests as evidence of improved real-passport accuracy. Previously observed passport 14/19 and permit 13/13 remain the only validated aggregate figures.
+
+
 ## 2026-10-12 — Joined-Han candidate must be visible to Validation (source consistency fix)
 - Review of previous main `b459f08a` identified a measurement defect: `chooseTaiwanChineseName()` may return a unique strict-MRZ-compatible name formed by two adjacent Han OCR boxes, but `predictOne()` only collected candidateTexts from individual OCR items and assembled raw rows before selection. The correct joined fallback could therefore be absent from the Validation candidate set and incorrectly classified as a recognition miss.
 - Fix: after `vizName` is returned, add its exact normalized name to the **transient** diagnostic candidateTexts if missing. The actual selector result, confidence, rank, production output and strict romanization remain unchanged by this diagnostic bookkeeping. No names/IDs persist or leave browser. Add regression guard in `test-passport-joined-han-name.mjs`.
