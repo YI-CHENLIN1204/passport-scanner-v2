@@ -1,6 +1,13 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
 
+## 2026-10-12 — 官方 Server Recognition 合成圖實測成功
+
+使用者本機 OCR 品質頁的隔離合成圖測試顯示：PP-OCRv5 server-rec ONNX 使用 WASM fallback 執行成功，辨識框 1，輸入合成文字「中文姓名 測試甲乙」與 OCR 輸出完全相符，總耗時 3552ms。WebGPU 仍因 MaxPool ceil_mode 不相容，使用 WASM。這證實候選模型在目前 SDK／瀏覽器至少能辨識合成中文文字，**不代表真實護照 A/B 的精準率改善**。
+
+下一階段應在 Validation-only、匿名且 read-only 條件下建立 Mobile 與 Server 模型對照，隔離新模型 SDK instance、保持正式護照與台胞證 OCR 不變；記錄 exact-name、rescue/regression、P50/P90 及失敗原因。正式 pipeline 仍 2026.10.11.29，最佳已實測護照 14/19、台胞證 13/13；不得因合成測試成功就宣稱護照突破 74%。禁止 GitHub Actions，不上傳真實資料。
+
+
 ## 2026-10-12 — Server-rec 合成 WASM 執行成功，但原本 0 框統計讀錯 SDK 欄位
 
 使用者最新合成圖 smoke 截圖顯示：WebGPU MaxPool ceil_mode 不支援後，WASM fallback **成功執行**，總耗時約 2963ms，但 UI 顯示辨識框數 0。檢查發現實驗程式原先讀 `rec_texts/texts`，而現行 PaddleOCR.js 在正式 `paddleOcr.ts` 中的實際使用方式是 `prediction.items`，故該 0 不可靠，不代表 Detection 失敗。已將隔離實驗改用 `prediction.items` 計算框數與擷取合成文字，UI 顯示實際 synthetic 文字（不含真實旅客資料），並補 regression guard。正式 production `.29` 不改；尚未確定合成字辨識正確，也沒有執行真實模型 A/B；下一步只需 pull、verify:ocr、frontend Docker rebuild、重新按合成圖測試，不要再跑 32 張 Validation。禁止 GitHub Actions 與個資上傳。
