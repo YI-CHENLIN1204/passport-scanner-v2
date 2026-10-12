@@ -123,3 +123,4 @@ main 新候選 2026.10.11.29 不增加任何 OCR 推論／裁切，不變更原�
 
 此候選尚未在 Windows 執行完整 `npm.cmd run verify:ocr`、Docker rebuild 或固定 32 張 Validation；不可宣稱比 .28 改善。若沒有提升或造成退步，應回退此項插值實驗，不再以這條路徑調參。台胞證 BOCA、joined-token、one-syllable、standalone sex、focused retry 全保留。禁止 GitHub Actions，不開小型 branch/PR，不上傳證件影像或真實個資；legacy Validation 缺實際工作輸入影像，不代表新照片泛化準確率。
 
+> 2026-10-12：`.29` 真實固定 Validation 護照 14/19、台胞證 13/13，Canvas 插值沒有改善；後續禁止重複無收益的固定 ROI / shadow / 插值嘗試。模型級 PP-OCRv5 server-rec 對照仍在封裝相容性前置階段（見 `docs/OCR_MODEL_AB_PLAN.md`）；未取得合法 browser-compatible ONNX tar，正式 OCR 不變、不要求使用者重跑 32 張。GitHub Actions 禁止執行。
