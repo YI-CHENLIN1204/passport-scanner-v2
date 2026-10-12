@@ -51,3 +51,16 @@
 使用：cd frontend；node scripts/package-ocr-server-model.mjs <model-directory> <output.tar>；再用 node scripts/inspect-ocr-model-tar.mjs <output.tar> <actual-model-name> 做結構檢查。
 新增 synthetic model packaging regression；模型二進位、私人證件及個資不提交 GitHub。
 尚未完成實際模型下載、瀏覽器 SDK 初始化、ONNX 相容性或 A/B Validation。正式 OCR 仍 .29，不要現在重跑 32 張。
+
+## 2026-10-12 — 可執行隔離模型啟動測試已接入（尚待本機運行）
+
+新增 opt-in 官方模型下載器 `frontend/scripts/download-official-ocr-server-model.mjs`。只連接 PaddlePaddle 官方 Hugging Face，對 inference.onnx 比對官方 SHA256 `d9dc333c9c7b042c6dffb8e33d72b6f65c9c1d463d0a3c2f78174fea55e94752`，檢查 inference.yml model_name。
+新增 `frontend/scripts/prepare-ocr-server-model.mjs` 一條命令完成下載、打包未壓縮 tar、結構檢查、建立本機 manifest，產物位於 `frontend/public/paddle-models/experiments/` 並由 gitignore 排除。模型資料約 85MB，不提交 GitHub。此命令需要網路、磁碟空間，且僅在操作者明確執行時下載。
+可在 frontend 目錄執行 `npm.cmd run prepare:ocr-server-model`（Windows）或 `npm run prepare:ocr-server-model`（Linux/macOS），然後在本機啟動前端，至 OCR 品質頁面主動點擊「執行合成圖模型啟動測試」。
+新增 `frontend/src/services/experimentalServerRecognition.ts`，用獨立 `PaddleOCR.create` 加載同源官方 ONNX candidate + 既有 mobile detection，只用 canvas 生成的假中文圖片，輸出初始化狀態、框數與執行時間；`dispose()` 釋放。**不讀取旅客照片、不覆寫 production OCR、不執行 32 張 Validation**。
+合成測試成功只代表模型可在該瀏覽器與 SDK 執行，仍不是保證中文字正確或有實際提高護照姓名準確率。若實驗資產未準備則顯示提示，不允許降級成自動取用第三方雲端推論。
+新增 synthetic packaging tests、來源與隔離 guard，納入 `verify:ocr`。正式 pipeline 保持 2026.10.11.29；所有實際 SDK smoke、模型下載、真實照片 A/B 尚未執行，不能寫成成功。
+
+### 目前的下個驗收點
+
+先由本機操作者執行一次 `npm.cmd run verify:ocr`、準備官方模型與前端 rebuild，再點合成圖 smoke。**只需回報是否成功初始化與耗時／錯誤分類**；不要求立即重跑 32 張。合成 smoke 成功後，才建立完整隔離 A/B 的準確率評估，避免重複無意義的 legacy Validation。
