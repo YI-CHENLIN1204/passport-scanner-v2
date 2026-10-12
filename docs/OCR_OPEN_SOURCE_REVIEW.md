@@ -674,3 +674,11 @@ main 新候選 2026.10.11.29 不增加任何 OCR 推論／裁切，不變更原�
 
 此候選尚未在 Windows 執行完整 `npm.cmd run verify:ocr`、Docker rebuild 或固定 32 張 Validation；不可宣稱比 .28 改善。若沒有提升或造成退步，應回退此項插值實驗，不再以這條路徑調參。台胞證 BOCA、joined-token、one-syllable、standalone sex、focused retry 全保留。禁止 GitHub Actions，不開小型 branch/PR，不上傳證件影像或真實個資；legacy Validation 缺實際工作輸入影像，不代表新照片泛化準確率。
 
+## 2026-10-12 — .29 驗證持平；已啟動模型級 A/B 前置研究
+
+使用者完成 `2026.10.11.29` 固定 32 張 auto Validation：護照中文姓名及整張全欄 **14/19（74%）**，台胞證全欄及必要欄位 **13/13（100%）**，完成 32 張、失敗 0。與 `.28` 持平，`.29` Canvas 高品質插值**沒有可見淨改善**，不得再以調 interpolation 設定作下一輪推進。
+
+停止無效的 ROI/拼音規則/縮放小參數迴圈。新的主要技術方向為「保持現有 PP-OCRv5 mobile detection 與 parser/selector，另以 PP-OCRv5 server recognition 作 read-only A/B」，詳見 [OCR_MODEL_AB_PLAN.md](./OCR_MODEL_AB_PLAN.md)。官方 benchmark server-rec 繁體中文指標較高，但不證明台灣護照會更準；SDK 自訂模型須合法、相容的 uncompressed tar + inference.onnx + inference.yml。新增 `frontend/scripts/inspect-ocr-model-tar.mjs` 和合成 `test-ocr-model-tar-preflight.mjs`，後者接入 `verify:ocr`。
+
+**尚未取得並驗證 browser-compatible server-rec ONNX tar，也尚未實作可執行的新模型推論 A/B；正式 pipeline 仍是 `.29`，不可現在要求使用者跑固定 32 張。** 模型資料與證件照片不得上傳 GitHub；GitHub Actions 禁止執行。固定 legacy Validation 缺當初真實 OCR 工作圖像，不可宣稱 production 泛化準確率。
+
