@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+## 2026-10-13 — Validation 樣本品質匿名稽核（尚待本機驗證）
+- 使用者懷疑持續 14/19 的問題包含早期隨意保留的測試樣本，且過去不清楚如何取消。已確認後端 `SetSelection(false)` 會移除一般 `TrainingSamples` 複本，但保護固定 Test baseline；操作入口在原團別證件審核視窗「保留此樣本供 OCR 改善」勾選框，不能把排除訓練樣本誤當成刪正式旅客／已審核證件。
+- 在 OCR 品質頁新增只讀 Validation 人工標準答案匿名稽核（不執行 OCR、不下載照片、不讀 fixed Test）：中文姓名缺漏、出生日期格式與明顯可疑年份（1900 年以前或未來）、已填但驗證失敗的台灣身分證字號、簡單占位文字訊號。只輸出整體數字，不輸出任何姓名／字號／樣本 ID；每一異常是待人工確認而非自動剔除。沒有填身分證號的護照不視為錯誤。
+- 正式 OCR 與 dataset selection API 不變。新增 source static guard 並接入 `verify:ocr`。未進行 Windows 編譯或真實盤點，不能宣稱 19 張中有任何一張真的是假資料，也不得藉由刪掉失敗樣本冒稱模型改善；保留既有 14/19、13/13 基準與歷史結果。
+- 禁止 GitHub Actions、真實證件影像或個資提交至版本庫。
+
+
 ## 2026-10-13 — 新增不同中文 OCR 引擎的 4 張缺候選護照隔離實驗（待 Windows 實測）
 - 先前真實 32/32 Validation 再次確認護照 14/19、台胞證 13/13；已實驗的 PP-OCRv5 Server Recognition 在一張真實缺候選樣本上救回 0，耗時高，不再投入相同模型。
 - 這輪使用現有 `tesseract.js@^7` 新增**不同於 PaddleOCR**的繁體中文 `chi_tra` LSTM Worker。獨立服務 `alternativeChineseRecognition.ts` 重用既有 broad VIZ ROI（不是正式姓名選取），只在同頁完成 production Validation 後讀取其 session-only `currentPageRecognitionMissPassportSamples`，最多四張護照，使用同一 Worker 依序運行；不讀 Test、不更新正式旅客與 OCR、不上傳證件照片、不保留 OCR 全文、不顯示姓名。

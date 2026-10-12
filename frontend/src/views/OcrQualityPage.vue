@@ -34,6 +34,7 @@ import { aggregatePermitSourceEvidence, type PermitSourceEvidence } from '../ser
 import { aggregatePermitRawNameEvidence, type PermitRawNameEvidenceLike } from '../services/permitRawNameDiagnostics'
 import { aggregatePermitSexEvidence, type PermitSexEvidenceLike } from '../services/permitSexDiagnostics'
 import { mergePassportStrictShadow } from '../services/passportShadowMerge'
+import { auditSampleGroundTruth, type SampleQualityAudit } from '../services/trainingSampleQualityAudit'
 import { createAlternativeChineseRecognition, containsStandaloneChineseName } from '../services/alternativeChineseRecognition'
 import {
   smokeTestServerRecognition,
@@ -103,6 +104,28 @@ async function runAlternativeChineseRecognition() {
     }
     alternativeRecognitionProgress.value = ''
     alternativeRecognitionRunning.value = false
+  }
+}
+
+const qualityAuditRunning = ref(false)
+const qualityAuditError = ref('')
+const qualityAuditSummary = ref<SampleQualityAudit | null>(null)
+async function runQualityAudit() {
+  if (qualityAuditRunning.value || profilingValidation.value || retesting.value) return
+  qualityAuditRunning.value = true
+  qualityAuditError.value = ''
+  qualityAuditSummary.value = null
+  try {
+    // No OCR, no image bytes, no Test/fixed-Test contents.
+    const samples = await getTrainingEvaluationSamples('validation')
+    qualityAuditSummary.value = auditSampleGroundTruth(
+      samples,
+      validateTaiwanNationalId,
+    )
+  } catch {
+    qualityAuditError.value = '匿名資料品質稽核無法完成，請確認後端連線。'
+  } finally {
+    qualityAuditRunning.value = false
   }
 }
 
@@ -3893,6 +3916,31 @@ onMounted(load)
         </div>
       </section>
 
+      <section class="dataset-card">
+        <div class="dataset-copy">
+          <p class="page-kicker">VALIDATION DATA QUALITY</p>
+          <h2>Validation 標準答案品質檢查</h2>
+          <p>只讀取 Validation 人工標準答案，匿名檢查生日格式或不合理年份、空白中文姓名、已填入卻未通過檢查碼的身分證號，以及疑似測試占位文字。只顯示總數，不讀取證件照片、不修改樣本、不接觸固定 Test。</p>
+          <p>異常僅供人工確認：護照未填身分證號不算錯誤。排除樣本請回到原團別證件審核視窗，取消「保留此樣本供 OCR 改善」；已固定 Test 的樣本依法不可直接移除。</p>
+          <p v-if="qualityAuditSummary" class="validation-legacy-note">
+            Validation 共 {{ qualityAuditSummary.total }} 張；可能需要檢查 {{ qualityAuditSummary.flagged }} 張；
+            出生日期格式異常 {{ qualityAuditSummary.invalidBirthDates }}；
+            日期明顯可疑 {{ qualityAuditSummary.suspiciousDates }}；
+            姓名缺漏 {{ qualityAuditSummary.missingNames }}；
+            已填身分證號驗證失敗 {{ qualityAuditSummary.invalidNationalIds }}；
+            占位資料訊號 {{ qualityAuditSummary.placeholderSignals }}。
+            各原因可能重疊，不能加總當作異常張數，也不能直接推論 OCR 模型變準。
+          </p>
+          <p v-if="qualityAuditError" class="validation-legacy-note">{{ qualityAuditError }}</p>
+        </div>
+        <div class="dataset-actions">
+          <button type="button" class="secondary-action"
+            :disabled="qualityAuditRunning || profilingValidation || retesting"
+            @click="runQualityAudit">
+            {{ qualityAuditRunning ? '檢查中…' : '檢查 Validation 標準答案（不執行 OCR）' }}
+          </button>
+        </div>
+      </section>
       <section class="dataset-card">
         <div class="dataset-copy">
           <p class="page-kicker">

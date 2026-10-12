@@ -816,3 +816,8 @@ probe 僅顯示匿名 Mobile / Server exact candidate、detected boxes、recogni
 - Crucial interpretation: `containsStandaloneChineseName` accepts only exact standalone row (or 姓名 prefix) and may miss true characters spread across multiple OCR lines/with noisy labels. **0 exact is not proof of 0 useful individual characters**. Before another model or crop effort, compute anonymous partial-evidence categories on existing chi_tra results (do not log candidate/ground truth), or examine safe aggregate patterns. Keep current production passport 14/19 and permit 13/13 until real improvement.
 - No GitHub Actions, image/PII upload, Test cohort usage or new production behavior.
 
+### 2026-10-13 — Validation 樣本品質匿名稽核（尚待本機驗證）
+- 使用者懷疑持續 14/19 的問題包含早期隨意保留的測試樣本，且過去不清楚如何取消。已確認後端 `SetSelection(false)` 會移除一般 `TrainingSamples` 複本，但保護固定 Test baseline；操作入口在原團別證件審核視窗「保留此樣本供 OCR 改善」勾選框，不能把排除訓練樣本誤當成刪正式旅客／已審核證件。
+- 在 OCR 品質頁新增只讀 Validation 人工標準答案匿名稽核（不執行 OCR、不下載照片、不讀 fixed Test）：中文姓名缺漏、出生日期格式與明顯可疑年份（1900 年以前或未來）、已填但驗證失敗的台灣身分證字號、簡單占位文字訊號。只輸出整體數字，不輸出任何姓名／字號／樣本 ID；每一異常是待人工確認而非自動剔除。沒有填身分證號的護照不視為錯誤。
+- 正式 OCR 與 dataset selection API 不變。新增 source static guard 並接入 `verify:ocr`。未進行 Windows 編譯或真實盤點，不能宣稱 19 張中有任何一張真的是假資料，也不得藉由刪掉失敗樣本冒稱模型改善；保留既有 14/19、13/13 基準與歷史結果。
+- 禁止 GitHub Actions、真實證件影像或個資提交至版本庫。

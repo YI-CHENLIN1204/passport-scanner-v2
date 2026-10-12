@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-13 — Validation 樣本品質匿名稽核（尚待本機驗證）
+- 使用者懷疑持續 14/19 的問題包含早期隨意保留的測試樣本，且過去不清楚如何取消。已確認後端 `SetSelection(false)` 會移除一般 `TrainingSamples` 複本，但保護固定 Test baseline；操作入口在原團別證件審核視窗「保留此樣本供 OCR 改善」勾選框，不能把排除訓練樣本誤當成刪正式旅客／已審核證件。
+- 在 OCR 品質頁新增只讀 Validation 人工標準答案匿名稽核（不執行 OCR、不下載照片、不讀 fixed Test）：中文姓名缺漏、出生日期格式與明顯可疑年份（1900 年以前或未來）、已填但驗證失敗的台灣身分證字號、簡單占位文字訊號。只輸出整體數字，不輸出任何姓名／字號／樣本 ID；每一異常是待人工確認而非自動剔除。沒有填身分證號的護照不視為錯誤。
+- 正式 OCR 與 dataset selection API 不變。新增 source static guard 並接入 `verify:ocr`。未進行 Windows 編譯或真實盤點，不能宣稱 19 張中有任何一張真的是假資料，也不得藉由刪掉失敗樣本冒稱模型改善；保留既有 14/19、13/13 基準與歷史結果。
+- 禁止 GitHub Actions、真實證件影像或個資提交至版本庫。
+
+
 ## 2026-10-13 — Windows independent chi_tra OCR first true 4-sample result
 - User screenshot: after completed same-page production Validation, independent Tesseract `chi_tra` on 4 verified missing-name-candidate passports completed successfully: compared 4, standalone exact Chinese name 0, errors 0; Worker init 989 ms, combined broad VIZ ROI recognition 42,950 ms (~10.7 s each). No end-to-end rescue demonstrated; do not promote to production or ask to repeat same run.
 - Independently, same screenshot shows same-ROI PP-OCRv5 Server test on one verified miss: Mobile exact 0, Server exact 0, rescue 0, two pipelines detect/recognize 29 boxes; Server total ~20,060 ms. Thus neither existing server experiment nor this independent Tesseract exact-standalone match has demonstrated benefit.
