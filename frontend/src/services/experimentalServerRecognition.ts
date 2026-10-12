@@ -105,6 +105,11 @@ export async function smokeTestServerRecognition(): Promise<ServerRecognitionSmo
     if (!(message.includes('ceil_mode') && message.includes('WebGPU MaxPool'))) {
       throw error
     }
-    return execute('wasm', true)
+    try {
+      return await execute('wasm', true)
+    } catch (wasmError) {
+      const details = wasmError instanceof Error ? wasmError.message : String(wasmError)
+      throw new Error('Auto/WebGPU MaxPool ceil_mode 不支援；WASM fallback 亦失敗：' + details)
+    }
   }
 }
