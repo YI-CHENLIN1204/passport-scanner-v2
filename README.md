@@ -1,5 +1,26 @@
 # Passport Scanner V2
 
+<!-- PORTFOLIO_SUMMARY_START -->
+## Portfolio Summary
+
+An internal travel-agency document OCR and traveler-data management system designed to reduce repetitive manual document entry while keeping a human review step in the workflow.
+
+**Highlights**
+- Browser-side OCR to reduce cloud-OCR cost and limit unnecessary document-image transmission.
+- Structured field validation before data is accepted by the backend.
+- Traveler matching and document-version management for repeated uploads and document renewals.
+- Human-in-the-loop review so OCR output is never treated as automatically correct.
+- PostgreSQL persistence with a separated frontend / Web API architecture.
+
+**Stack:** Vue 3 / TypeScript · ASP.NET Core Web API · PaddleOCR.js / PP-OCRv5 · PostgreSQL · Docker · Git/GitHub
+
+**Privacy note:** real passport/ID images and personally identifiable traveler data should never be committed to the repository. Keep only synthetic, redacted, or non-sensitive demo material in any version intended for public viewing.
+
+> The repository is currently kept private while the project is under active development and privacy-sensitive test material is being reviewed.
+
+<!-- PORTFOLIO_SUMMARY_END -->
+
+
 > **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md) 與 [docs/NEXT_CHAT_HANDOFF.md](./docs/NEXT_CHAT_HANDOFF.md)（正式最佳實測 `2026.10.11.20`：護照全欄 13/19、台胞證全欄與中文姓名及性別均 13/13；下一目標護照中文姓名）。
 
 旅行社內部使用的證件掃描與旅客資料整理系統。
