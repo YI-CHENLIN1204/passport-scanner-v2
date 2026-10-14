@@ -185,6 +185,22 @@ Repository 中保留的是：
 
 ---
 
+## 直接看程式碼
+
+如果想直接確認實作內容，可以從這些地方開始：
+
+- [Frontend / Vue 3 + TypeScript](./frontend/src)
+- [OCR 與影像處理](./frontend/src/services)
+- [ASP.NET Core Backend](./backend/PassportScanner.Api)
+- [Domain / Traveler & Document Logic](./backend/PassportScanner.Api/Domain)
+- [Database / Persistence](./backend/PassportScanner.Api/Infrastructure)
+- [OCR Regression / Validation Scripts](./frontend/scripts)
+- [Docker Compose](./docker-compose.yml)
+
+這些連結直接指向實際 source code，而不是只有功能說明。
+
+---
+
 ## 專案文件
 
 如果想確認這不是只有 README，可以直接往下看實際的系統設計與開發紀錄：
