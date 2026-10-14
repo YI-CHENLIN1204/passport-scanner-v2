@@ -284,7 +284,7 @@ Database   PostgreSQL
 
 ---
 
-## Why this project matters to me
+## 這個專案對我的意義
 
 這個專案不是從「想做 OCR」開始，而是從實際重複輸入證件資料的工作流程開始。
 
