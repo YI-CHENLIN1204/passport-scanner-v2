@@ -20,7 +20,6 @@ assert.equal(js.diagnostics?.length ?? 0, 0)
 const normalized = value => value.replace(/\s+/g, '').trim()
 const compare = (name, surname, given) => {
   const allowed = new Map([
-    ['林', 'LIN'], ['奕', 'YI'], ['辰', 'CHEN'],
     ['王', 'WANG'], ['大', 'DA'], ['明', 'MING'],
   ])
   const syllables = Array.from(name).map(char => allowed.get(char))
@@ -46,28 +45,28 @@ const box = (text, x, y, score=0.96) => ({
   minY:y, maxY:y+22, centerY:y+11, height:22,
   points:[[x,y],[x+18,y],[x+18,y+22],[x,y+22]],
 })
-const mrz = {surname:'LIN',givenNames:'YI CHEN'}
+const mrz = {surname:'WANG',givenNames:'DA MING'}
 const label = box('姓名',0,15)
-const first = box('林',65,15)
-const second = box('奕辰',84,15)
+const first = box('王',65,15)
+const second = box('大明',84,15)
 function choose(items, reference=mrz) {
   return select(items,reference)
 }
 
-assert.equal(choose([label,first,second])?.text, '林奕辰',
+assert.equal(choose([label,first,second])?.text, '王大明',
   'adjacent boxes must be recoverable with exact MRZ phonetics')
 assert.equal(choose([label,first,{...second,score:0.80}]), null,
   'weak recognition evidence cannot trigger a join')
-assert.equal(choose([label,first,box('奕辰',140,15)]), null,
+assert.equal(choose([label,first,box('大明',140,15)]), null,
   'distant boxes cannot be joined')
-assert.equal(choose([label,first,box('奕辰',84,50)]), null,
+assert.equal(choose([label,first,box('大明',84,50)]), null,
   'off-row boxes cannot be joined')
-assert.equal(choose([label,first,second],{surname:'LIN',givenNames:'YI MING'}),null,
+assert.equal(choose([label,first,second],{surname:'WANG',givenNames:'DA HUA'}),null,
   'phonetic conflict must not be relaxed')
 assert.equal(choose([first,second]),null,
   'unanchored name fragments must not be joined')
 
 // Existing unambiguous full-box candidate must keep priority.
-const whole = box('林奕辰',65,15)
-assert.equal(choose([label,whole,first,second])?.text,'林奕辰')
+const whole = box('王大明',65,15)
+assert.equal(choose([label,whole,first,second])?.text,'王大明')
 console.log('Production joined-Han selector synthetic functional cases passed')
