@@ -193,7 +193,7 @@ Repository 中保留的是：
 - [OCR 與影像處理](./frontend/src/services)
 - [ASP.NET Core Backend](./backend/PassportScanner.Api)
 - [Domain / Traveler & Document Logic](./backend/PassportScanner.Api/Domain)
-- [Database / Persistence](./backend/PassportScanner.Api/Infrastructure)
+- [Database / Persistence](./backend/PassportScanner.Api/Persistence)
 - [OCR Regression / Validation Scripts](./frontend/scripts)
 - [Docker Compose](./docker-compose.yml)
 
