@@ -211,7 +211,7 @@ Repository 中保留的是：
 - [OCR PoC / Engine Evaluation](./docs/OCR_POC.md)
 - [Development Setup](./docs/DEVELOPMENT.md)
 - [Project Decisions](./docs/DECISIONS.md)
-- [Current Handoff / Development Status](./docs/HANDOFF.md)
+- [Documentation Map](./docs/README.md)
 - [Security & Privacy](./SECURITY.md)
 
 ---
