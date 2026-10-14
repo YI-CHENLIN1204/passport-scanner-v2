@@ -1,248 +1,247 @@
 # Passport Scanner V2
+## 旅行社旅客證件 OCR 辨識與資料管理系統
 
-<!-- PORTFOLIO_SUMMARY_START -->
-## Portfolio Summary
+> 從旅行社實際的證件建檔流程出發，把「掃描文字」延伸成一套可審核、可驗證、可管理旅客資料的工作流程。
 
-An internal travel-agency document OCR and traveler-data management system designed to reduce repetitive manual document entry while keeping a human review step in the workflow.
+**目前狀態：持續開發中｜Public Repository｜不提交真實證件影像與旅客個資**
 
-**Highlights**
-- Browser-side OCR to reduce cloud-OCR cost and limit unnecessary document-image transmission.
-- Structured field validation before data is accepted by the backend.
-- Traveler matching and document-version management for repeated uploads and document renewals.
-- Human-in-the-loop review so OCR output is never treated as automatically correct.
-- PostgreSQL persistence with a separated frontend / Web API architecture.
+---
 
-**Stack:** Vue 3 / TypeScript · ASP.NET Core Web API · PaddleOCR.js / PP-OCRv5 · PostgreSQL · Docker · Git/GitHub
+## 這個專案解決什麼問題？
 
-**Privacy note:** real passport/ID images and personally identifiable traveler data should never be committed to the repository. Keep only synthetic, redacted, or non-sensitive demo material in any version intended for public viewing.
+旅行社收到旅客證件後，傳統流程常需要人工查看照片，再逐欄輸入姓名、證件號碼、出生日期、有效期限等資料。
 
-> The repository is currently kept private while the project is under active development and privacy-sensitive test material is being reviewed.
+V2 不把目標放在「做一個 OCR Demo」，而是處理 OCR 之後真正會遇到的問題：
 
-<!-- PORTFOLIO_SUMMARY_END -->
+- OCR 結果怎麼轉成結構化欄位？
+- 怎麼檢查 MRZ、日期、證件號碼等資料是否合理？
+- 同一位旅客不同時間上傳多張證件時，怎麼比對與合併？
+- OCR 不可靠時，怎麼保留人工覆核？
+- 真實證件影像與開發資料怎麼避免直接進入 Git？
 
+---
 
-> **交接與最新開發狀態：** 請優先閱讀 [docs/HANDOFF.md](./docs/HANDOFF.md) 與 [docs/NEXT_CHAT_HANDOFF.md](./docs/NEXT_CHAT_HANDOFF.md)（正式最佳實測 `2026.10.11.20`：護照全欄 13/19、台胞證全欄與中文姓名及性別均 13/13；下一目標護照中文姓名）。
+## 系統流程
 
-旅行社內部使用的證件掃描與旅客資料整理系統。
-
-V2 的核心方向是：**在使用者瀏覽器端執行 OCR，降低雲端 AI 成本與敏感證件影像外送風險；只擷取真正有業務價值的欄位，並保留人工覆核流程。**
-
-## V2 目前範圍
-
-- 使用對象：旅行社內部人員（業務／控團）。
-- 支援證件方向：護照、台灣身分證、台胞證。
-- OCR：在瀏覽器端執行，不把證件影像送到雲端 OCR 服務做辨識。
-- 辨識結果：以結構化資料回傳後端。
-- 原始證件照片：可因人工覆核需求另行保存，但其保存流程與 OCR 推論分開管理。
-- 審核：人工逐筆確認 OCR 結果。
-- 匯出：由團別頁人工觸發 CSV 匯出，可依證件類型選擇欄位與排序。
-- V2 不做登入與複雜權限管理。
-- V2 不直接整合 ERP。
-
-## 目前護照流程
-
-護照已完成第一輪 OCR 引擎選型與 5 張不同條件的泛化測試：
-
-- 正式主引擎：PaddleOCR.js / PP-OCRv5。
-- OCR 執行於瀏覽器端。
-- 弱偵測時自動改試護照底部 MRZ 區域。
-- TD3 MRZ 解析後以 check digit 驗證護照號碼、出生日期、有效期限與 composite。
-- 辨識完成後直接進入可編輯的人工覆核卡。
-- 人工覆核日期顯示為 YYYY-MM-DD。
-- 按下確認後會建立 typed review payload，送到 ASP.NET Core 後端再次驗證，再寫入 PostgreSQL。
-- Docker Compose 會啟動獨立 PostgreSQL service，旅客主檔與證件版本保存在 named volume；重啟 frontend／backend 不會清空資料。
-- Tesseract Baseline A 與泛化測試工具保留在開發診斷區，不進旅行社員工主要流程。
-
-## 文件
-
-- [AGENTS.md](./AGENTS.md) — 給 Codex / AI Agent 的專案工作規則。
-- [docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) — 專案背景、使用情境與邊界。
-- [docs/SYSTEM_ARCHITECTURE.md](./docs/SYSTEM_ARCHITECTURE.md) — V2 架構與資料流。
-- [docs/OCR_REQUIREMENTS.md](./docs/OCR_REQUIREMENTS.md) — OCR 文件類型、欄位與驗證原則。
-- [docs/OCR_POC.md](./docs/OCR_POC.md) — 瀏覽器 OCR PoC 與引擎比較基準。
-- [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) — 旅客主檔、證件版本與團別資料模型方向。
-- [docs/DECISIONS.md](./docs/DECISIONS.md) — 已確認決策與尚未定案項目。
-- [docs/PASSPORT_REVIEW_CONTRACT.md](./docs/PASSPORT_REVIEW_CONTRACT.md) — 人工覆核完成後的前端 draft / 未來 API payload。
-- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 本機環境、啟動方式與前後端 port。
-
-## 開發原則
-
-1. 先完成 V2 內部掃描／審核／旅客資料／CSV 匯出，再處理 V3 / V4。
-2. 不為了「資料看起來完整」而儲存沒有業務價值的證件欄位。
-3. OCR 必須允許人工覆核，不能把辨識結果直接視為正確資料。
-4. 敏感資料採最小化蒐集與最小化保存。
-5. 尚未寫進「已確認決策」的構想，不可自行當成正式需求實作。
-
-
-## Current Development Stack
-
-```text
-frontend/  Vue 3 + TypeScript + Vite        :5173
-backend/   ASP.NET Core Web API (.NET 10)  :5080
+```mermaid
+flowchart LR
+    A[批次上傳證件] --> B[瀏覽器端 AI OCR]
+    B --> C[影像處理 / MRZ 解析]
+    C --> D[欄位驗證]
+    D --> E[旅客比對與證件版本管理]
+    E --> F[人工覆核]
+    F --> G[PostgreSQL]
+    G --> H[團別資料 / CSV 匯出]
 ```
 
-開發啟動方式請看 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)。
+目前主要證件流程包含：
 
+- 護照
+- 台胞證
+- 台灣身分證
 
-## 目前資料流里程碑
+OCR 主要在瀏覽器端執行，後端負責 typed payload 驗證、旅客資料邏輯與 PostgreSQL persistence。
+
+---
+
+## V1 → V2 的差異
+
+| V1 | V2 |
+|---|---|
+| 偏向單次 OCR / 資料擷取 | 完整證件資料處理流程 |
+| 雲端 AI / API 為主 | 瀏覽器端 PaddleOCR 為主 |
+| 辨識後直接取得結果 | OCR 後仍有欄位驗證與人工覆核 |
+| 單筆資料處理 | 批次掃描、旅客比對、證件版本管理 |
+| 著重「辨識出文字」 | 著重「建立可實際使用的旅客資料」 |
+
+---
+
+## 核心功能
+
+### 01｜Browser-side AI OCR
+
+- PaddleOCR.js / PP-OCRv5
+- 瀏覽器端推論
+- 影像方向處理與裁切
+- 護照 MRZ parsing
+- TD3 check digit 驗證
+- 中文姓名辨識與候選處理
+
+### 02｜資料驗證
+
+辨識結果不直接視為正確資料。
+
+前後端會依欄位進行格式與業務規則驗證，例如：
+
+- 護照號碼
+- 出生日期
+- 有效期限
+- 國籍 / 簽發國
+- 台灣身分證 checksum
+- MRZ composite check digit
+
+### 03｜Traveler Matching
+
+系統不是把每張證件都當成不同的人。
+
+目前資料模型將：
+
+- Traveler 主檔
+- Document Version
+- Scan / Review 工作資料
+
+分開處理，以支援同一旅客重新掃描、換發新證件，以及多證件整合。
+
+### 04｜Human-in-the-loop Review
+
+OCR 只是輔助。
 
 ```text
-護照圖片
-  ↓
-PaddleOCR / PP-OCRv5（瀏覽器）
-  ↓
-MRZ + check digit
-  ↓
-人工覆核
-  ↓
-PassportReviewDraft
-  ↓
-ASP.NET Core 後端驗證
-  ↓
-ITravelerStore
-  ↓
-PostgresTravelerStore
-  ├─ travelers
-  └─ document_versions
+OCR
+ ↓
+欄位解析
+ ↓
+自動驗證
+ ↓
+人工對照原圖
+ ↓
+確認後才進正式旅客資料
 ```
 
-目前版本已能驗證：
+審核介面支援影像縮放、拖移、旋轉與欄位編輯，避免把模型輸出直接當成最終答案。
 
-- 第一次掃描：建立旅客 + 第一個護照版本。
-- 同一本護照再次掃描：更新既有版本，不重複新增。
-- 同一旅客換新護照：建立新 document version，舊版本保留。
-- 舊護照重新掃描：不會自動變回 current。
-- 多位完全相同候選：後端拒絕自動合併。
+### 05｜團別與 CSV 匯出
 
-正式 PostgreSQL 已接入；OCR / 覆核 contract 維持不變。
+已審核旅客可進入團別資料流程，並依證件類型選擇需要欄位後匯出 CSV。
 
+---
 
-## 目前台胞證流程
+## 技術架構
 
-台胞證與台灣身分證都已進入正式 OCR / 人工覆核流程。
+| Layer | Technology |
+|---|---|
+| Frontend | Vue 3 · TypeScript · Vite |
+| OCR | PaddleOCR.js · PP-OCRv5 · Tesseract.js（實驗比較） |
+| Backend | ASP.NET Core Web API · .NET 10 |
+| Database | PostgreSQL 16 |
+| Container | Docker · Docker Compose · Nginx |
+| Validation | MRZ Check Digit · Field Validation · Synthetic Regression Tests |
+| Version Control | Git · GitHub |
 
-目前流程：
+```text
+Browser
+ ├─ Vue UI
+ ├─ Image Processing
+ └─ PaddleOCR
+        │
+        ▼
+ASP.NET Core Web API
+ ├─ Validation
+ ├─ Traveler Matching
+ └─ Document Version Logic
+        │
+        ▼
+PostgreSQL
+```
 
-- PP-OCRv5 瀏覽器端整頁辨識。
-- 擷取中文姓名、8 位台胞證號碼、出生日期、性別、有效期限。
-- 8 位證號與 2 位簽發次數分開處理，不保存簽發次數。
-- 日期統一轉為 YYYY-MM-DD。
-- OCR 無法可靠取得的欄位留給人工補填。
-- 儲存前需人工對照原圖確認所有欄位。
-- 儲存後與護照共用 traveler_master / document_versions 版本邏輯。
+---
 
-## 旅客資料／正式主檔
+## OCR 驗證方式
 
-主介面目前分為：
+這個專案有刻意保留「實驗結果 ≠ 真實泛化能力」的界線。
 
-- 證件掃描。
-- 旅客資料。
+目前曾使用固定 Validation set 做迭代比較。已確認的歷史基準包含：
 
-旅客資料頁已可：
+- 護照：固定樣本中文姓名 / 全欄曾達 **14 / 19**
+- 台胞證：固定樣本必要欄位曾達 **13 / 13**
 
-- 搜尋中文姓名、英文姓名或證件號碼。
-- 查看 traveler 主檔。
-- 查看護照／台胞證／台灣身分證歷史版本。
-- 查看目前使用中的證件版本。
+這些數字只代表特定 legacy Validation set 的結果，**不能解讀成新照片的 74% / 100% 泛化準確率**。
 
-目前 persistence 為 PostgreSQL；旅客主檔與證件版本保存在 Docker named volume，backend 重啟後資料仍保留。
+後續模型、ROI、selector、Server Recognition 等實驗只有在真正量測後才會記錄為改善；沒有改善的方案也會保留在開發紀錄中，避免重複走同一條失敗路線。
 
+---
 
-## 目前台灣身分證流程
+## Privacy by Design
 
-- PP-OCRv5 瀏覽器端整頁辨識。
-- 自動判斷 0° / ±90° / 180°，必要時再做小角度校正。
-- 擷取中文姓名、國民身分證統一編號、出生日期。
-- 民國年出生日期自動轉為 YYYY-MM-DD。
-- 性別由身分證字號第 2 碼交叉驗證，不在無可靠字號時預設。
-- 前端與 ASP.NET Core 後端都獨立計算身分證字號檢查碼。
-- OCR 抓不到的欄位允許人工補填；全部人工覆核後才可儲存。
-- 身分證沒有到期日，因此 document_versions 的 expiry_date 對此證件為 NULL。
+這個 repository 已公開，但**真實資料不公開**。
 
+不應提交：
 
-## PostgreSQL 持久化
+- 真實護照 / 身分證 / 台胞證照片
+- 真實旅客姓名、身分證字號、護照號碼、MRZ
+- PostgreSQL database dump
+- OCR training / validation private dataset
+- `.env`、API key、private key、service account credentials
 
-目前正式資料層已從開發用記憶體儲存切換為 PostgreSQL。
+Repository 中保留的是：
 
-Docker Compose 會建立三個服務：
+- Source code
+- Synthetic test fixtures
+- Schema / architecture
+- 匿名化 aggregate metrics
+- Placeholder environment configuration
 
-- `frontend`：Vue + Nginx。
-- `backend`：ASP.NET Core API。
-- `database`：PostgreSQL 16。
+詳細原則請看 [SECURITY.md](./SECURITY.md)。
 
-資料主要分為：
+---
 
-- `travelers`：旅客主檔。
-- `document_versions`：護照、台胞證、台灣身分證的歷史版本。
+## 專案文件
 
-PostgreSQL 使用 named volume `passport_scanner_postgres`。一般的 `docker compose down` 不會刪除資料；只有明確執行 `docker compose down -v` 或手動刪除 volume 才會移除資料。
+如果想確認這不是只有 README，可以直接往下看實際的系統設計與開發紀錄：
 
-本機開發密碼可透過環境變數 `PASSPORT_DB_PASSWORD` 覆寫。Compose 內的預設密碼只供本機開發使用，不應直接用於正式公開環境。
+- [System Architecture](./docs/SYSTEM_ARCHITECTURE.md)
+- [Data Model](./docs/DATA_MODEL.md)
+- [OCR Requirements](./docs/OCR_REQUIREMENTS.md)
+- [OCR PoC / Engine Evaluation](./docs/OCR_POC.md)
+- [Development Setup](./docs/DEVELOPMENT.md)
+- [Project Decisions](./docs/DECISIONS.md)
+- [Current Handoff / Development Status](./docs/HANDOFF.md)
+- [Security & Privacy](./SECURITY.md)
 
+---
 
-> 2026-10-12：main OCR 候選 `2026.10.11.21`（護照 broad VIZ 有限放大，待本機 Validation）。最佳實測仍為 `.20`：護照 13/19、台胞證 13/13；禁止 GitHub Actions。
+## 本機啟動
 
+建立本機環境設定：
 
-2026-10-12 實測更新：`.21` 32/32 auto Validation 成功，護照中文姓名及全欄皆 14/19（74%），台胞證全部必要欄位 13/13（100%）。下一步聚焦護照剩餘五張姓名辨識問題。固定 legacy Validation 缺工作輸入影像，不代表新照片泛化準確率；禁止 GitHub Actions。
+```bash
+cp .env.example .env
+```
 
-> 最新候選 .22：護照兩段 crop 分區匿名診斷（無新增 OCR）；最佳已實測 .21，護照 14/19、台胞證 13/13。請以 HANDOFF 頂端為準。
+啟動完整服務：
 
-2026-10-12 實測：`.22` auto Validation 32/32 完成、失敗 0，護照 14/19、台胞證 13/13，與 `.21` 準確率相同。護照 5 張錯誤中，name-field 正確候選 1、錯誤候選 2、未執行 2；broad VIZ 正確候選 0、錯誤候選 2、未執行 3。這是匿名分區診斷，並非 selector 可安全改善的證據。下一輪先調查未執行與候選拒絕原因；不得啟動 GitHub Actions。
+```bash
+docker compose up -d --build
+```
 
-> `.23` 待驗證候選：護照 name-field unknown 時保留 provisional 並讓 broad VIZ 尋找 compatible，未證實提昇。最佳已實測 `.22`：護照 14/19、台胞證 13/13；禁止 GitHub Actions。
+主要開發服務：
 
-> .23 已正式 Validation：護照 14/19、台胞證 13/13，與 .22 持平；broad VIZ 正確候選 0→1，但未提升最終姓名。下一步追查候選拒絕原因；禁止 GitHub Actions。
+```text
+Frontend   Vue 3 / Vite
+Backend    ASP.NET Core Web API
+Database   PostgreSQL
+```
 
-> 2026-10-12：main `.24` 只增加護照正確候選 source × rejection reason 的匿名診斷，待本機測試。最佳已實測 `.23` 護照 14/19、台胞證 13/13。禁止 GitHub Actions。
+> `.env.example` 只有 placeholder。請勿把正式密碼或任何 API key commit 到 Git。
 
-> 2026-10-12 `.24` 實測：32/32 Validation 成功，護照中文姓名 14/19、台胞證全欄 13/13。唯一有正確姓名卻未採用的護照案例原因為 `name-field / romanization:one-syllable-mismatch` 1 張；不可無條件放寬 selector。下一步僅能先做嚴格條件的 shadow / synthetic 驗證；禁止 GitHub Actions。
+---
 
-> `.25` 嚴格護照 one-syllable mismatch 唯讀 shadow 候選已加入，待本機 Validation。已實測最佳 `.24`：護照 14/19、台胞證 13/13。禁止 GitHub Actions。
+## 專案定位
 
-> 最新 main 候選 `.26`：只修復 read-only shadow 的已接受姓名保護與多 ROI 合併模擬，最佳實測 `.25` 護照 14/19、台胞證 13/13；尚待本機驗證。禁止 GitHub Actions。
+這不是完整 ERP，也不是旅客端自助平台。
 
-## 2026-10-12 — .26 固定 Validation 實測
+目前 V2 專注在：
 
-使用者完成 pipeline 2026.10.11.26 的固定 32 張 auto Validation，32/32 成功、失敗 0。護照中文姓名及整張全欄 14/19（74%），其他七欄 19/19；台胞證五項必要欄位與整張全欄 13/13（100%）。相較 .25 無改善亦無回歸。嚴格 one-syllable shadow：潛在改善 0、潛在退步 0、維持正確 14、維持錯誤 5；existing-accepted 9、eligible 6、ambiguous 3、wrong-subtype 1。這些 eligible 不是實際正確率，不得將 shadow 政策直接用於正式 selector。剩餘五張護照姓名錯誤：一張具有完整正確候選，被 name-field / romanization:one-syllable-mismatch 擋住；其餘四張沒有完整正確候選。下一步優先改善原有 OCR 文字辨識品質，不再只放寬 selector。此為缺原始 OCR 工作圖的 legacy Validation，不能代表新照片泛化。禁止 GitHub Actions，不上傳證件個資。
+**證件輸入 → AI OCR → 資料驗證 → 旅客比對 → 人工覆核 → 正式資料**
 
-## 2026-10-12 — .27 護照 focused VIZ 候選（待本機驗證）
+未來如果繼續擴充，才會再考慮與 ERP / CRM / 出團管理等模組整合。
 
-.26 正式固定 Validation 32/32 成功，護照姓名與全欄 14/19，台胞證全欄 13/13。剩下五張護照姓名錯誤中四張沒有完整正確 OCR 候選；.25/.26 嚴格 one-syllable shadow rescued 0，故不再放寬正式 selector。
+---
 
-候選 `2026.10.11.27` 新增護照 `focused-viz` 裁切，範圍沿用現有 broad VIZ 左上邊界 (x=24%、y=12%)、縮至寬 60%、高 34%，使用已有的 bounded `createPixelCrop(...,1500)`。僅在既有 `name-field`、`viz-crop` 都未得到明確 romanization compatible 姓名時，才額外做一次 focused ROI OCR；已有 compatible 的護照不增加 OCR 次數。新候選仍經過既有嚴格 `chooseTaiwanChineseName`，只允許明確 compatible 候選取代保留的 provisional 值；沒有 compatible 時維持原有姓名、不猜。台胞證所有 selector/sex retry 完全不動。Validation 增加 focused VIZ 的匿名 exact/other/none/not-run 數量；新增 synthetic source regression `test-passport-focused-viz.mjs` 並納入 `verify:ocr`。
+## Why this project matters to me
 
-**尚未跑本機 verify/build 或固定 32 張 Validation，不能宣稱任何改善**。正式最佳已實測仍是 .26 護照 14/19、台胞證 13/13；集中本機驗證後對照新增 focused ROI 命中與總準確率，不成功就不繼續盲目疊加 crop。全部 32 張為缺原始 OCR 工作圖的 legacy Validation，不代表新上傳照片泛化準確率。禁止 GitHub Actions、branch/PR 微改與任何真實證件／個資上傳。
+這個專案不是從「想做 OCR」開始，而是從實際重複輸入證件資料的工作流程開始。
 
-## 2026-10-12 — .28 撤回無效 focused VIZ（待本機驗證）
+我希望把技術放進真正的作業流程裡，所以比起單純提高模型辨識率，我更在意：
 
-.27 本機固定 32 張 Validation 全部完成，失敗 0。護照中文姓名與整張 14/19，台胞證全欄 13/13。新增 focused VIZ 在五張錯誤護照裡正確候選 0、其他候選 1、未執行 4，沒有提升準確率。因此不再疊加第三次 OCR。
-
-main 的候選版本更新為 2026.10.11.28，撤除 focused VIZ 的額外辨識與建立裁切；保留先前已有實際改善的 name-field 和 broad VIZ 路徑、既有姓名 selector，以及所有已成功的台胞證姓名和 sex 路徑。測試守衛更新為確認 focused crop 不會恢復。這是減少無益的額外運算，不宣稱提高準確率。
-
-目前尚待 Windows npm.cmd run verify:ocr 和 Docker rebuild。最新實測仍為護照 14/19、台胞證 13/13；此固定 legacy Validation 不包含當初原始 OCR 工作輸入影像，不代表新照片泛化。GitHub Actions 禁止執行，不上傳真實證件個資。
-
-## 2026-10-12 — .28 正式固定 Validation：移除 focused VIZ 後無回歸
-
-使用者本機完成 2026.10.11.28 固定 auto Validation，完成 32/32、失敗 0。護照整張及中文姓名 14/19（74%），其餘七欄 19/19；台胞證整張及五個必要欄位 13/13（100%）。相比 .27 無變化，證實撤回無收益的第三次 focused VIZ 沒造成固定樣本回歸。護照五張姓名失敗中，完整正確候選 1 張（name-field / romanization:one-syllable-mismatch）、其他候選不符 4 張。focused VIZ 診斷正確候選 0、未執行 5，符合該 OCR 已撤除。嚴格 one-syllable shadow 潛在改善 0、退步 0。護照 OCR 中位數約 1.2 秒、P90 2.3 秒，台胞證 OCR 中位數約 0.5 秒、P90 2.7 秒。
-
-結論：最佳已實測版本更新為 .28（準確率仍護照 14/19、台胞證 13/13）；不得恢復第三段 fixed focused ROI 或錯誤聲稱帶來提升。下一階段應探索真正 recognition-quality 改進，並保持既有姓名 selector 不變。32 張 legacy Validation 缺原始 OCR 工作輸入照片，不代表新照片泛化準確率。禁止 GitHub Actions，不提交個資。
-
-## 2026-10-12 — .29 護照姓名 OCR 裁切高品質插值候選（待本機驗證）
-
-正式最新已實測 .28 固定 Validation：32/32 完成，護照中文姓名及整張全欄 14/19（74%）、台胞證五欄及整張 13/13（100%）。護照餘下 5 張姓名錯誤，4 張沒有完整正確辨識候選，先前額外 focused VIZ ROI 已在 .27 證明無收益並於 .28 撤除。
-
-main 新候選 2026.10.11.29 不增加任何 OCR 推論／裁切，不變更原本 name-field 及 broad VIZ 比例、不放寬姓名 selector；只對**護照既有兩個姓名 crop 且確實放大時**，在 Canvas 明確啟用 `imageSmoothingEnabled=true`、`imageSmoothingQuality='high'`。共享 `createPixelCrop()` 新增預設為 false 的選用參數，因此台胞證等其他 crop 維持原行為。這只是測試高品質插值能否幫助小字 recognition 的候選，瀏覽器實際實作可能不保證改善。新增 `test-passport-resize-quality.mjs` regression，鎖定只對護照的 opt-in、無額外 focused ROI，加入 `verify:ocr`；既有 OCR 版本測試同步更新。
-
-此候選尚未在 Windows 執行完整 `npm.cmd run verify:ocr`、Docker rebuild 或固定 32 張 Validation；不可宣稱比 .28 改善。若沒有提升或造成退步，應回退此項插值實驗，不再以這條路徑調參。台胞證 BOCA、joined-token、one-syllable、standalone sex、focused retry 全保留。禁止 GitHub Actions，不開小型 branch/PR，不上傳證件影像或真實個資；legacy Validation 缺實際工作輸入影像，不代表新照片泛化準確率。
-
-> 2026-10-12：`.29` 真實固定 Validation 護照 14/19、台胞證 13/13，Canvas 插值沒有改善；後續禁止重複無收益的固定 ROI / shadow / 插值嘗試。模型級 PP-OCRv5 server-rec 對照仍在封裝相容性前置階段（見 `docs/OCR_MODEL_AB_PLAN.md`）；未取得合法 browser-compatible ONNX tar，正式 OCR 不變、不要求使用者重跑 32 張。GitHub Actions 禁止執行。
-
-## 2026-10-12 — 官方 Server Recognition 隔離合成圖啟動測試已建置
-
-在官方 PaddlePaddle 發布的 PP-OCRv5_server_rec_onnx（約 84.5MB ONNX + inference.yml）基礎上，已新增一次性可選下載與 SHA256 校驗腳本、streaming tar 封裝工具及本機 manifest。執行 `cd frontend && npm.cmd run prepare:ocr-server-model` 可在本機下載及產生同源 /paddle-models/experiments/ 資產，二進位檔由 .gitignore 排除、不上傳 GitHub。候選模型來源、限制及精確步驟見 docs/OCR_MODEL_AB_PLAN.md。
-
-OCR 品質頁面已新增完全隔離的「執行合成圖模型啟動測試」，呼叫獨立 PaddleOCR SDK instance、以 Canvas 自製假中文字測試圖驗證瀏覽器模型是否可初始化推論、結束後 dispose。此實驗僅操作者主動執行，不讀真實證件，不呼叫 production getPaddle，也不代表真實姓名準確率會改善。已新增 static/synthetic regression guard 並接入 verify:ocr。
-
-目前候選尚未於使用者 Windows 實際下載或完成合成 smoke；原 production pipeline 2026.10.11.29 完全不變，正式最佳已實測護照 14/19、台胞證 13/13。下一驗收先看 npm.cmd run verify:ocr、Docker frontend rebuild、合成 smoke 是否成功，**不要求立即跑固定 32 張 Validation**。只有獨立模型可確定載入且比較設計完成，才進入真正 A/B。禁止 GitHub Actions；不得上傳模型二進位或護照個資。
-
-> 2026-10-12：官方 Server Recognition WASM 合成中文字 smoke 成功（1 框、完全相符、3552ms）。現有 main 已新增純 Validation 護照的 Mobile vs Server read-only A/B 入口，尚未本機編譯與跑實測，不能宣稱護照準確率提高。production pipeline 仍 `.29`（護照 14/19、台胞證 13/13）；詳情見 docs/OCR_MODEL_AB_PLAN.md。禁止 GitHub Actions／上傳個資。
+**資料是否可靠、錯誤是否能被發現、人工是否能介入，以及系統最後能不能真正被使用。**
