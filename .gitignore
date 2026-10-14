@@ -467,3 +467,21 @@ frontend/public/paddle-models/experiments/
 .venv/
 __pycache__/
 *.pyc
+# Security-sensitive local files
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+service_account*.json
+secrets*.json
+*.sqlite
+*.sqlite3
+*.db
+!training/benchmark.schema.json
+
+# Never commit real identity-document media outside the explicitly ignored training folders.
+private-data/
+private-samples/
+real-documents/
