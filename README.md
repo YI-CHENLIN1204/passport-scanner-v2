@@ -216,6 +216,36 @@ Repository 中保留的是：
 
 ---
 
+## 可重現驗證
+
+除了閱讀 README，也可以直接執行目前 repository 內的程式與回歸檢查：
+
+### Frontend / OCR
+
+```bash
+cd frontend
+npm ci
+npm run verify:ocr
+```
+
+`verify:ocr` 會執行 OCR regression scripts、TypeScript type check 與 Vite build。測試內容以 synthetic / static regression 為主，不需要把真實證件資料放進 Git。
+
+### Backend
+
+```bash
+dotnet build backend/PassportScanner.Api/PassportScanner.Api.csproj
+```
+
+### Full stack
+
+```bash
+docker compose config
+docker compose up -d --build
+```
+
+> 固定 Validation set 的真實證件影像不屬於公開 repository，因此公開程式碼可以重現 build / regression 流程，但不能從 GitHub 直接重跑私人 Validation dataset。
+
+---
 ## 本機啟動
 
 建立本機環境設定：
