@@ -6036,7 +6036,7 @@ function chooseTaiwanIdChineseName(
   geometries: PaddleItemGeometry[],
   rows: string[],
 ) {
-  // Paddle may return one complete row such as "姓名林奕辰" while the
+  // Paddle may return one complete row such as "姓名王大明" while the
   // geometry-based neighbour search sees only "奕辰". Prefer the explicit
   // labelled row because it preserves the surname and is semantically
   // stronger than proximity alone.
