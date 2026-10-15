@@ -445,9 +445,6 @@ async function runServerRecognitionComparison() {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       try {
         const file = await getTrainingSampleImageFile(sample.trainingSampleId)
-        if (sample.documentType === 'PASSPORT' && selectedMode === 'production') {
-          currentProfileMrz[sample.trainingSampleId] = prediction.fields.nameEn ?? ''
-        }
         const truth = groundTruthForSample(sample).nameZh
         const before = performance.now()
         // This sample was proven wrong by the completed production Validation
@@ -1852,6 +1849,9 @@ async function profileValidationOnly() {
         const wallMs =
           performance.now() - ocrStart
 
+        if (sample.documentType === 'PASSPORT' && selectedMode === 'production') {
+          currentProfileMrz[sample.trainingSampleId] = prediction.fields.nameEn ?? ''
+        }
         const truth = groundTruthForSample(sample)
         const fields = (
           fieldsByDocumentType[sample.documentType] ??
