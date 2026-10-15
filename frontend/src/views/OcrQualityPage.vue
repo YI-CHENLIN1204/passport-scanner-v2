@@ -375,6 +375,7 @@ const currentPageSelectorReasonSummary = computed(() =>
     .join('；'),
 )
 const currentPageWrongIndexReady = ref(false)
+const currentPagePassportFailureEvidence = ref('')
 // Private session-only .29 MRZ for exact same-sample offline testing. Never send to GitHub.
 const currentPagePassportMrz = ref<Record<string, string>>({})
 function downloadProductionErrorIndex() {
@@ -1757,6 +1758,7 @@ async function profileValidationOnly() {
   const currentProfileSelectorBlocked = new Set<string>()
   const currentProfileSelectorReasonCounts: Record<string, number> = {}
   currentPageWrongPassportSamples.value = new Set()
+  currentPagePassportFailureEvidence.value = ''
   currentPagePassportMrz.value = {}
   currentPageRecognitionMissPassportSamples.value = new Set()
   currentPageSelectorBlockedPassportSamples.value = new Set()
@@ -2288,6 +2290,16 @@ async function profileValidationOnly() {
     ].slice(0, 3)
 
     currentPageWrongIndexReady.value = !stopValidationRequested.value && failedCount === 0 && selectedMode === 'production'
+    currentPagePassportFailureEvidence.value = currentPageWrongIndexReady.value
+      ? (() => {
+          const failed = outcomes.filter(item => item.documentType === 'PASSPORT' && item.passportNameFailure !== null)
+          const exact = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].includes('exact')).length
+          const other = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].includes('other')).length
+          const noCandidates = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].every(value => value === 'none' || value === 'not-run')).length
+          const selector = failed.filter(item => item.passportNameFailure === 'exact-candidate').length
+          return `失敗護照 ${failed.length} 張；區域含正確字串 ${exact}；含其他文字候選 ${other}；所有已跑區域均無候選 ${noCandidates}；selector 阻擋 ${selector}。以上類別可能重疊，不能直接推定 Detection 或 Recognition 的根因。`
+        })()
+      : ''
     currentPagePassportMrz.value = currentPageWrongIndexReady.value ? currentProfileMrz : {}
     currentPageWrongPassportSamples.value = currentPageWrongIndexReady.value
       ? currentProfileWrong
@@ -2800,6 +2812,7 @@ onMounted(load)
             匯出本頁 .29 錯誤索引（僅存本機）
           </button>
           <p class="validation-legacy-note">{{ currentPageWrongIndexReady ? `本頁護照姓名錯誤 ${currentPageWrongPassportSamples.size} 張；缺正確候選 ${currentPageRecognitionMissPassportSamples.size} 張；有候選卻遭拒 ${currentPageSelectorBlockedPassportSamples.size} 張。` : '尚未建立當次索引，請先完成正式 auto Validation。' }}</p>
+          <p v-if="currentPagePassportFailureEvidence" class="validation-legacy-note">{{ currentPagePassportFailureEvidence }}</p>
           <p v-if="currentPageWrongIndexReady && currentPageSelectorReasonSummary" class="validation-legacy-note">
             姓名候選遭拒原因：{{ currentPageSelectorReasonSummary }}
           </p>

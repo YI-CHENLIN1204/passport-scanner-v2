@@ -888,3 +888,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 建立 docs/OCR_CURRENT_STRATEGY.md：明確分辨正式基準、模型候選命中率、錯選、淘汰理由及下一步驗收條件。
 - 新增 DECISIONS D-089（停止不安全 v6 自動救援）與 D-090（技術決策記錄契約），同步 OCR_MODEL_AB_PLAN、NEXT_CHAT_HANDOFF。
 - 本批為文件及技術治理改進，不變更正式 OCR 演算法、不修改資料庫，無新的本機 Validation；正式 14/19 與 13/13 保持上一次實測基準。沒有觸發 GitHub Actions。
+
+### 2026-10-16 — 護照五張失敗樣本根因證據第一階段
+- OCR 品質頁正式 Validation 錯誤索引卡片新增匿名的 name-field / broad viz / focused viz 證據彙整：失敗張數、任何區域有正確文字、存在其他候選、各區域沒有候選、selector 擋住完整候選。既有詳細 source 計數仍保留。
+- 此次只修改前端診斷和文件，不修改辨識結果或照片、固定 Test。提交後尚待 Windows Build + 32 張正式 Validation，請勿宣稱正確率提高。

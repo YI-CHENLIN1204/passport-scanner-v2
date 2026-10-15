@@ -529,3 +529,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — 最新 OCR 模型決策與下一步
 先讀 docs/OCR_CURRENT_STRATEGY.md 及 docs/DECISIONS.md D-089 / D-090，避免重複失敗實驗。正式 .29：護照 14/19、台胞證 13/13。PP-OCRv6 Small 另辨出一張正確姓名候選，但同樣本正式 MRZ gate 0 rescue、2 wrong；不能正式採用。OCR 品質頁已將 Server、Tesseract、ROI A/B 四組舊按鈕隱藏，保留正式 Validation、樣本品質及本機錯誤索引。當前目標：五張錯誤護照匿名根因歸類／樣本品質診斷；所有模型與工程決定必須更新文件。main 集中開發、不啟動 Actions、不提交私人資料。文件記錄提交本身不代表提升了辨識率。
+
+## 2026-10-16 — Root-cause evidence before swapping OCR models
+在正式 OCR 品質頁錯誤索引區新增匿名多 crop 失敗證據彙總。注意『所有已跑區域沒有候選』與『有其他候選』不是 detector/recognizer 真正因果分類，不能作為重新訓練結論；需先測 Build / Validation。後續利用此分類選擇品質問題或候選生成改善。D-091 與 docs/OCR_CURRENT_STRATEGY.md 為決策入口。正式 .29 仍護照 14/19、台胞證 13/13；不開 Actions、不上傳私密影像。

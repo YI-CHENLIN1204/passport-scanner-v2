@@ -223,3 +223,6 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 
 ## 2026-10-16 — 最新決策摘要
 現行與淘汰模型總覽改以 docs/OCR_CURRENT_STRATEGY.md 為準。正式 .29 仍為護照 14/19、台胞證 13/13。v6 Small 在四張缺候選樣本產生一張新 exact candidate，但使用當次 .29 MRZ 與正式 comparator 時仍是 0 對、2 錯，因此不安全，不准自動上線。PP-OCRv5 Server / Tesseract chi_tra / 歷史英文整串拼音停止繼續盲測。下一實驗先取得五張失敗的匿名根因分桶與影像品質檢查，別再反覆放寬 selector；沒有新 Validation 實測，不能聲稱有增益。
+
+## 2026-10-16 — v6 停止盲測，優先分離失敗成因
+新增頁面匿名多 crop 失敗證據統計，分辨是否曾出現完整正確字串、其他候選、沒有候選及 selector 阻擋。這是重疊的觀察性分類，非 Detection/Recognition 真因標籤。暫不選新 OCR 模型；先用正式 Validation 驗證實際有用的證據分佈，再依缺失決定可驗收的方案。新的 v6 輸出及拼音 gate 曾有兩張錯選，禁止自動採用。

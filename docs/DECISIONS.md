@@ -1153,3 +1153,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 ### D-090：OCR 模型與決策證據必須集中保存（2026-10-16）
 - 新增 docs/OCR_CURRENT_STRATEGY.md 作為現行優先入口；所有改動應記錄假設、模型取捨、所用樣本與執行 backend、候選前後正確率及錯選數、資源耗時、隱私風險、實驗／正式狀態、驗收與回滾。詳細運作寫 WORKLOG，實驗計畫寫 OCR_MODEL_AB_PLAN，交接更新 NEXT_CHAT_HANDOFF。
 - 未有原始可驗證指標就標記『待測』，不可把候選存在率視為最終護照成功率。固定 Validation 與獨立 Test 分開；不得上傳私人影像、MRZ 或樣本識別碼，不執行 GitHub Actions。
+
+### D-091：失敗護照先以匿名多區域證據診斷（2026-10-16）
+- 正式 .29 5 張護照姓名失敗以既有 name-field / viz-crop / focused-viz 的 exact / other / none / not-run 診斷彙整。增加一段當次 Validation 統計，不顯示姓名、證號、圖片或單張識別碼；結果僅留頁面記憶體。
+- 分類可能重疊；這是文字是否出現在 OCR 行／候選裡的觀察，不能直接推論 detector、recognizer 或 ground truth 已確認錯誤。維持原本人工覆核流程；任何改進須另做完整 Validation 與獨立 Test。
+- 本項僅改善診斷，未改模型、正式版本、資料庫、台胞證辨識；待 Windows Build 和正式 Validation 驗收。因資料安全禁止向 GitHub 上傳失敗樣本或實際姓名。
