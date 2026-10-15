@@ -220,3 +220,6 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 先前本頁正式 `.29` auto Validation 完成 32/32，護照 14/19、台胞證 13/13，建立 5 張護照姓名錯誤的暫存索引；第一張雙模型 A/B Mobile 和 Server 均錯，救回 0。Mobile 含啟動釋放 11,402ms、Server 63,145ms，雙模型 74,547ms。
 
 本批只改研究實驗：由於同頁正式 Validation 已驗證所挑選的護照姓名錯誤，因此不再在昂貴的救援試驗中重複初始化 Mobile Worker；只執行 Server WASM Worker 並與同頁 `.29` 判錯及人工 ground truth 比對。每次仍只跑一張已驗證失敗的 Validation 護照，若 Server 正確則計候選救回。UI 明確標示此為「正式 auto 已判錯 vs Server WASM」的跨 backend 對照，不能等同兩模型在同一 backend 同時重跑的嚴格 A/B。安全索引同頁暫存、刷新消失；模型和文件照片不提交 GitHub。正式 OCR pipeline `.29`、台胞證、固定 Test 完全不變。已更新 synthetic/static regression guard，尚未 Windows verify/build 或實測；Server 耗時瓶頸仍需另行研究。禁止 GitHub Actions。
+
+## 2026-10-16 — 最新決策摘要
+現行與淘汰模型總覽改以 docs/OCR_CURRENT_STRATEGY.md 為準。正式 .29 仍為護照 14/19、台胞證 13/13。v6 Small 在四張缺候選樣本產生一張新 exact candidate，但使用當次 .29 MRZ 與正式 comparator 時仍是 0 對、2 錯，因此不安全，不准自動上線。PP-OCRv5 Server / Tesseract chi_tra / 歷史英文整串拼音停止繼續盲測。下一實驗先取得五張失敗的匿名根因分桶與影像品質檢查，別再反覆放寬 selector；沒有新 Validation 實測，不能聲稱有增益。

@@ -1142,3 +1142,14 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 在 `chooseTaiwanChineseName()` 新增只限原本 `best` 不存在或低於原門檻的受限兩框拼接 fallback：每框 1–2 個漢字、score >= .82、水平接近且同行、鄰近「姓名」或 MRZ 對應拉丁姓名錨點，整個合併姓名必須使用原本嚴格 `compareChineseNameToMrzRomanization` 得到 `compatible`；多個不同合格合併結果則不使用。原既有成功候選不被覆蓋。
 - 不變更台胞證、身分證或任何背景 OCR 模型；正式版本號維持 `2026.10.11.29` 以避免聲稱已提高準確率。新增 `test-passport-joined-han-name.mjs` 並接入 `verify:ocr` 靜態防回歸。
 - 注意：此假設**尚無證據證實**四張失敗護照有相鄰完整漢字框。沒有新一輪 32 張 Windows 真實 Validation，也未完成本地 npm build / regression，不得把這批視為已驗證改善；先測編譯，再評估是否真實救回且沒有其他欄位退步。禁止 GitHub Actions 與個資提交。
+
+### D-089：暫停會產生錯選的 PP-OCRv6 自動姓名救援（2026-10-16）
+- 決策：保留 PP-OCRv5 Mobile / pipeline .29 正式主線。PP-OCRv6 Small 僅作離線候選研究，不允許直接改寫護照中文姓名，也不能因固定 Validation 達標而放寬嚴格 selector。原有人工審核不變。
+- 證據：正式 19 張護照 14/19、13 張台胞證 13/13；四張 .29 缺候選護照中 v6 多辨出一張完整中文姓名，但無錨點候選方法四張有一對三錯；使用當次 .29 MRZ + 正式 nameRomanization.ts 比對，缺候選四張 0 對、2 錯。此實驗不能證明可安全救援。
+- 淘汰：PP-OCRv5 Server（無明確救援且極慢）、Tesseract chi_tra（0 救援）、歷史 OCR 英文 + pypinyin 整串比對（0 救援且錯選）、標籤-only 閘門（所有樣本無候選）。來源與限制參照 docs/OCR_CURRENT_STRATEGY.md。
+- 下一步：先定位五張姓名錯誤的 Detection、Recognition、候選組裝、selector 與人工答案問題；先做匿名分類及獨立 Test，再引入新的模型或規則。無完整回歸不得升級正式版本。
+- 回滾／門檻：候選發生任何無法解釋的錯選，不得進正式自動接受；台胞證 13/13 不能退步。需要實測才宣稱 15/19 或 100%。
+
+### D-090：OCR 模型與決策證據必須集中保存（2026-10-16）
+- 新增 docs/OCR_CURRENT_STRATEGY.md 作為現行優先入口；所有改動應記錄假設、模型取捨、所用樣本與執行 backend、候選前後正確率及錯選數、資源耗時、隱私風險、實驗／正式狀態、驗收與回滾。詳細運作寫 WORKLOG，實驗計畫寫 OCR_MODEL_AB_PLAN，交接更新 NEXT_CHAT_HANDOFF。
+- 未有原始可驗證指標就標記『待測』，不可把候選存在率視為最終護照成功率。固定 Validation 與獨立 Test 分開；不得上傳私人影像、MRZ 或樣本識別碼，不執行 GitHub Actions。

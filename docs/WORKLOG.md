@@ -883,3 +883,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - Offline PP-OCRv6 Small against current .29 sample-linked MRZ: 5 failure-sample MRZ rows compared; 2 compatible candidates, **0 correct and 2 wrong**, 3 without a unique compatible candidate. Among four verified .29 candidate-misses: 0 rescued, 2 wrong. STOP any automated use of these relaxed candidates. Note model produced one standalone exact candidate but it is not safely selected.
 - On OcrQualityPage, old browser-only PP-OCRv5 Server smoke, Tesseract chi_tra, ROI A/B, single-image Server rescue experiments are no longer rendered (disabled legacy template blocks); keep official Validation and local .29 error-index export in an explicit, simpler section. Retired script logic remains for a later safe deletion, not an active UI. Local index contains current MRZ person names: private only, never commit to GitHub. No production OCR algorithms changed, no Actions.
 - Before claiming better accuracy, use a genuinely independent alternative model with validation on held-out documents, or improve source-image quality/annotation problems; do not blindly relax candidate accept rules to reach 100% on this fixed cohort.
+
+### 2026-10-16 — 集中整理模型與技術決定
+- 建立 docs/OCR_CURRENT_STRATEGY.md：明確分辨正式基準、模型候選命中率、錯選、淘汰理由及下一步驗收條件。
+- 新增 DECISIONS D-089（停止不安全 v6 自動救援）與 D-090（技術決策記錄契約），同步 OCR_MODEL_AB_PLAN、NEXT_CHAT_HANDOFF。
+- 本批為文件及技術治理改進，不變更正式 OCR 演算法、不修改資料庫，無新的本機 Validation；正式 14/19 與 13/13 保持上一次實測基準。沒有觸發 GitHub Actions。
