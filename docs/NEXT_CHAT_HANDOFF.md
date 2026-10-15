@@ -532,3 +532,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Root-cause evidence before swapping OCR models
 在正式 OCR 品質頁錯誤索引區新增匿名多 crop 失敗證據彙總。注意『所有已跑區域沒有候選』與『有其他候選』不是 detector/recognizer 真正因果分類，不能作為重新訓練結論；需先測 Build / Validation。後續利用此分類選擇品質問題或候選生成改善。D-091 與 docs/OCR_CURRENT_STRATEGY.md 為決策入口。正式 .29 仍護照 14/19、台胞證 13/13；不開 Actions、不上傳私密影像。
+
+## 2026-10-16 — 現行批次掃描人工覆核安全提示
+批次護照 OCR 若中文姓名輸出空白，檔案結果列明示需要人工核對，仍正常加入待審核。錯誤但非空白仍須人工驗證；不宣稱提高辨識率。待 Windows build。繼續以真實 5 張錯誤的影像/標註品質和新候選辨識能力作為下一個實質準確率突破口；保留 D-089 至 D-092 決策與 WORKLOG，禁止 GitHub Actions 和私人證件提交。

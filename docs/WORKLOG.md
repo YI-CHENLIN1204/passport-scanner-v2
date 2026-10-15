@@ -892,3 +892,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 護照五張失敗樣本根因證據第一階段
 - OCR 品質頁正式 Validation 錯誤索引卡片新增匿名的 name-field / broad viz / focused viz 證據彙整：失敗張數、任何區域有正確文字、存在其他候選、各區域沒有候選、selector 擋住完整候選。既有詳細 source 計數仍保留。
 - 此次只修改前端診斷和文件，不修改辨識結果或照片、固定 Test。提交後尚待 Windows Build + 32 張正式 Validation，請勿宣稱正確率提高。
+
+### 2026-10-16 — 加入護照空白中文姓名提示
+- BatchScanPage 的單檔完成提示新增「已加入待審核 · 中文姓名未辨出，請人工核對」，僅護照且辨識結果 nameZh 空白時出現；避免操作者將掃描完成錯認為姓名也辨對。
+- 不更動 OCR 決策、存檔內容及台胞證 13/13 基準。此改動不代表護照由 14/19 提升；實際 Windows Build 與端到端流程尚待驗證。模型選擇理由延續 OCR_CURRENT_STRATEGY。

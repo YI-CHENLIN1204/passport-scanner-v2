@@ -1030,7 +1030,9 @@ async function runBatch(
         await addScanItem(batch.scanBatchId, request)
 
         item.status = 'done'
-        item.message = '已加入待審核'
+        item.message = documentType.value === 'PASSPORT' && !request.nameZh?.trim()
+          ? '已加入待審核 · 中文姓名未辨出，請人工核對'
+          : '已加入待審核'
       } catch (err) {
         item.status = 'error'
         item.message =
