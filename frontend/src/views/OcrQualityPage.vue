@@ -1468,6 +1468,7 @@ interface ValidationProfileSample {
   fullExact: boolean
   passportNameFailure: ValidationPassportNameFailure | null
   passportCropDiagnosis: PassportCropDiagnosis | null
+  passportCharacterCoverage: 'all' | 'partial' | 'none' | null
   passportExactDecision: string | null
   passportExactDecisionSource: string | null
   passportShadow: 'rescued' | 'regressed' | 'unchanged-correct' | 'unchanged-wrong' | null
@@ -1672,6 +1673,21 @@ function classifyPassportCrop(
     candidates.includes(expected) || raws.includes(expected)
   )) return 'exact'
   return candidates.length ? 'other' : 'none'
+}
+
+// Anonymous diagnostic only: overlap of expected Han codepoints and OCR raw text.
+// This does NOT imply the characters are on the same name row or in correct order.
+function classifyPassportCharacterCoverage(
+  expected: string,
+  diagnostics: PassportNameDiagnosticSnapshot[],
+): 'all' | 'partial' | 'none' {
+  const target = [...expected].filter(character => /\p{Script=Han}/u.test(character))
+  if (!target.length) return 'none'
+  const seen = diagnostics.flatMap(item => item.rawTexts)
+    .join('')
+  const covered = target.filter(character => seen.includes(character)).length
+  if (!covered) return 'none'
+  return covered === target.length ? 'all' : 'partial'
 }
 
 function diagnosePassportCrops(
@@ -1905,6 +1921,12 @@ async function profileValidationOnly() {
                 prediction.passportNameDiagnostics,
               )
             : null
+        const passportCharacterCoverage =
+          sample.documentType === 'PASSPORT' && passportNameFailure !== null
+            ? classifyPassportCharacterCoverage(
+                expectedName, prediction.passportNameDiagnostics,
+              )
+            : null
         const exactDecisions = sample.documentType === 'PASSPORT' &&
           passportNameFailure === 'exact-candidate'
           ? prediction.passportNameDiagnostics.flatMap(
@@ -2020,6 +2042,7 @@ async function profileValidationOnly() {
             sample.hasExactOcrInput,
           passportNameFailure,
           passportCropDiagnosis,
+          passportCharacterCoverage,
           passportExactDecision,
           passportExactDecisionSource,
           passportShadow,
@@ -2296,8 +2319,11 @@ async function profileValidationOnly() {
           const exact = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].includes('exact')).length
           const other = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].includes('other')).length
           const noCandidates = failed.filter(item => item.passportCropDiagnosis && [item.passportCropDiagnosis.nameField, item.passportCropDiagnosis.vizCrop, item.passportCropDiagnosis.focusedViz].every(value => value === 'none' || value === 'not-run')).length
+          const allChars = failed.filter(item => item.passportCharacterCoverage === 'all').length
+          const partialChars = failed.filter(item => item.passportCharacterCoverage === 'partial').length
+          const zeroChars = failed.filter(item => item.passportCharacterCoverage === 'none').length
           const selector = failed.filter(item => item.passportNameFailure === 'exact-candidate').length
-          return `失敗護照 ${failed.length} 張；區域含正確字串 ${exact}；含其他文字候選 ${other}；所有已跑區域均無候選 ${noCandidates}；selector 阻擋 ${selector}。以上類別可能重疊，不能直接推定 Detection 或 Recognition 的根因。`
+          return `失敗護照 ${failed.length} 張；區域含正確字串 ${exact}；含其他文字候選 ${other}；所有已跑區域均無候選 ${noCandidates}；selector 阻擋 ${selector}；原始 OCR 姓名字元覆蓋：全部 ${allChars}、部分 ${partialChars}、零 ${zeroChars}。字元可出現在無關區域或不同框，不能證明完整姓名可拼出，也不能直接推定 Detector 或 Recognizer 根因。`
         })()
       : ''
     currentPagePassportMrz.value = currentPageWrongIndexReady.value ? currentProfileMrz : {}

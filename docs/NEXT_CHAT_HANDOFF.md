@@ -538,3 +538,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — 三框護照姓名候選 fallback（待本機測試）
 最新 main 增加 PP-OCRv5 Mobile 三個各單漢字高信心、同行近距離、姓名標籤或拉丁姓名錨點、完整正式 MRZ 相容的唯一組合 fallback。只在 direct 已無有效候選才用，不改模型、台胞證、DB，不採錯選的 v6 規則。檢查 npm run verify:ocr / npm run build，再集中 Validation 32 張；在測試前正式成績仍 14/19、13/13。決策 D-093；持續遵守集中 main、不開 Actions、資料不外流。
+
+## 2026-10-16 — Passport failed-name character coverage instrumentation
+最新 main 在 OcrQualityPage 正式 Validation 完成時顯示姓名 raw OCR 逐字覆蓋（全部／部分／零），只統計錯誤護照、不顯示個資。這是下一輪決定跨框組字或新繁體辨識模型的根因觀察，不是新 OCR 變更；若只有某些字出現在其他區域仍可能假陽性。需 Windows build 和 full Validation 才有實測分類，不得聲稱準確率提升。維持 D-089–094、WORKLOG、OCR_CURRENT_STRATEGY 同步管理。

@@ -900,3 +900,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 護照三字拆框候選保守恢復
 - 於 paddleOcr.ts 既有姓名選取器新增三個單漢字框的嚴格空白結果 fallback，只在無有效既有候選時使用；每字高信心、同行近距離、明確標籤或拉丁錨點、整個姓名 MRZ 全字相容且唯一才返回。沒有降低既有兩字框 fallback 的任何門檻。
 - 擴充 test-passport-joined-han-name.mjs 源碼防回歸守衛。這不是證明實際會提升四張錯誤護照的有效率；尚待 Windows npm verify/build 與固定 Validation。更新 D-093，無 Actions，無個資。
+
+### 2026-10-16 — 新增 Passport OCR 字元覆蓋率匿名診斷
+- 在既有正式 Validation 失敗護照統計中，從 raw OCR 文字和匿名標準答案計算姓名漢字「全部、部分、零」出現件數；不用 OCR 次數增加、沒有新模型、沒有修改 .29 或台胞證。目的是證據導向判斷跨框組字 vs recognition 漏字，避免繼續不確定的三框拼接盲測。
+- 僅暫存分類且在頁面呈現匿名件數；無個人姓名或 raw OCR 匯出。待本機 build / Validation，尚無正確率增益。決策 D-094。
