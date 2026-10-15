@@ -118,9 +118,12 @@ def evaluate(zip_path,limit,production_index=None,production_comparator=False):
           old_name=fields.get('nameZh') if isinstance(fields,dict) else None
           observed_english=fields.get('nameEn') if isinstance(fields,dict) else None
           if production_comparator:
+            sample_key=str(row.get('sampleId','')).replace('-','').lower()
+            # Never use exported historical OCR English for this experiment.
+            current_mrz=(production_index or {}).get('productionMrzEnglishBySampleId',{}).get(sample_key,'')
             production_comparator_rows.append({'candidates':[p.text for p in variants['no_anchor_any_roi']],
-              'ocrEnglish':observed_english or '', 'truth':truth,
-              'confirmedMiss':bool(production_index and str(row.get('sampleId','')).replace('-','').lower() in production_index['missingCandidateSampleIds'])})
+              'ocrEnglish':current_mrz, 'truth':truth,
+              'confirmedMiss':bool(production_index and sample_key in production_index['missingCandidateSampleIds'])})
           # Historical OCR-derived English is used ONLY as exploratory evidence;
           # NEVER use groundTruth English or treat old OCR as current .29 MRZ.
           roman_status,roman_matches=corroborate_candidates(
@@ -183,7 +186,7 @@ def evaluate(zip_path,limit,production_index=None,production_comparator=False):
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,
       historical_ocr_english_romanization=romanization_gate,
-      production_comparator_on_historical_english=official_comparator_result,
+      production_comparator_on_current_29_mrz=official_comparator_result,
       truth_blind_ablation=gate_ablation,
       confirmed_missing_ablation=missing_gate_ablation if production_index is not None else 'not_provided',
       v6_exact_candidate_evidence=candidate_evidence,
@@ -222,6 +225,11 @@ if __name__=='__main__':
           if not isinstance(index.get(group),list) or any(not isinstance(x,str) or len(x.replace('-',''))!=32 for x in index[group]):
             raise ValueError('invalid local index')
           index[group]=[x.replace('-','').lower() for x in index[group]]
+        raw_mrz=index.get('productionMrzEnglishBySampleId')
+        if args.production_comparator and not isinstance(raw_mrz,dict):
+          raise ValueError('Missing current-page .29 MRZ map: re-export after updated full production Validation')
+        index['productionMrzEnglishBySampleId']={k.replace('-','').lower():v for k,v in (raw_mrz or {}).items()
+          if isinstance(k,str) and isinstance(v,str) and len(v)<256}
       print(json.dumps(evaluate(args.dataset_zip,args.limit,index,args.production_comparator),ensure_ascii=False))
     except ImportError as error:
       # Package name only: don't echo private paths or image contents.

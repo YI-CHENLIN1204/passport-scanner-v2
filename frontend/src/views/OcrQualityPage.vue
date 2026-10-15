@@ -375,6 +375,8 @@ const currentPageSelectorReasonSummary = computed(() =>
     .join('；'),
 )
 const currentPageWrongIndexReady = ref(false)
+// Private session-only .29 MRZ for exact same-sample offline testing. Never send to GitHub.
+const currentPagePassportMrz = ref<Record<string, string>>({})
 function downloadProductionErrorIndex() {
   if (!currentPageWrongIndexReady.value) return
   // Contains opaque local training sample IDs, NOT names or OCR text.
@@ -383,6 +385,13 @@ function downloadProductionErrorIndex() {
     pipelineVersion: OCR_PIPELINE_VERSION,
     missingCandidateSampleIds: [...currentPageRecognitionMissPassportSamples.value],
     selectorBlockedSampleIds: [...currentPageSelectorBlockedPassportSamples.value],
+    // Contains personal names. Store ONLY in the private backup folder; never share.
+    productionMrzEnglishBySampleId: Object.fromEntries(
+      [...currentPageRecognitionMissPassportSamples.value,
+       ...currentPageSelectorBlockedPassportSamples.value]
+        .filter(id => currentPagePassportMrz.value[id])
+        .map(id => [id, currentPagePassportMrz.value[id]]),
+    ),
   })
   const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
   try {
@@ -436,6 +445,9 @@ async function runServerRecognitionComparison() {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       try {
         const file = await getTrainingSampleImageFile(sample.trainingSampleId)
+        if (sample.documentType === 'PASSPORT' && selectedMode === 'production') {
+          currentProfileMrz[sample.trainingSampleId] = prediction.fields.nameEn ?? ''
+        }
         const truth = groundTruthForSample(sample).nameZh
         const before = performance.now()
         // This sample was proven wrong by the completed production Validation
@@ -1743,10 +1755,12 @@ async function profileValidationOnly() {
 
   const outcomes: ValidationProfileSample[] = []
   const currentProfileWrong = new Set<string>()
+  const currentProfileMrz: Record<string, string> = {}
   const currentProfileRecognitionMiss = new Set<string>()
   const currentProfileSelectorBlocked = new Set<string>()
   const currentProfileSelectorReasonCounts: Record<string, number> = {}
   currentPageWrongPassportSamples.value = new Set()
+  currentPagePassportMrz.value = {}
   currentPageRecognitionMissPassportSamples.value = new Set()
   currentPageSelectorBlockedPassportSamples.value = new Set()
   currentPageSelectorReasonCounts.value = {}
@@ -2274,6 +2288,7 @@ async function profileValidationOnly() {
     ].slice(0, 3)
 
     currentPageWrongIndexReady.value = !stopValidationRequested.value && failedCount === 0 && selectedMode === 'production'
+    currentPagePassportMrz.value = currentPageWrongIndexReady.value ? currentProfileMrz : {}
     currentPageWrongPassportSamples.value = currentPageWrongIndexReady.value
       ? currentProfileWrong
       : new Set()
