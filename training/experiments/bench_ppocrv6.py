@@ -3,6 +3,7 @@
 import argparse, json, statistics, sys, time, zipfile
 from pathlib import Path, PurePosixPath
 from v6_name_gate import propose_names
+from v6_romanization_gate import corroborate_candidates, pypinyin_romanize
 
 STAGE = 'startup'
 
@@ -31,6 +32,7 @@ def evaluate(zip_path,limit,production_index=None):
     candidate_evidence={'matched_exact_with_geometry':0,'matched_exact_no_geometry':0,'matched_exact_low_confidence':0,'matched_exact_upper_roi':0,'matched_exact_lower_roi':0}
     verified_missing_evidence={'standalone_with_geometry':0,'standalone_confident':0,'standalone_upper_roi':0}
     passport_ordinal=0
+    romanization_gate={'ocr_english_available':0,'single_match':0,'single_correct':0,'single_wrong':0,'ambiguous':0,'no_match':0,'no_ocr_english':0,'missing_candidate_single_correct':0,'missing_candidate_single_wrong':0}
     gate_ablation={'no_anchor_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'no_anchor_upper_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'label_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0}}
     missing_gate_ablation={'no_anchor_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'no_anchor_upper_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'label_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0}}
     blind_gate={'unique_proposed':0,'unique_correct':0,'unique_wrong':0,'ambiguous':0,'no_proposal':0,
@@ -113,6 +115,20 @@ def evaluate(zip_path,limit,production_index=None):
           old=label.get('originalOcr') or {}
           fields=(old.get('originalFields') or old.get('fields') or {}) if isinstance(old,dict) else {}
           old_name=fields.get('nameZh') if isinstance(fields,dict) else None
+          observed_english=fields.get('nameEn') if isinstance(fields,dict) else None
+          # Historical OCR-derived English is used ONLY as exploratory evidence;
+          # NEVER use groundTruth English or treat old OCR as current .29 MRZ.
+          roman_status,roman_matches=corroborate_candidates(
+            variants['no_anchor_any_roi'], observed_english, pypinyin_romanize)
+          if roman_status=='no-ocr-english':romanization_gate['no_ocr_english']+=1
+          else:
+            romanization_gate['ocr_english_available']+=1
+            if roman_status=='single-exact-romanization':
+              romanization_gate['single_match']+=1
+              if roman_matches[0].text==truth:romanization_gate['single_correct']+=1
+              else:romanization_gate['single_wrong']+=1
+            elif roman_status=='ambiguous':romanization_gate['ambiguous']+=1
+            else:romanization_gate['no_match']+=1
           old_status=('exact' if isinstance(old_name,str) and ''.join(old_name.split())==truth
                       else 'different' if isinstance(old_name,str) and old_name.strip()
                       else 'unknown')
@@ -121,6 +137,9 @@ def evaluate(zip_path,limit,production_index=None):
             if key in production_index['missingCandidateSampleIds']:
               indexed_seen.add(key)
               overlap['confirmed_missing_candidates']+=1
+              if roman_status=='single-exact-romanization':
+                if roman_matches[0].text==truth:romanization_gate['missing_candidate_single_correct']+=1
+                else:romanization_gate['missing_candidate_single_wrong']+=1
               for variant,candidates in variants.items():
                 bucket=missing_gate_ablation[variant]
                 if len(candidates)>1:bucket['ambiguous']+=1
@@ -149,6 +168,7 @@ def evaluate(zip_path,limit,production_index=None):
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,
+      historical_ocr_english_romanization=romanization_gate,
       truth_blind_ablation=gate_ablation,
       confirmed_missing_ablation=missing_gate_ablation if production_index is not None else 'not_provided',
       v6_exact_candidate_evidence=candidate_evidence,
