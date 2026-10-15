@@ -3,22 +3,42 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build } from 'esbuild'
+import { createRequire } from 'node:module'
+import ts from 'typescript'
+
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const bundled = await build({
-  entryPoints: [path.join(root, 'src/services/nameRomanization.ts')],
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  write: false,
-  logLevel: 'silent',
-})
-// Import the bundled ESM directly. Do not use a hand-rolled CommonJS
-// require/new Function loader; that was fragile for bundled dependencies.
-const encoded = Buffer.from(bundled.outputFiles[0].text, 'utf8').toString('base64')
+const require = createRequire(import.meta.url)
+function loadTs(relativePath, cache = new Map()) {
+  const absolute = path.join(root, 'src/services', relativePath)
+  if (cache.has(absolute)) return cache.get(absolute)
+  const source = fs.readFileSync(absolute, 'utf8')
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    fileName: absolute,
+    reportDiagnostics: true,
+  })
+  if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) {
+    throw new Error('Local TypeScript transpilation failed')
+  }
+  const mod = { exports: {} }
+  cache.set(absolute, mod.exports)
+  // The executed JavaScript is project source checked out from GitHub,
+  // never supplied by the private OCR dataset.
+  const localRequire = (specifier) => {
+    if (specifier === './officialRomanizationVariants') {
+      return loadTs('officialRomanizationVariants.ts', cache)
+    }
+    if (specifier === 'pinyin-pro') return require('pinyin-pro')
+    throw new Error('Unexpected comparator import')
+  }
+  new Function('module', 'exports', 'require', compiled.outputText)(
+    mod, mod.exports, localRequire,
+  )
+  return mod.exports
+}
 const { compareChineseNameToMrzRomanization } =
-  await import('data:text/javascript;base64,' + encoded)
+  loadTs('nameRomanization.ts')
 if (typeof compareChineseNameToMrzRomanization !== 'function') {
   throw new Error('Production comparator export unavailable')
 }
