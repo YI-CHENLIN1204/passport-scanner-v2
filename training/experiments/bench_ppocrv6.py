@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Local only PP-OCRv6 Small test on PRIVATE ZIP; never prints PII."""
-import argparse, json, statistics, sys, time, zipfile
+import argparse, json, statistics, sys, time, zipfile, subprocess
 from pathlib import Path, PurePosixPath
 from v6_name_gate import propose_names
 from v6_romanization_gate import corroborate_candidates, pypinyin_romanize
@@ -11,7 +11,7 @@ def safe(z, name):
     if not isinstance(name,str) or not name or '..' in PurePosixPath(name).parts or name not in z.namelist(): raise ValueError('invalid archive path')
     return z.read(name)
 
-def evaluate(zip_path,limit,production_index=None):
+def evaluate(zip_path,limit,production_index=None,production_comparator=False):
     global STAGE
     STAGE = 'dependencies'
     import cv2, numpy as np
@@ -27,6 +27,7 @@ def evaluate(zip_path,limit,production_index=None):
     total=exact=substring=failed=0
     timings=[]
     anonymous_rows=[]
+    production_comparator_rows=[]
     overlap={'confirmed_missing_candidates':0,'v6_standalone_rescue':0,'v6_substring_potential':0,'v6_absent':0,'confirmed_selector_blocked':0}
     indexed_seen=set()
     candidate_evidence={'matched_exact_with_geometry':0,'matched_exact_no_geometry':0,'matched_exact_low_confidence':0,'matched_exact_upper_roi':0,'matched_exact_lower_roi':0}
@@ -116,6 +117,10 @@ def evaluate(zip_path,limit,production_index=None):
           fields=(old.get('originalFields') or old.get('fields') or {}) if isinstance(old,dict) else {}
           old_name=fields.get('nameZh') if isinstance(fields,dict) else None
           observed_english=fields.get('nameEn') if isinstance(fields,dict) else None
+          if production_comparator:
+            production_comparator_rows.append({'candidates':[p.text for p in variants['no_anchor_any_roi']],
+              'ocrEnglish':observed_english or '', 'truth':truth,
+              'confirmedMiss':bool(production_index and str(row.get('sampleId','')).replace('-','').lower() in production_index['missingCandidateSampleIds'])})
           # Historical OCR-derived English is used ONLY as exploratory evidence;
           # NEVER use groundTruth English or treat old OCR as current .29 MRZ.
           roman_status,roman_matches=corroborate_candidates(
@@ -162,6 +167,15 @@ def evaluate(zip_path,limit,production_index=None):
             'v6_roi_candidate':status,'exported_original_ocr_proxy':old_status})
         except Exception:
           failed+=1
+    official_comparator_result='not_requested'
+    if production_comparator:
+      STAGE='local-production-romanization-comparator'
+      script=Path(__file__).resolve().parents[2] / 'frontend' / 'scripts' / 'eval-v6-mrz-candidates.mjs'
+      proc=subprocess.run(['node',str(script)],input=json.dumps(production_comparator_rows),
+        text=True,capture_output=True,timeout=90,check=False)
+      if proc.returncode!=0:
+        raise RuntimeError('Local comparator failed')
+      official_comparator_result=json.loads(proc.stdout)
     if production_index is not None:
       overlap['index_complete']=indexed_seen==set(production_index['missingCandidateSampleIds'])
     return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
@@ -169,6 +183,7 @@ def evaluate(zip_path,limit,production_index=None):
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,
       historical_ocr_english_romanization=romanization_gate,
+      production_comparator_on_historical_english=official_comparator_result,
       truth_blind_ablation=gate_ablation,
       confirmed_missing_ablation=missing_gate_ablation if production_index is not None else 'not_provided',
       v6_exact_candidate_evidence=candidate_evidence,
@@ -183,6 +198,8 @@ if __name__=='__main__':
     p.add_argument('--limit',type=int,default=19)
     p.add_argument('--production-index',type=Path,
       help='Local anonymous index exported from the same-page complete production Validation')
+    p.add_argument('--production-comparator',action='store_true',
+      help='Use bundled frontend comparator against historical OCR English; requires frontend npm ci')
     p.add_argument('--check',action='store_true',
       help='Check local packages and v6 config without reading the private ZIP')
     args=p.parse_args()
@@ -205,7 +222,7 @@ if __name__=='__main__':
           if not isinstance(index.get(group),list) or any(not isinstance(x,str) or len(x.replace('-',''))!=32 for x in index[group]):
             raise ValueError('invalid local index')
           index[group]=[x.replace('-','').lower() for x in index[group]]
-      print(json.dumps(evaluate(args.dataset_zip,args.limit,index),ensure_ascii=False))
+      print(json.dumps(evaluate(args.dataset_zip,args.limit,index,args.production_comparator),ensure_ascii=False))
     except ImportError as error:
       # Package name only: don't echo private paths or image contents.
       print('IMPORT_ERROR: '+str(error).split(':')[0][:100],file=sys.stderr)
