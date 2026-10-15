@@ -31,6 +31,8 @@ def evaluate(zip_path,limit,production_index=None):
     candidate_evidence={'matched_exact_with_geometry':0,'matched_exact_no_geometry':0,'matched_exact_low_confidence':0,'matched_exact_upper_roi':0,'matched_exact_lower_roi':0}
     verified_missing_evidence={'standalone_with_geometry':0,'standalone_confident':0,'standalone_upper_roi':0}
     passport_ordinal=0
+    gate_ablation={'no_anchor_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'no_anchor_upper_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'label_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0}}
+    missing_gate_ablation={'no_anchor_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'no_anchor_upper_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0},'label_any_roi':{'unique_correct':0,'unique_wrong':0,'ambiguous':0,'none':0}}
     blind_gate={'unique_proposed':0,'unique_correct':0,'unique_wrong':0,'ambiguous':0,'no_proposal':0,
       'missing_candidate_unique_correct':0,'missing_candidate_unique_wrong':0}
     STAGE = 'zip-manifest'
@@ -63,6 +65,17 @@ def evaluate(zip_path,limit,production_index=None):
           boxes=getattr(result,'boxes',None)
           scores=getattr(result,'scores',None)
           proposals=propose_names(texts,boxes,scores,roi.shape[0])
+          variants={
+            'no_anchor_any_roi':propose_names(texts,boxes,scores,roi.shape[0],require_label=False,upper_only=False),
+            'no_anchor_upper_roi':propose_names(texts,boxes,scores,roi.shape[0],require_label=False,upper_only=True),
+            'label_any_roi':propose_names(texts,boxes,scores,roi.shape[0],require_label=True,upper_only=False),
+          }
+          for key,candidates in variants.items():
+            bucket=gate_ablation[key]
+            if len(candidates)>1:bucket['ambiguous']+=1
+            elif not candidates:bucket['none']+=1
+            elif candidates[0].text==truth:bucket['unique_correct']+=1
+            else:bucket['unique_wrong']+=1
           if len(proposals)==1:
             blind_gate['unique_proposed']+=1
             if proposals[0].text==truth: blind_gate['unique_correct']+=1
@@ -108,6 +121,12 @@ def evaluate(zip_path,limit,production_index=None):
             if key in production_index['missingCandidateSampleIds']:
               indexed_seen.add(key)
               overlap['confirmed_missing_candidates']+=1
+              for variant,candidates in variants.items():
+                bucket=missing_gate_ablation[variant]
+                if len(candidates)>1:bucket['ambiguous']+=1
+                elif not candidates:bucket['none']+=1
+                elif candidates[0].text==truth:bucket['unique_correct']+=1
+                else:bucket['unique_wrong']+=1
               if len(proposals)==1:
                 if proposals[0].text==truth:blind_gate['missing_candidate_unique_correct']+=1
                 else:blind_gate['missing_candidate_unique_wrong']+=1
@@ -130,6 +149,8 @@ def evaluate(zip_path,limit,production_index=None):
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,
+      truth_blind_ablation=gate_ablation,
+      confirmed_missing_ablation=missing_gate_ablation if production_index is not None else 'not_provided',
       v6_exact_candidate_evidence=candidate_evidence,
       production_missing_candidate_evidence=verified_missing_evidence if production_index is not None else 'not_provided',
       production_29_overlap=overlap if production_index is not None else 'not_provided',

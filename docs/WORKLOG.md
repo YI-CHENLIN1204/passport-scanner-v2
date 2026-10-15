@@ -855,3 +855,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - Added exact text de-duplication: repeated OCR boxes with the same proposed name are not counted as contradictory candidates. Distinct names remain ambiguous and must not be auto-applied.
 - Expanded synthetic tests for inline variants, repeated candidates, conflicting distinct candidates, missing anchors, bottom-of-ROI, low-confidence and non-Han text. All v6 work remains **offline experimental**, not yet a browser integration nor evidence of improved production 14/19. The tests require running on the local Python environment; do not claim actual validation improvement without Windows private ZIP + .29 index evidence. Never run Actions, never submit private data.
 
+### 2026-10-15 — PP-OCRv6 blind-name gate ablation
+- Real Windows private Validation showed 19/19 no candidates from the strict label+upper-ROI gate, despite the v6 recognition model producing 14 exact full-name strings and one exact extra candidate among four confirmed .29 misses. This is a gate problem, not a model degradation.
+- Added three offline-only truth-blind gate variants: no-label full ROI; no-label upper ROI; label-required full ROI. After candidate selection, compare against ground truth and count unique-correct/unique-wrong/ambiguous/none overall and in the verified four .29 missing-candidate samples. No private OCR text, images or IDs printed; no Test samples. This determines whether missing labels or the incorrect upper-ROI assumption causes all 19 to be rejected.
+- Keep production .29 and permit untouched; a no-anchor experiment is diagnostic only and must NEVER be deployed without MRZ and geometry safety checks. Local private pilot not yet rerun; no Actions.
+

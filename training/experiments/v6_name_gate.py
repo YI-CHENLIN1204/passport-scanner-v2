@@ -13,7 +13,7 @@ class NameProposal:
     score: float
     anchored: bool
 
-def propose_names(texts, boxes, scores, roi_height):
+def propose_names(texts, boxes, scores, roi_height, *, require_label=True, upper_only=True):
     """No ground truth or MRZ input. Ambiguous proposals are never auto-applied."""
     if boxes is None or scores is None or len(texts)!=len(boxes) or len(texts)!=len(scores):
         return []
@@ -37,7 +37,7 @@ def propose_names(texts, boxes, scores, roi_height):
     anchors=[geo for text,geo,_ in entries if LABEL.fullmatch(text)]
     proposals={}
     for text,(x1,x2,cy,h),score in entries:
-        if score<.75 or cy>roi_height*.66 or h<=0:
+        if score<.75 or (upper_only and cy>roi_height*.66) or h<=0:
             continue
         inline=INLINE.fullmatch(text)
         if inline:
@@ -52,7 +52,7 @@ def propose_names(texts, boxes, scores, roi_height):
             and abs(cy-acy)<=.65*max(h,ah)
             for ax1,ax2,acy,ah in anchors if ah>0
         )
-        if anchored:
+        if anchored or not require_label:
             proposals[text]=max(score,proposals.get(text,0.0))
     # Repeated boxes with identical normalized names are not ambiguity;
     # genuinely distinct candidates still remain ambiguous to the caller.

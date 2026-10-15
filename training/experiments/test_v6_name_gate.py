@@ -16,4 +16,9 @@ assert not propose_names(['姓名:ABC123'],[box(10,10)],[.91],200)
 assert not propose_names(['中文姓名不是姓名'],[box(10,10)],[.91],200)
 assert not propose_names(['姓名林奕辰'],[box(10,10)],[.91],200)
 assert not propose_names(['姓名不是姓名'],[box(10,10)],[.91],200)
+
+assert [p.text for p in propose_names(['林奕辰'],[box(60,150)],[.91],200,require_label=False,upper_only=False)]==['林奕辰']
+assert not propose_names(['林奕辰'],[box(60,150)],[.91],200,require_label=False,upper_only=True)
+assert [p.text for p in propose_names(['林奕辰'],[box(60,10)],[.91],200,require_label=False,upper_only=True)]==['林奕辰']
+assert not propose_names(['林奕辰'],[box(60,150)],[.91],200,require_label=True,upper_only=False)
 print('v6 truth-blind gate synthetic tests passed')
