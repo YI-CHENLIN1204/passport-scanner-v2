@@ -2,6 +2,7 @@
 """Local only PP-OCRv6 Small test on PRIVATE ZIP; never prints PII."""
 import argparse, json, statistics, sys, time, zipfile
 from pathlib import Path, PurePosixPath
+from v6_name_gate import propose_names
 
 STAGE = 'startup'
 
@@ -30,6 +31,8 @@ def evaluate(zip_path,limit,production_index=None):
     candidate_evidence={'matched_exact_with_geometry':0,'matched_exact_no_geometry':0,'matched_exact_low_confidence':0,'matched_exact_upper_roi':0,'matched_exact_lower_roi':0}
     verified_missing_evidence={'standalone_with_geometry':0,'standalone_confident':0,'standalone_upper_roi':0}
     passport_ordinal=0
+    blind_gate={'unique_proposed':0,'unique_correct':0,'unique_wrong':0,'ambiguous':0,'no_proposal':0,
+      'missing_candidate_unique_correct':0,'missing_candidate_unique_wrong':0}
     STAGE = 'zip-manifest'
     with zipfile.ZipFile(zip_path) as z:
       records=safe(z,'splits/validation.jsonl').decode('utf-8-sig').splitlines()
@@ -59,6 +62,13 @@ def evaluate(zip_path,limit,production_index=None):
           texts=[''.join(t.split()) for t in (getattr(result,'txts',None) or [])]
           boxes=getattr(result,'boxes',None)
           scores=getattr(result,'scores',None)
+          proposals=propose_names(texts,boxes,scores,roi.shape[0])
+          if len(proposals)==1:
+            blind_gate['unique_proposed']+=1
+            if proposals[0].text==truth: blind_gate['unique_correct']+=1
+            else: blind_gate['unique_wrong']+=1
+          elif len(proposals)>1:blind_gate['ambiguous']+=1
+          else: blind_gate['no_proposal']+=1
           matched_indices=[i for i,t in enumerate(texts) if t==truth]
           # Diagnostic only. Geometry/score MAY be absent depending on RapidOCR output.
           # Do not reject a valid candidate because metadata is missing.
@@ -98,6 +108,9 @@ def evaluate(zip_path,limit,production_index=None):
             if key in production_index['missingCandidateSampleIds']:
               indexed_seen.add(key)
               overlap['confirmed_missing_candidates']+=1
+              if len(proposals)==1:
+                if proposals[0].text==truth:blind_gate['missing_candidate_unique_correct']+=1
+                else:blind_gate['missing_candidate_unique_wrong']+=1
               if status=='standalone-exact':
                 overlap['v6_standalone_rescue']+=1
                 if any(item[0] for item in evidence):verified_missing_evidence['standalone_with_geometry']+=1
@@ -116,6 +129,7 @@ def evaluate(zip_path,limit,production_index=None):
     return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
+      truth_blind_spatial_gate=blind_gate,
       v6_exact_candidate_evidence=candidate_evidence,
       production_missing_candidate_evidence=verified_missing_evidence if production_index is not None else 'not_provided',
       production_29_overlap=overlap if production_index is not None else 'not_provided',

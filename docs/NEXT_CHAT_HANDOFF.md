@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 新對話交接（2026-10-12）
 
+## 2026-10-15 — PP-OCRv6 truth-blind spatial name proposal (experimental)
+- Recent new Windows validation again confirmed production v5 .29 = passport 14/19, permit 13/13 after isolated database restore. Existing v6 local RapidOCR same-sample pilot found one independently exact full name among four v5 candidate misses, with box, score and upper-ROI evidence; **not** a proven production rescue.
+- Added `training/experiments/v6_name_gate.py`, a standalone conservative *truth-blind* proposal stage: scan v6 recognized boxes without consulting ground truth; require 2–4 Han characters, recognition score >=.75, upper portion of ROI, and close same-row label '姓名' / '中文姓名'. No MRZ acceptance, no automatic traveler mutation. Missing geometry/score => no proposal.
+- Existing private `bench_ppocrv6.py` now reports `truth_blind_spatial_gate`: unique correct/wrong, ambiguous, none, and unique correct/wrong among the four actual .29 candidate-misses (ground truth used **only after** proposal selection for evaluation). A true proposal can be wrong; check false positives before any deployment. A real passport with no '姓名' OCR anchor may fail this strict trial; do not interpret 0 as model regression.
+- Added no-private-data synthetic tests; neither Python local full pilot nor browser production run was executed here. No changes to production .29, permit, database, Docker, or Test; never run Actions. Code authored on main, not yet empirically validated.
+
+
 ## 2026-10-13 — Confirmed same-sample PP-OCRv6 Small complementarity on Windows
 - User ran local PRIVATE ZIP + local current-production .29 missing-candidate/selector-blocked index against RapidOCR PP-OCRv6 Small. Observed `processed=19`, `standalone_exact=14`, `substring_only=2`, `failures=0`, `median_roi_ms=671` and `production_29_overlap={confirmed_missing_candidates:4, v6_standalone_rescue:1, v6_substring_potential:0, v6_absent:3, confirmed_selector_blocked:1, index_complete:true}`.
 - This is the first actual **same-sample** additional complete name recognition candidate among the four genuine .29 candidate misses. It is NOT yet a confirmed end-to-end rescue: ROI model was run in local Python RapidOCR, not the browser; final name geometry/strict MRZ acceptability and regression on original correct 14 must be tested. Do not claim 15/19 as observed production accuracy.
