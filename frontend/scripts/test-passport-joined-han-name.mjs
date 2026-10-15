@@ -18,9 +18,22 @@ assert.match(joined, /englishNameAnchors\.some/)
 assert.match(joined, /if \(!anchored\) return \[\]/)
 assert.ok(joined.includes('/^[\\p{Script=Han}]{1,2}$/u'))
 
+const tripleStart = source.indexOf('const tripleHanCandidates = parsedMrz', to)
+assert.ok(tripleStart > to, 'triple box fallback should follow strict two-box fallback')
+const triple = source.slice(tripleStart, source.indexOf('const eligible = [', tripleStart))
+assert.match(triple, /left === middle \|\| middle === right \|\| left === right/)
+assert.match(triple, /\(part\.score \?\? 0\) < 0\.88/)
+assert.match(triple, /gaps\.some/)
+assert.match(triple, /compareChineseNameToMrzRomanization/)
+assert.match(triple, /!== 'compatible'/)
+assert.match(triple, /nameLabels\.some/)
+assert.match(triple, /englishNameAnchors\.some/)
+assert.match(triple, /if \(!anchored\) return \[\]/)
+
 const selector = source.slice(to, source.indexOf('function passportOrientationQuality(', to))
 assert.match(selector, /if \(!best \|\| best\.score < 0\.65\)/)
 assert.match(selector, /distinctJoins\.size === 1/)
+assert.match(selector, /\[\.\.\.joinedHanCandidates, \.\.\.tripleHanCandidates\]/)
 assert.match(selector, /guardedOfficialNameSuggestion/)
 // A recovered two-box name must enter transient Validation candidate lists.
 // Otherwise it is misclassified as a recognition miss and sent to Server A/B.

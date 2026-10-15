@@ -896,3 +896,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 加入護照空白中文姓名提示
 - BatchScanPage 的單檔完成提示新增「已加入待審核 · 中文姓名未辨出，請人工核對」，僅護照且辨識結果 nameZh 空白時出現；避免操作者將掃描完成錯認為姓名也辨對。
 - 不更動 OCR 決策、存檔內容及台胞證 13/13 基準。此改動不代表護照由 14/19 提升；實際 Windows Build 與端到端流程尚待驗證。模型選擇理由延續 OCR_CURRENT_STRATEGY。
+
+### 2026-10-16 — 護照三字拆框候選保守恢復
+- 於 paddleOcr.ts 既有姓名選取器新增三個單漢字框的嚴格空白結果 fallback，只在無有效既有候選時使用；每字高信心、同行近距離、明確標籤或拉丁錨點、整個姓名 MRZ 全字相容且唯一才返回。沒有降低既有兩字框 fallback 的任何門檻。
+- 擴充 test-passport-joined-han-name.mjs 源碼防回歸守衛。這不是證明實際會提升四張錯誤護照的有效率；尚待 Windows npm verify/build 與固定 Validation。更新 D-093，無 Actions，無個資。

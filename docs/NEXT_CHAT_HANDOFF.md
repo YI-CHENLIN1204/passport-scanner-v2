@@ -535,3 +535,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — 現行批次掃描人工覆核安全提示
 批次護照 OCR 若中文姓名輸出空白，檔案結果列明示需要人工核對，仍正常加入待審核。錯誤但非空白仍須人工驗證；不宣稱提高辨識率。待 Windows build。繼續以真實 5 張錯誤的影像/標註品質和新候選辨識能力作為下一個實質準確率突破口；保留 D-089 至 D-092 決策與 WORKLOG，禁止 GitHub Actions 和私人證件提交。
+
+## 2026-10-16 — 三框護照姓名候選 fallback（待本機測試）
+最新 main 增加 PP-OCRv5 Mobile 三個各單漢字高信心、同行近距離、姓名標籤或拉丁姓名錨點、完整正式 MRZ 相容的唯一組合 fallback。只在 direct 已無有效候選才用，不改模型、台胞證、DB，不採錯選的 v6 規則。檢查 npm run verify:ocr / npm run build，再集中 Validation 32 張；在測試前正式成績仍 14/19、13/13。決策 D-093；持續遵守集中 main、不開 Actions、資料不外流。
