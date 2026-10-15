@@ -541,3 +541,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Passport failed-name character coverage instrumentation
 最新 main 在 OcrQualityPage 正式 Validation 完成時顯示姓名 raw OCR 逐字覆蓋（全部／部分／零），只統計錯誤護照、不顯示個資。這是下一輪決定跨框組字或新繁體辨識模型的根因觀察，不是新 OCR 變更；若只有某些字出現在其他區域仍可能假陽性。需 Windows build 和 full Validation 才有實測分類，不得聲稱準確率提升。維持 D-089–094、WORKLOG、OCR_CURRENT_STRATEGY 同步管理。
+
+## 2026-10-16 — Current experimental OCR candidate change D-095
+三框 fallback 已擴充每框 1–2 字、最終 3–4 字，保留 >=0.88、同列、姓名錨點、MRZ compatible、唯一候選以及 direct 優先。尚未 Windows 驗收、未有任何準確率提升證據。記錄在 DECISIONS D-095、WORKLOG、OCR_MODEL_AB_PLAN。正式 .29 14/19、台胞證 13/13，main 集中開發，不啟動 Actions。

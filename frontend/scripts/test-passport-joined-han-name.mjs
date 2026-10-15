@@ -24,6 +24,8 @@ const triple = source.slice(tripleStart, source.indexOf('const eligible = [', tr
 assert.match(triple, /left === middle \|\| middle === right \|\| left === right/)
 assert.match(triple, /\(part\.score \?\? 0\) < 0\.88/)
 assert.match(triple, /gaps\.some/)
+assert.ok(triple.includes(String.raw`/^[\p{Script=Han}]{1,2}$/u`))
+assert.match(triple, /\[\.\.\.text\]\.length < 3 \|\| \[\.\.\.text\]\.length > 4/)
 assert.match(triple, /compareChineseNameToMrzRomanization/)
 assert.match(triple, /!== 'compatible'/)
 assert.match(triple, /nameLabels\.some/)

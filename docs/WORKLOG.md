@@ -904,3 +904,6 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 新增 Passport OCR 字元覆蓋率匿名診斷
 - 在既有正式 Validation 失敗護照統計中，從 raw OCR 文字和匿名標準答案計算姓名漢字「全部、部分、零」出現件數；不用 OCR 次數增加、沒有新模型、沒有修改 .29 或台胞證。目的是證據導向判斷跨框組字 vs recognition 漏字，避免繼續不確定的三框拼接盲測。
 - 僅暫存分類且在頁面呈現匿名件數；無個人姓名或 raw OCR 匯出。待本機 build / Validation，尚無正確率增益。決策 D-094。
+
+### 2026-10-16 — 三框護照姓名混合長度恢復（待驗證）
+- paddleOcr.ts 三框合成由只允許 1+1+1 改為每段 1–2 字，整體僅允許 3–4 字；MRZ exact compatible、位置錨點、信心 >=0.88、唯一候選及原有 direct 優先邏輯保持。新增靜態回歸守衛。未在私人 Validation 實測，不得宣稱改善。決策 D-095。

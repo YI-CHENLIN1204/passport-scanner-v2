@@ -747,7 +747,7 @@ function chooseTaiwanChineseName(
           if (parts.some(part =>
             part.height <= 0 ||
             (part.score ?? 0) < 0.88 ||
-            !/^[\p{Script=Han}]$/u.test(part.normalized)
+            !/^[\p{Script=Han}]{1,2}$/u.test(part.normalized)
           )) return []
           const height = Math.max(...parts.map(part => part.height))
           const centerY = parts.reduce((sum, part) => sum + part.centerY, 0) / 3
@@ -758,6 +758,9 @@ function chooseTaiwanChineseName(
           ]
           if (gaps.some(gap => gap < -height * 0.05 || gap > height * 1.1)) return []
           const text = parts.map(part => part.normalized).join('')
+          // Limit three-box recovery to the 3–4 Han passport names supported
+          // by the existing selector. Never concatenate unrelated long rows.
+          if ([...text].length < 3 || [...text].length > 4) return []
           if (compareChineseNameToMrzRomanization(
             text, parsedMrz.surname, parsedMrz.givenNames,
           ) !== 'compatible') return []
