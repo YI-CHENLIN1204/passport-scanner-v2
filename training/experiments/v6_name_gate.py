@@ -4,7 +4,8 @@ import re
 from dataclasses import dataclass
 
 HAN = re.compile(r'^[\u3400-\u9fff]{2,4}$')
-LABEL = re.compile(r'^(?:姓名|中文姓名|姓名[：:])$')
+LABEL = re.compile(r'^(?:姓名|中文姓名)(?:[：:])?$')
+INLINE = re.compile(r'^(?:姓名|中文姓名)[：:]?([\u3400-\u9fff]{2,4})$')
 
 @dataclass(frozen=True)
 class NameProposal:
@@ -34,9 +35,17 @@ def propose_names(texts, boxes, scores, roi_height):
         if geo and math.isfinite(conf):
             entries.append((norm,geo,conf))
     anchors=[geo for text,geo,_ in entries if LABEL.fullmatch(text)]
-    proposals=[]
+    proposals={}
     for text,(x1,x2,cy,h),score in entries:
-        if not HAN.fullmatch(text) or score<.75 or cy>roi_height*.66 or h<=0:
+        if score<.75 or cy>roi_height*.66 or h<=0:
+            continue
+        inline=INLINE.fullmatch(text)
+        if inline:
+            # Explicit prefix provides a stronger anchor than anonymous Han.
+            name=inline.group(1)
+            proposals[name]=max(score,proposals.get(name,0.0))
+            continue
+        if not HAN.fullmatch(text):
             continue
         anchored=any(
             x1>=ax2-max(h,ah) and x1-ax2<=10*max(h,ah)
@@ -44,5 +53,7 @@ def propose_names(texts, boxes, scores, roi_height):
             for ax1,ax2,acy,ah in anchors if ah>0
         )
         if anchored:
-            proposals.append(NameProposal(text,score,True))
-    return proposals
+            proposals[text]=max(score,proposals.get(text,0.0))
+    # Repeated boxes with identical normalized names are not ambiguity;
+    # genuinely distinct candidates still remain ambiguous to the caller.
+    return [NameProposal(text,score,True) for text,score in proposals.items()]
