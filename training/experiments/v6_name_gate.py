@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 HAN = re.compile(r'^[\u3400-\u9fff]{2,4}$')
 LABEL = re.compile(r'^(?:姓名|中文姓名)(?:[：:])?$')
-INLINE = re.compile(r'^(?:姓名|中文姓名)[：:]([\u3400-\u9fff]{2,4})
+INLINE = re.compile(r'^(?:姓名|中文姓名)[：:]([\u3400-\u9fff]{2,4})$')
 
 @dataclass(frozen=True)
 class NameProposal:
