@@ -2788,6 +2788,29 @@ onMounted(load)
 
       <section class="retest-card">
         <div class="retest-copy">
+          <p class="page-kicker">VALIDATION LOCAL INDEX</p>
+          <h2>正式 Validation 錯誤索引</h2>
+          <p>先完成正式 auto Validation，才能下載當次缺候選與姓名選取錯誤的私人本機索引，供離線 PP-OCRv6 實驗使用。舊版 Server、Tesseract 及 ROI A/B 已停止使用並從操作畫面移除。</p>
+          <small>下載的 JSON 含當次 MRZ 英文姓名與私人樣本識別碼，請僅存放在本機加密備份資料夾；不得上傳 GitHub 或傳送給其他人。此操作不修改正式 OCR、旅客資料或 Test。</small>
+        </div>
+        <div class="retest-action">
+          <button type="button" class="secondary-action"
+            :disabled="!currentPageWrongIndexReady || profilingValidation || retesting"
+            @click="downloadProductionErrorIndex">
+            匯出本頁 .29 錯誤索引（僅存本機）
+          </button>
+          <p class="validation-legacy-note">{{ currentPageWrongIndexReady ? `本頁護照姓名錯誤 ${currentPageWrongPassportSamples.size} 張；缺正確候選 ${currentPageRecognitionMissPassportSamples.size} 張；有候選卻遭拒 ${currentPageSelectorBlockedPassportSamples.size} 張。` : '尚未建立當次索引，請先完成正式 auto Validation。' }}</p>
+          <p v-if="currentPageWrongIndexReady && currentPageSelectorReasonSummary" class="validation-legacy-note">
+            姓名候選遭拒原因：{{ currentPageSelectorReasonSummary }}
+          </p>
+        </div>
+      </section>
+
+      <!-- Retired browser model experiments: deliberately unrendered.
+           References remain temporarily for typechecked archival until
+           their script dependencies can be removed in a separate refactor. -->
+      <section v-if="false" class="retest-card">
+        <div class="retest-copy">
           <p class="page-kicker">EXPERIMENTAL MODEL SMOKE</p>
           <h2>Server Recognition 本機合成圖測試</h2>
           <p>
@@ -2819,7 +2842,7 @@ onMounted(load)
         </div>
       </section>
 
-      <section class="retest-card">
+      <section v-if="false" class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">INDEPENDENT CHINESE OCR</p>
           <h2>護照中文姓名：繁體中文 Tesseract 獨立辨識</h2>
@@ -2838,7 +2861,7 @@ onMounted(load)
         </div>
       </section>
 
-      <section class="retest-card">
+      <section v-if="false" class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">RECOGNITION ROI A/B</p>
           <h2>護照 Validation：相同 broad VIZ ROI Recognition 比較</h2>
@@ -2897,7 +2920,7 @@ onMounted(load)
         </div>
       </section>
 
-      <section class="retest-card">
+      <section v-if="false" class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">ISOLATED MODEL A/B</p>
           <h2>護照 Validation：Server Recognition 錯誤樣本救援測試</h2>
