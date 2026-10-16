@@ -27,6 +27,15 @@ assert.match(
   docker,
   /chinese_cht_PP-OCRv3_mobile_rec_rapidocr\.tar/,
 )
+assert.equal(
+  docker.match(/FROM nginx:alpine AS final/g)?.length,
+  1,
+  'Dockerfile must contain one final stage only',
+)
+assert.match(
+  docker,
+  /grep -Eq '\^model_name:\[\[:space:\]\]\*chinese_cht_PP-OCRv3_mobile_rec\[\[:space:\]\]\*\$'/,
+)
 
 assert.match(service, /worker: true/)
 assert.match(service, /backend: 'wasm'/)
@@ -73,8 +82,32 @@ assert.match(
   /chineseNameReviewCandidate: string \| null/,
 )
 assert.match(contracts, /string\? ChineseNameReviewCandidate/)
+const reviewedInputStart = store.indexOf(
+  'private static ReviewedDocumentInput BuildReviewedDocumentInput(',
+)
+const reviewedInputEnd = store.indexOf(
+  'private TourPersonDraftRecord ResolveDraftPerson(',
+  reviewedInputStart,
+)
+const responseStart = store.indexOf(
+  'private static ScanItemResponse ToItemResponse(',
+)
+const responseEnd = store.indexOf(
+  'private static string? ExtractChineseNameReviewCandidate(',
+  responseStart,
+)
+assert.ok(
+  reviewedInputStart >= 0 && reviewedInputEnd > reviewedInputStart,
+)
+assert.ok(responseStart >= 0 && responseEnd > responseStart)
+const reviewedInput = store.slice(reviewedInputStart, reviewedInputEnd)
+const responseMapping = store.slice(responseStart, responseEnd)
+assert.doesNotMatch(
+  reviewedInput,
+  /ExtractChineseNameReviewCandidate/,
+)
 assert.match(
-  store,
+  responseMapping,
   /ExtractChineseNameReviewCandidate\(item\.OcrPayloadJson\)/,
 )
 assert.match(store, /"secondaryChineseNameReview"/)

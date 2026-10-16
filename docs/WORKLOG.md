@@ -957,3 +957,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 第二模型初始化、模型下載或推論失敗只標記 unavailable，不能阻止 PP-OCRv5 結果加入待審核。
 - 私人 19 張離線實驗證明此 recognizer 有互補性，但瀏覽器橋接使用 PP-OCRv5 Mobile detector + 現有 broad VIZ crop，不等同原 RapidOCR detector/runtime，故不能直接把離線 2 張 rescue 換算成 production 16/19。
 - 正式基準仍是護照 14/19、台胞證 13/13。只有完成本機 verify:ocr、Docker build/browser runtime，再跑固定 Validation，才能更新準確率。
+
+### 2026-10-16 — D-103 post-commit wiring correction
+- 提交後人工 diff 審查發現兩個接線錯位：Docker model_name grep 行被組檔截斷、ChineseNameReviewCandidate 一度誤插入 ReviewedDocumentInput constructor，而非 ScanItemResponse mapper。
+- 已重建 Dockerfile 的候選模型區塊，確保只有一個 final stage；backend 只在 ToItemResponse 抽取 review candidate，不污染正式 ReviewedDocumentInput。
+- 強化 test-passport-secondary-review-candidate.mjs：鎖定 Docker final stage 數量與完整 model_name guard，並明確要求 candidate 只存在 ScanItemResponse mapping、不得進 ReviewedDocumentInput。
+- 此修正仍未代表 Windows build/runtime 通過；正式 OCR 成績維持護照 14/19、台胞證 13/13。

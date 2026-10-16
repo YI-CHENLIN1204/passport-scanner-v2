@@ -67,14 +67,7 @@ RUN mkdir -p /models/experiments /tmp/cht-v3-model \
     && curl -fL --retry 4 --retry-delay 2 \
       https://huggingface.co/PaddlePaddle/chinese_cht_PP-OCRv3_mobile_rec/resolve/083f1a89e8efdedbd748514157e12f5a05b33bc3/inference.yml \
       -o /tmp/cht-v3-model/inference.yml \
-    && grep -Eq '^model_name:[[:space:]]*chinese_cht_PP-OCRv3_mobile_rec[[:space:]]*
-
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY --from=paddle-models /models /usr/share/nginx/html/paddle-models
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
- /tmp/cht-v3-model/inference.yml \
+    && grep -Eq '^model_name:[[:space:]]*chinese_cht_PP-OCRv3_mobile_rec[[:space:]]*$' /tmp/cht-v3-model/inference.yml \
     && grep -q 'character_dict:' /tmp/cht-v3-model/inference.yml \
     && tar --format=ustar -cf \
       /models/experiments/chinese_cht_PP-OCRv3_mobile_rec_rapidocr.tar \

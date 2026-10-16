@@ -586,3 +586,6 @@ Windows `npm.cmd run verify:ocr` 最新一次在 `test-server-recognition-smoke.
 - 第二模型初始化、模型下載或推論失敗只標記 unavailable，不能阻止 PP-OCRv5 結果加入待審核。
 - 私人 19 張離線實驗證明此 recognizer 有互補性，但瀏覽器橋接使用 PP-OCRv5 Mobile detector + 現有 broad VIZ crop，不等同原 RapidOCR detector/runtime，故不能直接把離線 2 張 rescue 換算成 production 16/19。
 - 正式基準仍是護照 14/19、台胞證 13/13。只有完成本機 verify:ocr、Docker build/browser runtime，再跑固定 Validation，才能更新準確率。
+
+## 2026-10-16 — D-103 wiring correction before user validation
+Post-commit diff review caught and corrected a malformed Docker candidate-model block plus a misplaced backend positional argument. The corrected tree keeps ChineseNameReviewCandidate only in ScanItemResponse, never ReviewedDocumentInput, and adds regression guards for both mistakes. No Windows build/runtime claim yet; next step is local pull + verify:ocr + Docker build/browser smoke, then authorized real passport check.
