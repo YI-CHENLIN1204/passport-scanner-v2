@@ -34,7 +34,7 @@ assert.equal(
 )
 assert.match(
   docker,
-  /grep -Eq '\^model_name:\[\[:space:\]\]\*chinese_cht_PP-OCRv3_mobile_rec\[\[:space:\]\]\*\$'/,
+  /grep -Eq '\^\[\[:space:\]\]\*model_name:\[\[:space:\]\]\*chinese_cht_PP-OCRv3_mobile_rec\[\[:space:\]\]\*\$'/,
 )
 
 assert.match(service, /worker: true/)

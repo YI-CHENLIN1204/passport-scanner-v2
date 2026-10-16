@@ -963,3 +963,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 已重建 Dockerfile 的候選模型區塊，確保只有一個 final stage；backend 只在 ToItemResponse 抽取 review candidate，不污染正式 ReviewedDocumentInput。
 - 強化 test-passport-secondary-review-candidate.mjs：鎖定 Docker final stage 數量與完整 model_name guard，並明確要求 candidate 只存在 ScanItemResponse mapping、不得進 ReviewedDocumentInput。
 - 此修正仍未代表 Windows build/runtime 通過；正式 OCR 成績維持護照 14/19、台胞證 13/13。
+
+### 2026-10-16 — D-103 official metadata indentation guard
+- 官方 PaddlePaddle inference.yml 顯示 model_name 位於 Global 區塊且有前導縮排；Docker preflight 已改為允許前導空白後仍精確比對 chinese_cht_PP-OCRv3_mobile_rec。
+- 這是 build compatibility guard 修正，不是 OCR 準確率變更；正式基準仍為護照 14/19、台胞證 13/13。
