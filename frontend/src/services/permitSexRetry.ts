@@ -45,6 +45,16 @@ function sexLabelPriority(text: string) {
   return /^SEX/i.test(compact) ? 1 : 0
 }
 
+// Avoid floating-point dust (e.g. 600 * 0.34 = 204.00000000000003)
+// creating a one-pixel larger ROI across JS/runtime implementations.
+function stableCeilDimension(value: number) {
+  const rounded = Math.round(value)
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(value)) * 8
+  return Math.abs(value - rounded) <= tolerance
+    ? rounded
+    : Math.ceil(value)
+}
+
 function boundedRegion(
   imageWidth: number,
   imageHeight: number,
@@ -66,11 +76,11 @@ function boundedRegion(
   )
   const boundedWidth = Math.max(
     1,
-    Math.min(imageWidth - left, Math.ceil(width)),
+    Math.min(imageWidth - left, stableCeilDimension(width)),
   )
   const boundedHeight = Math.max(
     1,
-    Math.min(imageHeight - top, Math.ceil(height)),
+    Math.min(imageHeight - top, stableCeilDimension(height)),
   )
 
   return {

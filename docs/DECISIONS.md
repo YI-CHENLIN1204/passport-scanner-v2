@@ -1217,3 +1217,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 使用者執行 npm run verify:ocr 於 test-permit-evidence.mjs:50 失敗，實際 F、測試預期 M。查核 permitFieldEvidence.ts：當同行性別語意為 F、MRZ 為 M 時，採 semantic-row F，即使 label 分數低；另一筆相同情境的舊斷言也錯誤。
 - 因該規則已在現行實作內、過去台胞證固定 Validation 13/13，這次只修正兩個陳舊預期 M→F，另加『無同行語意且 label 分數低，仍選 MRZ』的反向保護案例。不修改台胞證 OCR 模型、選取器、資料庫、護照正式流程。
 - 注意僅根據程式選擇邏輯校正測試，不等同已驗證全部測試通過。需新電腦 npm.cmd run verify:ocr 跑完完整測試與 build。禁止因測試而放寬 production MRZ/性別策略。
+
+### D-102：台胞證固定 ROI 尺寸排除浮點取整不穩定（2026-10-16）
+- Windows npm run verify:ocr 實測在 test-permit-sex-retry.mjs 發生裁切 600×0.34 本應 204px，但浮點誤差 Math.ceil 得 205px，造成測試不穩定；另一次於 test-permit-evidence.mjs 曾觀察到性別期待 M、實際 F，兩項需區別，不能宣稱全回歸已通過。
+- 決策：在 permitSexRetry.ts 中針對接近整數的寬高使用 epsilon 容忍取整，對真正小數值仍保留 ceil 行為。增加 1000×600 和 999×601 測試，維持目前固定 ROI 比例、台胞證模型及正式姓名 OCR 路徑不變。
+- 尚待使用者本機 verify:ocr 驗證完整回歸；若仍有 test-permit-evidence 性別不穩定需另行排查，不能因一項修正就聲稱全部通過。不得啟動 GitHub Actions。

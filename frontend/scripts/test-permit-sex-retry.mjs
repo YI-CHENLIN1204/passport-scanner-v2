@@ -32,6 +32,11 @@ assert.deepEqual(fixed, {
   source: 'fixed',
 })
 
+// Fixed-layout fractions must not gain a pixel due to IEEE-754 noise.
+const fractional = retry.selectPermitSexRetryRegion(999, 601, [])
+assert.equal(fractional?.height, 205)
+assert.equal(fractional?.width, 480)
+
 const labeled = retry.selectPermitSexRetryRegion(
   1000,
   600,

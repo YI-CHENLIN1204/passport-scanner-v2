@@ -565,3 +565,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Fix legacy permit sex assertions blocking verify:ocr
 使用者 Windows 的 npm.cmd run verify:ocr 失敗於 frontend/scripts/test-permit-evidence.mjs:50（actual F, expected M），不代表 Docker Build 失敗。原始 permitFieldEvidence.ts 明確讓 semantic-row F 在 MRZ M 衝突時優先；修正兩個陳舊預期，增加弱 label 不得蓋 MRZ 的測試。production selector 不變。需再跑 npm.cmd run verify:ocr，若有後續 test 失敗先修測試而非亂改 production。Decision D-102，main、無 Actions、無私人資料。
+
+## 2026-10-16 — npm verify:ocr permit sex ROI rounding fix
+已確認 latest npm verify:ocr 在 test-permit-sex-retry 固定 ROI 高度多一像素，修正為浮點誤差容忍的 ceil；新增整數與非整數尺寸守衛。須在 Windows 重新跑 npm.cmd run verify:ocr 才能確認完整套件。前一份截圖另有 test-permit-evidence M/F 不同預期，尚未確認是否可重現；若出現應獨立調查。護照正式成績仍 14/19、台胞證 13/13，上次 Docker Build 已成功。

@@ -934,3 +934,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 修正 permit-evidence 舊測試阻塞完整 verify:ocr
 - 使用者 Windows 執行 verify:ocr 在 test-permit-evidence.mjs:50 失敗：F !== M。根因是兩個過時性別期望值，與既有 semantic-row override 不一致；只改測試，增加 label 單獨弱證據不應覆蓋 MRZ 的保護例。
 - 之前 frontend Docker Build 成功但 npm verify:ocr 未完成，兩件事不得混為一談。尚待完整 Windows 回歸重跑；沒有辨識率提升。D-102。
+
+### 2026-10-16 — 修正台胞證裁切浮點誤差回歸失敗
+- Windows 最新 npm verify:ocr 回報 test-permit-sex-retry 對 1000x600 固定 ROI 的 height 期待 204、實際 205。根因是 IEEE754 600×0.34 產生略大於 204 的小數並被 Math.ceil 多進位。採 epsilon-tolerant ceil 修正，增加非整數大小測試以保障原比例。
+- 同系列紀錄曾見 test-permit-evidence M/F 期望不符，此問題尚未獲得可重現根因，不把新的性別 ROI 取整修正誤認為解決全部問題。使用者 Docker Build 已成功；npm 全回歸仍待驗證。
