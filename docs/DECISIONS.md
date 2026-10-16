@@ -1212,3 +1212,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 決策：僅從已在本機產生的 ocrPayloadJson.sourceDetailRetry 讀取 attempted/accepted 狀態，顯示每張護照補救已採用或未取得可信姓名的人工覆核提示；不能以補救成功當作姓名已確認正確。其他證件不套用；原本的正式姓名 selector 不變。
 - 驗收：保留所有已成功的正常提示；原圖補救接受時提示人工覆核；失敗、無法採用或姓名仍空白時維持核對提示。不能因補救而省略人工確認，不能輸出真實姓名、MRZ 或個資至 GitHub。
 - 此次屬現有 D-099/D-100 的操作可觀測性改進，不是新的 OCR 模型或辨識率提升；待本機 npm verify:ocr 與實際批次掃描測試。
+
+### D-102：修正台胞證性別回歸測試的舊預期，不修改正式 selector（2026-10-16）
+- 使用者執行 npm run verify:ocr 於 test-permit-evidence.mjs:50 失敗，實際 F、測試預期 M。查核 permitFieldEvidence.ts：當同行性別語意為 F、MRZ 為 M 時，採 semantic-row F，即使 label 分數低；另一筆相同情境的舊斷言也錯誤。
+- 因該規則已在現行實作內、過去台胞證固定 Validation 13/13，這次只修正兩個陳舊預期 M→F，另加『無同行語意且 label 分數低，仍選 MRZ』的反向保護案例。不修改台胞證 OCR 模型、選取器、資料庫、護照正式流程。
+- 注意僅根據程式選擇邏輯校正測試，不等同已驗證全部測試通過。需新電腦 npm.cmd run verify:ocr 跑完完整測試與 build。禁止因測試而放寬 production MRZ/性別策略。

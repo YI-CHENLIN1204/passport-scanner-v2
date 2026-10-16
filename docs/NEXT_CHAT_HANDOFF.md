@@ -562,3 +562,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — D-101 source detail retry visible in batch
 批次護照檔案列現在顯示原圖補救是否接受，補救成功也仍須人工核對；元資料由私有 ocrPayloadJson.sourceDetailRetry 解析，不顯示姓名或 MRZ。這是 QA 可觀測性，非提升 OCR 14/19。保持 D-099/D-100 MRZ 嚴格一致性及真正使用的 OCR 圖片來源。尚待本機 npm verify:ocr，禁止 GitHub Actions。
+
+## 2026-10-16 — Fix legacy permit sex assertions blocking verify:ocr
+使用者 Windows 的 npm.cmd run verify:ocr 失敗於 frontend/scripts/test-permit-evidence.mjs:50（actual F, expected M），不代表 Docker Build 失敗。原始 permitFieldEvidence.ts 明確讓 semantic-row F 在 MRZ M 衝突時優先；修正兩個陳舊預期，增加弱 label 不得蓋 MRZ 的測試。production selector 不變。需再跑 npm.cmd run verify:ocr，若有後續 test 失敗先修測試而非亂改 production。Decision D-102，main、無 Actions、無私人資料。

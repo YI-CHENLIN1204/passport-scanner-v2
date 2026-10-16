@@ -47,14 +47,16 @@ assert.equal(selectPermitNameCandidate(null, [], true, false), null)
 
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('M', false, 'F', 0.94, 'F'), 'F')
-assert.equal(selectPermitSexCandidate('M', false, 'F', 0.72, 'F'), 'M')
+assert.equal(selectPermitSexCandidate('M', false, 'F', 0.72, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('M', false, 'F', 0.94, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('', false, 'F', 0.94, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('', false, '', null, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('', false, '', null, ''), '')
-assert.equal(selectPermitSexCandidate('M', true, 'F', 0.88, 'F'), 'M')
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.88, 'F'), 'F')
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.97, 'M'), 'M')
 assert.equal(selectPermitSexCandidate('M', true, 'F', 0.98, ''), 'M')
+// A weak printed label alone does not beat MRZ; direct same-row sex evidence does.
+assert.equal(selectPermitSexCandidate('M', true, 'F', 0.72, ''), 'M')
 
 assert.equal(selectPermitSexCandidate('M', true, '', null, 'F'), 'F')
 assert.deepEqual(

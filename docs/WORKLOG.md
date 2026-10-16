@@ -930,3 +930,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 原圖補救結果在批次檔案列可見
 - BatchScanPage 的每張檔案狀態增加 none/attempted/accepted，從本地 OCR payload 取用補救狀態；補救取得姓名時提示仍須人工核對，嘗試未採用時也提示人工核對。辨識結果未更改；台胞證與身分證不受影響。
 - 更新 test-passport-source-detail-retry.mjs 守衛；需在 Windows 進行完整 npm verify:ocr 和一張真實高解析度護照的實際補救測試。這不是準確率增益。決策 D-101。
+
+### 2026-10-16 — 修正 permit-evidence 舊測試阻塞完整 verify:ocr
+- 使用者 Windows 執行 verify:ocr 在 test-permit-evidence.mjs:50 失敗：F !== M。根因是兩個過時性別期望值，與既有 semantic-row override 不一致；只改測試，增加 label 單獨弱證據不應覆蓋 MRZ 的保護例。
+- 之前 frontend Docker Build 成功但 npm verify:ocr 未完成，兩件事不得混為一談。尚待完整 Windows 回歸重跑；沒有辨識率提升。D-102。
