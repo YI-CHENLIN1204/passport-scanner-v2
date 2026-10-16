@@ -547,3 +547,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — D-096 verified non-improvement
 最新固定正式 Validation 32/32：護照 14/19、台胞證 13/13；三框混合 3–4 字 fallback（D-095）無增益。停止組框／拼音閘門小步盲調；下一步投入離線繁體中文 recognizer 或影像品質的具體實驗。不要重新要求相同驗證，先完成有可測結果的新開發；每項決策依 DECISIONS 與 WORKLOG 紀錄，不開 Actions，不提交私密圖檔。
+
+## 2026-10-16 — Alternative traditional recognizer experiment queued
+最新 main 在 private ZIP offline PP-OCRv6 benchmark 新增 --rec-model v4-traditional，以固定 v6 detector、同 ROI 評估 RapidOCR 官方 PP-OCRv4 繁體中文 mobile recognition。預設 v6-small 原結果不變；新模型尚未 Windows 實測，首次可能下載模型，不可稱提高正式準確率。需比較 19 張 standalone_exact、四張確認缺候選的 candidate rescue、錯選與耗時，模型取捨與回滾 D-097。不得上傳私人圖檔、不動正式 .29 或台胞證，不啟動 Actions。

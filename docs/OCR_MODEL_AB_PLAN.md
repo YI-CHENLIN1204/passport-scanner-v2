@@ -238,3 +238,8 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 
 ## 2026-10-16 — 取消三框混合長度方案的後續投入
 實測正式 32 Validation（護照 14/19，台胞證 13/13）確認 D-095 1+1+2 等三框候選修訂沒有增益。將其標記為「無收益、停止後續幾何微調」，不再以同一固定集無止境調參。下輪方案需有新的 recognition 來源及真正不同的失敗證據：比較離線有無正確字串、運行成本、錯誤自動候選率，確認後才導入瀏覽器。
+
+## 2026-10-16 — 新模型正規對照：PP-OCRv4 Traditional Chinese Mobile Rec
+- 原 PP-OCRv6 Small detector、原 broad VIZ ROI 與 19 張 Validation 護照固定。RapidOCR v3.10 官方列出 PP-OCRv4 Rec chinese_cht / mobile / ONNX。執行 bench_ppocrv6.py --rec-model v4-traditional 與既有 v6-small 實驗比較（同樣本鍵配對，不能用匿名 Validation 順序當識別鍵）。
+- 優先讀 standalone_exact、production_29_overlap 的 v6_standalone_rescue（此欄為歷史欄名，選用 v4 時仍代表候選模型 rescue）、truth_blind_ablation 錯選及 median_roi_ms。**這些是離線候選指標，不是正式整張正確率。**
+- 如果能多辨出正式 .29 四張缺候選的完整姓名、且未增加錯選，才考慮後續 browser-compatible integration；若收益為 0，即列入淘汰。來源：https://rapidai.github.io/RapidOCRDocs/main/model_list/。

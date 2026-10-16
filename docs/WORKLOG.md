@@ -911,3 +911,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — D-095 三框混合長度試驗實測無增益
 - 使用者新電腦執行正式 32 張 Validation 截圖：護照整張 14/19、台胞證 13/13，OCR 失敗 0；中文姓名仍失敗 5 張，4 張缺完整候選、1 張正確候選被 one-syllable-mismatch 阻擋。
 - 三框混合 3–4 漢字補救 D-095 無收益。依 D-096 停止擴張組框與拼音 fallback，下一個研發批次改比較新繁體中文辨識模型與拍攝品質。此次只記錄實測，沒有新的 OCR 準確率改善。
+
+### 2026-10-16 — PP-OCRv4 繁體中文 recognizer 離線候選 A/B 入口
+- 查 RapidOCR 官方模型列表確認 v4 中文繁體 Mobile ONNX recognition 支援（v6 Small detector 繼續固定）。在原有匿名本機 private ZIP bench 新增 --rec-model v4-traditional，預設 v6-small 不變；避免新裁切和危險名稱 selector。既有輸出可比較全部 19 張 exact、同樣本 .29 missing candidate、位置候選錯選與 ROI 耗時。
+- 這是新的辨識來源而非 .29 改版；模型檔首次可需下載、效能未驗證。尚待 Windows 本機執行，不推送私人資料，也不啟動 GitHub Actions。決策 D-097。

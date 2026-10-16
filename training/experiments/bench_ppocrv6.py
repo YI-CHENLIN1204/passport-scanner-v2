@@ -11,18 +11,28 @@ def safe(z, name):
     if not isinstance(name,str) or not name or '..' in PurePosixPath(name).parts or name not in z.namelist(): raise ValueError('invalid archive path')
     return z.read(name)
 
-def evaluate(zip_path,limit,production_index=None,production_comparator=False):
+def evaluate(zip_path,limit,production_index=None,production_comparator=False,rec_model='v6-small'):
     global STAGE
     STAGE = 'dependencies'
     import cv2, numpy as np
-    from rapidocr import RapidOCR
+    from rapidocr import RapidOCR, EngineType, ModelType, OCRVersion, LangRec
     STAGE = 'model-initialization'
     begin=time.monotonic()
     # Model vocabulary and preprocessing both controlled by RapidOCR,
     # unlike swapping a v6 ONNX into the browser v5 SDK.
     # RapidOCR >= 3.9 already defaults to PP-OCRv6 Small for Det/Rec.
     # Keep model defaults instead of fragile string-valued overrides.
-    engine=RapidOCR(params={'Global.use_cls': False})
+    params={'Global.use_cls': False}
+    if rec_model=='v4-traditional':
+      # Only recognition changes: same v6 Small detector and broad VIZ crop.
+      # RapidOCR v3.10 model list explicitly supports traditional Chinese rec.
+      params.update({
+        'Rec.engine_type': EngineType.ONNXRUNTIME,
+        'Rec.lang_type': LangRec.CHINESE_CHT,
+        'Rec.model_type': ModelType.MOBILE,
+        'Rec.ocr_version': OCRVersion.PPOCRV4,
+      })
+    engine=RapidOCR(params=params)
     startup=round((time.monotonic()-begin)*1000)
     total=exact=substring=failed=0
     timings=[]
@@ -181,7 +191,7 @@ def evaluate(zip_path,limit,production_index=None,production_comparator=False):
       official_comparator_result=json.loads(proc.stdout)
     if production_index is not None:
       overlap['index_complete']=indexed_seen==set(production_index['missingCandidateSampleIds'])
-    return dict(cohort='Validation PASSPORT only',model='RapidOCR PP-OCRv6 Small',
+    return dict(cohort='Validation PASSPORT only',model=('RapidOCR PP-OCRv4 Traditional Chinese Mobile Rec + PP-OCRv6 Small Det' if rec_model=='v4-traditional' else 'RapidOCR PP-OCRv6 Small'),
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,
@@ -199,10 +209,12 @@ if __name__=='__main__':
     p=argparse.ArgumentParser()
     p.add_argument('dataset_zip',type=Path,nargs='?')
     p.add_argument('--limit',type=int,default=19)
+    p.add_argument('--rec-model',choices=('v6-small','v4-traditional'),default='v6-small',
+      help='Same v6 detector and ROI, compare only recognition; traditional model may download on first run')
     p.add_argument('--production-index',type=Path,
       help='Local anonymous index exported from the same-page complete production Validation')
     p.add_argument('--production-comparator',action='store_true',
-      help='Use bundled frontend comparator against historical OCR English; requires frontend npm ci')
+      help='Use existing frontend comparator with current production .29 MRZ (local index required)')
     p.add_argument('--check',action='store_true',
       help='Check local packages and v6 config without reading the private ZIP')
     args=p.parse_args()
@@ -230,7 +242,7 @@ if __name__=='__main__':
           raise ValueError('Missing current-page .29 MRZ map: re-export after updated full production Validation')
         index['productionMrzEnglishBySampleId']={k.replace('-','').lower():v for k,v in (raw_mrz or {}).items()
           if isinstance(k,str) and isinstance(v,str) and len(v)<256}
-      print(json.dumps(evaluate(args.dataset_zip,args.limit,index,args.production_comparator),ensure_ascii=False))
+      print(json.dumps(evaluate(args.dataset_zip,args.limit,index,args.production_comparator,args.rec_model),ensure_ascii=False))
     except ImportError as error:
       # Package name only: don't echo private paths or image contents.
       print('IMPORT_ERROR: '+str(error).split(':')[0][:100],file=sys.stderr)

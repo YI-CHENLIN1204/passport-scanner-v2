@@ -1184,3 +1184,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 本機最新版 32 張正式 Validation：護照 14/19（74%）、台胞證 13/13（100%）；五張護照中文姓名仍錯。D-095 擴充三框至 1+1+2／2+1+1 沒有任何整張準確率增益。
 - 決定：停止繼續調整三框幾何、名稱標籤、拼音及 shadow 規則，保留已存在的安全閘門但不再擴大；下一步投入繁體中文文字 recognizer 與影像品質證據。任何新模型先離線同樣本候選比較（含安全錯選），再考慮瀏覽器整合。
 - 限制：固定 Validation 未改善，不能宣稱 100% 或模型改良；新模型必須在未知標準答案時維持零錯誤自動接受，且台胞證不得退步。禁止上傳私有圖檔及 GitHub Actions。
+
+### D-097：PP-OCRv4 繁體中文辨識模型作為新的離線 A/B 對照（2026-10-16）
+- 依 RapidOCR 官方模型列表，PP-OCRv4 有獨立 chinese_cht Mobile recognition，可由 RapidOCR v3.10 以 Rec.lang_type=LangRec.CHINESE_CHT、Rec.ocr_version=OCRVersion.PPOCRV4、Rec.model_type=ModelType.MOBILE、ONNXRUNTIME 載入。官方資料：https://rapidai.github.io/RapidOCRDocs/main/model_list/
+- 研究目的：同一 PP-OCRv6 Small detector、同一 Validation 19 張護照、同一原始 broad VIZ ROI，只替換 recognition，與既有 v6-small 比較 standalone exact、對 .29 四張缺候選的新增完整候選、blind gate 錯選與每張 ROI 耗時。此比較不是瀏覽器端 end-to-end，也未證明安全選取或可用於正式 .29。
+- 改 training/experiments/bench_ppocrv6.py 增加 --rec-model v4-traditional；預設仍是 v6-small，模型首次執行可能自行下載，不能要求使用者提供或上傳護照圖片。只有模型辨識與安全 gate 實測皆明確優於原方案才列入瀏覽器可行性評估。回滾：任何更多錯誤自動候選不准直接上線。正式 PP-OCRv5 Mobile/台胞證維持不變。
+- 本批尚未在 Windows 安裝/載入新模型或執行私人 19 張 Validation；不得聲稱準確率有提升。
