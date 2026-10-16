@@ -926,3 +926,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 原圖姓名重試安全與 OCR 輸入記錄一致性
 - 使用者已完成 D-099 前端 Docker image Built / container Started。針對新補救流程，要求二次 MRZ 的所有重要欄位（證號、生日、英文姓／名、性別、國籍、簽發國、有效期限）均與第一次一致才採用。
 - 修正採用原圖時的 ocrInput.resized/workingWidth/workingHeight 元資料；擴充 test-passport-source-detail-retry.mjs 守衛。待本機執行 verify:ocr；原本 Validation 14/19 與台胞證 13/13 未變。
+
+### 2026-10-16 — 原圖補救結果在批次檔案列可見
+- BatchScanPage 的每張檔案狀態增加 none/attempted/accepted，從本地 OCR payload 取用補救狀態；補救取得姓名時提示仍須人工核對，嘗試未採用時也提示人工核對。辨識結果未更改；台胞證與身分證不受影響。
+- 更新 test-passport-source-detail-retry.mjs 守衛；需在 Windows 進行完整 npm verify:ocr 和一張真實高解析度護照的實際補救測試。這不是準確率增益。決策 D-101。

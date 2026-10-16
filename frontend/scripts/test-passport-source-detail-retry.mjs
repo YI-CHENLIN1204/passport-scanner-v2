@@ -24,4 +24,8 @@ assert.match(passport, /const actualOcrFile = detailRetryAccepted \? sourceFile 
 assert.match(passport, /fileToBase64\(actualOcrFile\)/)
 assert.match(passport, /sourceDetailRetry: \{/)
 assert.ok(!source.slice(end).includes('detailRetryAccepted'), 'permit and ID flows must be untouched')
+assert.match(source, /detailRetry: 'none' \| 'attempted' \| 'accepted'/)
+assert.match(source, /sourceDetailRetry\?\.accepted/)
+assert.match(source, /原圖補救取得姓名，請人工核對/)
+assert.match(source, /原圖補救未取得可信姓名，請人工核對/)
 console.log('Passport detail retry gated and saved exact OCR input')

@@ -37,6 +37,7 @@ interface BatchFileState {
   status: 'queued' | 'processing' | 'done' | 'error'
   message: string
   elapsedMs: number | null
+  detailRetry: 'none' | 'attempted' | 'accepted'
 }
 
 const tours = ref<TourSummaryResponse[]>([])
@@ -543,6 +544,7 @@ function addFiles(chosen: File[]) {
       status: 'queued',
       message: '等待辨識',
       elapsedMs: null,
+      detailRetry: 'none',
     })
 
     existing.add(key)
@@ -1045,6 +1047,7 @@ async function runBatch(
       ? '等待重新辨識'
       : '等待辨識'
     item.elapsedMs = null
+    item.detailRetry = 'none'
   })
 
   try {
@@ -1075,9 +1078,25 @@ async function runBatch(
         await addScanItem(batch.scanBatchId, request)
 
         item.status = 'done'
+        if (documentType.value === 'PASSPORT') {
+          try {
+            const metadata = JSON.parse(request.ocrPayloadJson ?? '{}') as {
+              sourceDetailRetry?: { attempted?: boolean; accepted?: boolean }
+            }
+            item.detailRetry = metadata.sourceDetailRetry?.accepted
+              ? 'accepted'
+              : metadata.sourceDetailRetry?.attempted ? 'attempted' : 'none'
+          } catch {
+            item.detailRetry = 'none'
+          }
+        }
         item.message = documentType.value === 'PASSPORT' && !request.nameZh?.trim()
           ? '已加入待審核 · 中文姓名未辨出，請人工核對'
-          : '已加入待審核'
+          : item.detailRetry === 'accepted'
+            ? '已加入待審核 · 原圖補救取得姓名，請人工核對'
+            : item.detailRetry === 'attempted'
+              ? '已加入待審核 · 原圖補救未取得可信姓名，請人工核對'
+              : '已加入待審核'
       } catch (err) {
         item.status = 'error'
         item.message =

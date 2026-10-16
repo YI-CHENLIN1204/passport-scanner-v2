@@ -559,3 +559,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — D-100 original-resolution retry evidence consistency
 使用者確認 Docker Build 成功。原圖重試採納條件新增性別／國籍／簽發國／效期 MRZ 完全一致，採納後保存正確 OCR input 的 resized/size 紀錄。只影響護照姓名空白且圖片確實被縮小的批次掃描；待 npm verify:ocr 和真實樣本覆核。不得稱正式辨識率已增加。決策 D-099/D-100，不能觸發 Actions 或外流照片。
+
+## 2026-10-16 — D-101 source detail retry visible in batch
+批次護照檔案列現在顯示原圖補救是否接受，補救成功也仍須人工核對；元資料由私有 ocrPayloadJson.sourceDetailRetry 解析，不顯示姓名或 MRZ。這是 QA 可觀測性，非提升 OCR 14/19。保持 D-099/D-100 MRZ 嚴格一致性及真正使用的 OCR 圖片來源。尚待本機 npm verify:ocr，禁止 GitHub Actions。
