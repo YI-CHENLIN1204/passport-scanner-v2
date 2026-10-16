@@ -1222,3 +1222,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - Windows npm run verify:ocr 實測在 test-permit-sex-retry.mjs 發生裁切 600×0.34 本應 204px，但浮點誤差 Math.ceil 得 205px，造成測試不穩定；另一次於 test-permit-evidence.mjs 曾觀察到性別期待 M、實際 F，兩項需區別，不能宣稱全回歸已通過。
 - 決策：在 permitSexRetry.ts 中針對接近整數的寬高使用 epsilon 容忍取整，對真正小數值仍保留 ceil 行為。增加 1000×600 和 999×601 測試，維持目前固定 ROI 比例、台胞證模型及正式姓名 OCR 路徑不變。
 - 尚待使用者本機 verify:ocr 驗證完整回歸；若仍有 test-permit-evidence 性別不穩定需另行排查，不能因一項修正就聲稱全部通過。不得啟動 GitHub Actions。
+
+### D-102：OCR 回歸測試應驗證語意，不依賴舊欄位相鄰順序（2026-10-16）
+- 使用者 Windows `npm.cmd run verify:ocr` 已在 `test-passport-crop-diagnostics.mjs` 中失敗：舊 regex 要求 `passportCropDiagnosis` 緊接 `passportExactDecision`，但 D-094 已加入 `passportCharacterCoverage`；這是測試契約過期，不是 OCR 實測失敗。
+- 修正該回歸守衛使其明確檢查新增字元覆蓋欄位與分類函式，不降低 OCR 正確率要求、不移除既有測試、不更動正式辨識程式。
+- 當前僅確認來源與錯誤訊息；完整 verify:ocr 及 Windows Build 仍待本機重跑。不得宣稱測試已全部通過。

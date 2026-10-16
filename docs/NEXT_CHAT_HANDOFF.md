@@ -568,3 +568,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — npm verify:ocr permit sex ROI rounding fix
 已確認 latest npm verify:ocr 在 test-permit-sex-retry 固定 ROI 高度多一像素，修正為浮點誤差容忍的 ceil；新增整數與非整數尺寸守衛。須在 Windows 重新跑 npm.cmd run verify:ocr 才能確認完整套件。前一份截圖另有 test-permit-evidence M/F 不同預期，尚未確認是否可重現；若出現應獨立調查。護照正式成績仍 14/19、台胞證 13/13，上次 Docker Build 已成功。
+
+## 2026-10-16 — OCR regression suite source guard updated
+User's Windows verify:ocr reached passport crop diagnostic test, failed due to source order assertion missing newer `passportCharacterCoverage` field. Fixed test and documented D-102. Need rerun `cd frontend; npm.cmd run verify:ocr` locally; not a model accuracy change. Main-only, no Actions or personal data.

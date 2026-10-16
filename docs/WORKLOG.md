@@ -938,3 +938,6 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 修正台胞證裁切浮點誤差回歸失敗
 - Windows 最新 npm verify:ocr 回報 test-permit-sex-retry 對 1000x600 固定 ROI 的 height 期待 204、實際 205。根因是 IEEE754 600×0.34 產生略大於 204 的小數並被 Math.ceil 多進位。採 epsilon-tolerant ceil 修正，增加非整數大小測試以保障原比例。
 - 同系列紀錄曾見 test-permit-evidence M/F 期望不符，此問題尚未獲得可重現根因，不把新的性別 ROI 取整修正誤認為解決全部問題。使用者 Docker Build 已成功；npm 全回歸仍待驗證。
+
+### 2026-10-16 — Fix stale regression wiring assertion
+- Windows verify:ocr failed after earlier permit tests passed: `test-passport-crop-diagnostics.mjs` expected adjacent `passportCropDiagnosis, passportExactDecision`; additional `passportCharacterCoverage` in Validation outcomes makes this source guard obsolete. Adjusted assertion to require all three wired fields and coverage classifier. No OCR behavior changes; awaiting full local verify:ocr rerun.
