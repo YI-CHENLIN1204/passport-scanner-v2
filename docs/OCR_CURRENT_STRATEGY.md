@@ -33,3 +33,6 @@
 每個決定必須附上：假設及問題、選用與淘汰方案及原因、實測樣本分組/後端、baseline 與 candidate 正確/錯選/耗時、安全與個資影響、狀態（構想/離線實驗/正式啟用/淘汰）、回滾門檻、相關 commit。更新 docs/DECISIONS.md、docs/WORKLOG.md、docs/OCR_MODEL_AB_PLAN.md、docs/NEXT_CHAT_HANDOFF.md；純文獻另更新 docs/OCR_OPEN_SOURCE_REVIEW.md。沒執行的測試標為待測，不得稱已通過。
 
 維持 main 集中開發，不啟動 GitHub Actions，不提交私人證件照片、標準答案、MRZ 英文姓名或個人識別碼。
+
+## 2026-10-16 實測狀態更新
+正式 32/32 Validation：護照 14/19、台胞證 13/13。新增三框混合長度（D-095）未改善。決策 D-096：停止繼續增加此類框組合和拼音容錯，下一步實驗必須提供不同 OCR 辨識來源或影像品質改善的真實比對、錯選風險及耗時才評估整合。

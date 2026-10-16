@@ -544,3 +544,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Current experimental OCR candidate change D-095
 三框 fallback 已擴充每框 1–2 字、最終 3–4 字，保留 >=0.88、同列、姓名錨點、MRZ compatible、唯一候選以及 direct 優先。尚未 Windows 驗收、未有任何準確率提升證據。記錄在 DECISIONS D-095、WORKLOG、OCR_MODEL_AB_PLAN。正式 .29 14/19、台胞證 13/13，main 集中開發，不啟動 Actions。
+
+## 2026-10-16 — D-096 verified non-improvement
+最新固定正式 Validation 32/32：護照 14/19、台胞證 13/13；三框混合 3–4 字 fallback（D-095）無增益。停止組框／拼音閘門小步盲調；下一步投入離線繁體中文 recognizer 或影像品質的具體實驗。不要重新要求相同驗證，先完成有可測結果的新開發；每項決策依 DECISIONS 與 WORKLOG 紀錄，不開 Actions，不提交私密圖檔。

@@ -907,3 +907,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 
 ### 2026-10-16 — 三框護照姓名混合長度恢復（待驗證）
 - paddleOcr.ts 三框合成由只允許 1+1+1 改為每段 1–2 字，整體僅允許 3–4 字；MRZ exact compatible、位置錨點、信心 >=0.88、唯一候選及原有 direct 優先邏輯保持。新增靜態回歸守衛。未在私人 Validation 實測，不得宣稱改善。決策 D-095。
+
+### 2026-10-16 — D-095 三框混合長度試驗實測無增益
+- 使用者新電腦執行正式 32 張 Validation 截圖：護照整張 14/19、台胞證 13/13，OCR 失敗 0；中文姓名仍失敗 5 張，4 張缺完整候選、1 張正確候選被 one-syllable-mismatch 阻擋。
+- 三框混合 3–4 漢字補救 D-095 無收益。依 D-096 停止擴張組框與拼音 fallback，下一個研發批次改比較新繁體中文辨識模型與拍攝品質。此次只記錄實測，沒有新的 OCR 準確率改善。
