@@ -1190,3 +1190,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 研究目的：同一 PP-OCRv6 Small detector、同一 Validation 19 張護照、同一原始 broad VIZ ROI，只替換 recognition，與既有 v6-small 比較 standalone exact、對 .29 四張缺候選的新增完整候選、blind gate 錯選與每張 ROI 耗時。此比較不是瀏覽器端 end-to-end，也未證明安全選取或可用於正式 .29。
 - 改 training/experiments/bench_ppocrv6.py 增加 --rec-model v4-traditional；預設仍是 v6-small，模型首次執行可能自行下載，不能要求使用者提供或上傳護照圖片。只有模型辨識與安全 gate 實測皆明確優於原方案才列入瀏覽器可行性評估。回滾：任何更多錯誤自動候選不准直接上線。正式 PP-OCRv5 Mobile/台胞證維持不變。
 - 本批尚未在 Windows 安裝/載入新模型或執行私人 19 張 Validation；不得聲稱準確率有提升。
+
+### D-098：繁體辨識模型實測結果（2026-10-16）
+- Windows 實測 19 張護照；實際下載模型 chinese_cht_PP-OCRv3_rec_mobile.onnx，雖然命令參數寫 v4-traditional，不能宣稱使用了 PP-OCRv4 權重。
+- 正確完整姓名候選 6/19；在正式 .29 四張缺候選中有 2 張出現完整正確姓名，仍有 1 張盲選錯誤。這是離線候選結果，不是正式辨識率。
+- 決定只保留人工審核補救研究，不替換正式 PP-OCRv5，不自動覆寫姓名；正式基準仍為護照 14/19、台胞證 13/13。

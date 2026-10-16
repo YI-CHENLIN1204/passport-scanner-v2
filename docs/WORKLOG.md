@@ -915,3 +915,6 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — PP-OCRv4 繁體中文 recognizer 離線候選 A/B 入口
 - 查 RapidOCR 官方模型列表確認 v4 中文繁體 Mobile ONNX recognition 支援（v6 Small detector 繼續固定）。在原有匿名本機 private ZIP bench 新增 --rec-model v4-traditional，預設 v6-small 不變；避免新裁切和危險名稱 selector。既有輸出可比較全部 19 張 exact、同樣本 .29 missing candidate、位置候選錯選與 ROI 耗時。
 - 這是新的辨識來源而非 .29 改版；模型檔首次可需下載、效能未驗證。尚待 Windows 本機執行，不推送私人資料，也不啟動 GitHub Actions。決策 D-097。
+
+## 2026-10-16 — 繁體辨識模型實測更正
+本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。

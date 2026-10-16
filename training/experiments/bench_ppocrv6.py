@@ -191,7 +191,7 @@ def evaluate(zip_path,limit,production_index=None,production_comparator=False,re
       official_comparator_result=json.loads(proc.stdout)
     if production_index is not None:
       overlap['index_complete']=indexed_seen==set(production_index['missingCandidateSampleIds'])
-    return dict(cohort='Validation PASSPORT only',model=('RapidOCR PP-OCRv4 Traditional Chinese Mobile Rec + PP-OCRv6 Small Det' if rec_model=='v4-traditional' else 'RapidOCR PP-OCRv6 Small'),
+    return dict(cohort='Validation PASSPORT only',model=('RapidOCR Traditional Chinese Rec (observed PP-OCRv3 Mobile weights) + PP-OCRv6 Small Det' if rec_model=='v4-traditional' else 'RapidOCR PP-OCRv6 Small'),
       processed=total,standalone_exact=exact,substring_only=substring,failures=failed,
       anonymous_by_validation_order=anonymous_rows,
       truth_blind_spatial_gate=blind_gate,

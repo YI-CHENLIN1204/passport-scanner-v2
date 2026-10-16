@@ -695,3 +695,6 @@ main 新候選 2026.10.11.29 不增加任何 OCR 推論／裁切，不變更原�
 
 ## 2026-10-16 — PP-OCRv4 繁體中文 recognizer 作為 v6 Small 的獨立備選
 RapidOCR 官方列出 PP-OCRv4 Rec 支援 chinese_cht、ONNX Runtime、Mobile（https://rapidai.github.io/RapidOCRDocs/main/model_list/）；與 PP-OCRv6 Small 不同 recognition 權重／字典。採 RapidOCR 的模型路由，避免在 JS SDK 生硬換 ONNX 模型造成 preprocessing 和字典錯置。Python 離線 A/B 固定原 v6 detector 與 broad VIZ ROI，僅更換 recognizer。模型大小、速度、同樣本 rescue／錯選尚待測，不預設優於 v6。只有勝出才評估瀏覽器部署與維護成本。
+
+## 2026-10-16 — 繁體辨識模型實測更正
+本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。

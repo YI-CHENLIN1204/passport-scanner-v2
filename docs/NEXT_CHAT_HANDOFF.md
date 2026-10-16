@@ -550,3 +550,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Alternative traditional recognizer experiment queued
 最新 main 在 private ZIP offline PP-OCRv6 benchmark 新增 --rec-model v4-traditional，以固定 v6 detector、同 ROI 評估 RapidOCR 官方 PP-OCRv4 繁體中文 mobile recognition。預設 v6-small 原結果不變；新模型尚未 Windows 實測，首次可能下載模型，不可稱提高正式準確率。需比較 19 張 standalone_exact、四張確認缺候選的 candidate rescue、錯選與耗時，模型取捨與回滾 D-097。不得上傳私人圖檔、不動正式 .29 或台胞證，不啟動 Actions。
+
+## 2026-10-16 — 繁體辨識模型實測更正
+本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。
