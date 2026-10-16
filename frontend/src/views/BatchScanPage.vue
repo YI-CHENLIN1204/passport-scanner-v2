@@ -626,14 +626,51 @@ async function buildPassportItem(
   prepared: PreparedOcrInput,
 ): Promise<CreateScanItemRequest> {
   const file = prepared.file
-  const result = await recognizePassportWithPaddle(
+  let result = await recognizePassportWithPaddle(
     file,
     progress => {
       progressMessage.value = progress.message
     },
   )
 
+  // Missing-name only, source-detail recovery. Never rerun successful scans.
+  // High-resolution recovery does not relax the production name selector.
+  // Require the original MRZ document number to stay identical before using
+  // any second-pass field; no cross-document or heuristic name overwrite.
+  let detailRetryAttempted = false
+  let detailRetryAccepted = false
+  if (
+    prepared.resized &&
+    !result.chineseName?.trim() &&
+    result.parsedMrz?.documentNumber &&
+    prepared.originalWidth * prepared.originalHeight <= 12_000_000 &&
+    Math.max(prepared.originalWidth, prepared.originalHeight) <= 4200
+  ) {
+    detailRetryAttempted = true
+    try {
+      progressMessage.value = '中文姓名缺失，嘗試原圖細節補救'
+      const extra = await recognizePassportWithPaddle(
+        sourceFile,
+        progress => { progressMessage.value = progress.message },
+      )
+      if (
+        extra.chineseName?.trim() &&
+        extra.parsedMrz?.documentNumber === result.parsedMrz.documentNumber &&
+        extra.parsedMrz?.birthDate === result.parsedMrz.birthDate &&
+        extra.parsedMrz?.surname === result.parsedMrz.surname &&
+        extra.parsedMrz?.givenNames === result.parsedMrz.givenNames
+      ) {
+        // Keep all fields internally consistent by using the full result.
+        result = extra
+        detailRetryAccepted = true
+      }
+    } catch {
+      // Optional recovery failure never discards the primary result.
+    }
+  }
+
   const parsed = result.parsedMrz
+  const actualOcrFile = detailRetryAccepted ? sourceFile : file
   const nationalIdNumber = parsed
     ? passportNationalIdFromMrz(
         parsed.personalNumber,
@@ -643,18 +680,18 @@ async function buildPassportItem(
     : null
 
   await verifyDocumentTypeOnlyWhenNeeded(
-    file,
+    actualOcrFile,
     Boolean(parsed) || result.structureComplete,
   )
 
   const orientedImage =
-    result.orientedImage ?? file
+    result.orientedImage ?? actualOcrFile
   const reviewImage =
     await prepareReviewImage(orientedImage)
   const imageBase64 =
     await fileToBase64(reviewImage)
   const ocrInputImageBase64 =
-    await fileToBase64(file)
+    await fileToBase64(actualOcrFile)
 
   return {
     originalFileName: sourceFile.name,
@@ -664,7 +701,7 @@ async function buildPassportItem(
       'image/jpeg',
     imageBase64,
     ocrInputImageContentType:
-      file.type || 'image/jpeg',
+      actualOcrFile.type || 'image/jpeg',
     ocrInputImageBase64,
     nameZh: result.chineseName ?? '',
     nameZhOnDocument: result.chineseName ?? '',
@@ -697,6 +734,10 @@ async function buildPassportItem(
       predictMs: result.predictMs,
       totalMs: result.totalMs,
       fallbackUsed: result.fallbackUsed,
+      sourceDetailRetry: {
+        attempted: detailRetryAttempted,
+        accepted: detailRetryAccepted,
+      },
       ocrInput: {
         resized: prepared.resized,
         originalWidth:

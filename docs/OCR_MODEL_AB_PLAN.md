@@ -246,3 +246,7 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 
 ## 2026-10-16 — 繁體辨識模型實測更正
 本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。
+
+## 2026-10-16 — Source image detail retry and second recognizer separated
+- 已在批次護照掃描中新增只對空白中文姓名的原圖細節二次 OCR（D-099），這是 **相同 PP-OCRv5 recognizer 的影像輸入對照**，不是 PP-OCRv3 CHT 第二模型。只看 attempted/accepted、同證件 MRZ 閘門、耗時和人工核對的真實姓名，正式 Validation pipeline 不能誤算此應用層重試為準確率增加。
+- CHT PP-OCRv3 仍然是離線候選研究，未接入瀏覽器；將其自動選錯候選直接納入旅客是禁止事項。兩條研究必須各自驗證並記錄成效。

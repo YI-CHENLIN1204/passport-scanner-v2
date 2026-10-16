@@ -918,3 +918,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 
 ## 2026-10-16 — 繁體辨識模型實測更正
 本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。
+
+### 2026-10-16 — Production batch passport missing-name source-detail retry
+- BatchScanPage 在護照第一次 OCR 姓名空白且原圖被縮小時，限定原圖 <=12MP/<=4200px 嘗試一次較高解析度 OCR；採納需第二次非空且 MRZ 姓、名、生日、證號與第一次全部一致。保留既有選取規則、已正確姓名不重跑；失敗不阻止原本審核流程。
+- 儲存採用的真實 OCR input image 並在 payload 記錄 sourceDetailRetry attempted/accepted；新增 frontend/scripts/test-passport-source-detail-retry.mjs 作源碼守衛。這是未驗證的新生產補救實驗，並非離線 CHT v3 模型已能安全上線。待 Windows build 和人工重試樣本測試；正式 14/19、13/13 未改。
