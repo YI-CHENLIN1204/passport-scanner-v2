@@ -800,6 +800,7 @@ export interface ScanItemResponse {
   imageAvailable: boolean
   nameZh: string
   nameZhOnDocument: string
+  chineseNameReviewCandidate: string | null
   nameEn: string
   birthDate: string | null
   gender: string

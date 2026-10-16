@@ -805,6 +805,7 @@ public sealed class PostgresScanQueueStore(
             item.DocumentType,
             item.NameZh,
             item.NameZhOnDocument,
+            ExtractChineseNameReviewCandidate(item.OcrPayloadJson),
             item.NameEn,
             item.BirthDate.Value,
             item.Gender,
@@ -1382,6 +1383,44 @@ public sealed class PostgresScanQueueStore(
             item.DeleteAfter,
             item.CreatedAt,
             item.UpdatedAt);
+
+    private static string? ExtractChineseNameReviewCandidate(
+        string ocrPayloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(ocrPayloadJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var payload = JsonDocument.Parse(ocrPayloadJson);
+            if (
+                !payload.RootElement.TryGetProperty(
+                    "secondaryChineseNameReview",
+                    out var secondary) ||
+                !secondary.TryGetProperty("status", out var status) ||
+                !string.Equals(
+                    status.GetString(),
+                    "suggested",
+                    StringComparison.Ordinal) ||
+                !secondary.TryGetProperty("candidate", out var candidate) ||
+                candidate.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var normalized = NormalizeIdentityName(
+                candidate.GetString() ?? string.Empty);
+            return string.IsNullOrWhiteSpace(normalized)
+                ? null
+                : normalized;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static string NormalizeIdentityName(string value) =>
         string.Concat(

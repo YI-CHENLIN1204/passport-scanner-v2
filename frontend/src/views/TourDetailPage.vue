@@ -2996,6 +2996,34 @@ onBeforeUnmount(() => {
               />
             </label>
 
+            <div
+              v-if="
+                currentDocument.documentType === 'PASSPORT' &&
+                currentDocument.reviewStatus === 'PENDING' &&
+                currentDocument.chineseNameReviewCandidate
+              "
+              class="secondary-name-candidate"
+            >
+              <div>
+                <span>第二模型人工覆核候選</span>
+                <strong>
+                  {{ currentDocument.chineseNameReviewCandidate }}
+                </strong>
+                <small>
+                  已通過現有 MRZ 拼音一致性；系統沒有自動寫入，仍請對照照片。
+                </small>
+              </div>
+              <button
+                type="button"
+                @click="
+                  reviewForm.nameZh =
+                    currentDocument.chineseNameReviewCandidate ?? ''
+                "
+              >
+                人工套用候選
+              </button>
+            </div>
+
             <label
               v-if="
                 currentDocument.documentType ===
@@ -4598,4 +4626,45 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+.secondary-name-candidate {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 11px;
+  border: 1px solid #d8e2ee;
+  border-radius: 9px;
+  background: #f6f9fc;
+}
+
+.secondary-name-candidate > div {
+  display: grid;
+  gap: 3px;
+}
+
+.secondary-name-candidate span,
+.secondary-name-candidate small {
+  color: #66758a;
+  font-size: 10px;
+}
+
+.secondary-name-candidate strong {
+  color: #1d2c43;
+  font-size: 15px;
+}
+
+.secondary-name-candidate button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #bdcad9;
+  border-radius: 8px;
+  background: #fff;
+  color: #293a52;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
 </style>

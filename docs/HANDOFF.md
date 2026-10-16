@@ -755,3 +755,15 @@ GitHub 寄送已用 2,700 / 3,000 included Actions 分鐘（90%）通知；使�
 先前本頁正式 `.29` auto Validation 完成 32/32，護照 14/19、台胞證 13/13，建立 5 張護照姓名錯誤的暫存索引；第一張雙模型 A/B Mobile 和 Server 均錯，救回 0。Mobile 含啟動釋放 11,402ms、Server 63,145ms，雙模型 74,547ms。
 
 本批只改研究實驗：由於同頁正式 Validation 已驗證所挑選的護照姓名錯誤，因此不再在昂貴的救援試驗中重複初始化 Mobile Worker；只執行 Server WASM Worker 並與同頁 `.29` 判錯及人工 ground truth 比對。每次仍只跑一張已驗證失敗的 Validation 護照，若 Server 正確則計候選救回。UI 明確標示此為「正式 auto 已判錯 vs Server WASM」的跨 backend 對照，不能等同兩模型在同一 backend 同時重跑的嚴格 A/B。安全索引同頁暫存、刷新消失；模型和文件照片不提交 GitHub。正式 OCR pipeline `.29`、台胞證、固定 Test 完全不變。已更新 synthetic/static regression guard，尚未 Windows verify/build 或實測；Server 耗時瓶頸仍需另行研究。禁止 GitHub Actions。
+
+
+## 2026-10-16 — D-103：PP-OCRv3 繁中第二模型人工覆核候選（待 Windows runtime / Validation）
+- 這批不再擴張姓名組框、ROI 或拼音 fallback。正式 PP-OCRv5 Mobile 與 pipeline 2026.10.11.29 保持不變；第二模型只補充人工覆核候選。
+- 模型名稱固定更正為 chinese_cht_PP-OCRv3_rec_mobile.onnx。RapidOCR 的 v4-traditional 路由名稱不代表 PP-OCRv4 recognition 權重；本次 Docker 固定 RapidOCR 實驗同一 ONNX SHA-256：779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6。
+- Browser 橋接：Docker 下載上述固定 ONNX，搭配官方 PaddlePaddle chinese_cht_PP-OCRv3_mobile_rec 在固定 commit 083f1a89e8efdedbd748514157e12f5a05b33bc3 的 inference.yml，封裝為 PaddleOCR.js 所需未壓縮 ustar。這只是相容候選，仍需 Windows Docker build / browser runtime 證明；不得因程式已接線就宣稱模型可用。
+- 啟動門檻：只限護照，且正式結果 chineseNameRomanizationStatus 不是 compatible、MRZ 已有 surname / givenNames 時執行。台胞證與身分證完全不呼叫第二模型。
+- 安全門檻：第二模型所有候選仍使用 production compareChineseNameToMrzRomanization；只有 strict compatible 且 compatible 候選唯一時才形成 suggestion。零個或多個 compatible 候選都 abstain。
+- 絕不自動覆寫：suggestion 只寫入既有私人 ocrPayloadJson.secondaryChineseNameReview；result.chineseName、scan item nameZh、originalFields.nameZh 仍保持正式主模型輸出。Review queue API 只抽出 suggestion 給待審核畫面，操作員必須點「人工套用候選」並對照照片後才會進入表單。
+- 第二模型初始化、模型下載或推論失敗只標記 unavailable，不能阻止 PP-OCRv5 結果加入待審核。
+- 私人 19 張離線實驗證明此 recognizer 有互補性，但瀏覽器橋接使用 PP-OCRv5 Mobile detector + 現有 broad VIZ crop，不等同原 RapidOCR detector/runtime，故不能直接把離線 2 張 rescue 換算成 production 16/19。
+- 正式基準仍是護照 14/19、台胞證 13/13。只有完成本機 verify:ocr、Docker build/browser runtime，再跑固定 Validation，才能更新準確率。

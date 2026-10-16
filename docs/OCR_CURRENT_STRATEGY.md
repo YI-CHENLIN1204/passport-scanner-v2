@@ -36,3 +36,9 @@
 
 ## 2026-10-16 實測狀態更新
 正式 32/32 Validation：護照 14/19、台胞證 13/13。新增三框混合長度（D-095）未改善。決策 D-096：停止繼續增加此類框組合和拼音容錯，下一步實驗必須提供不同 OCR 辨識來源或影像品質改善的真實比對、錯選風險及耗時才評估整合。
+
+
+## 2026-10-16 — 第二模型 production seam（D-103，待真實驗證）
+PP-OCRv5 Mobile 仍是唯一正式自動填值模型。當護照中文姓名不是 strict-compatible 時，可呼叫隔離的 PP-OCRv3 Traditional Chinese recognition 產生人工覆核候選；只有既有 production MRZ comparator 判定 compatible 且候選唯一才顯示，永不自動寫入旅客姓名。模型 runtime 或候選失敗即 abstain。
+
+這條 browser 路徑不是離線 RapidOCR 實驗的完全複製：recognizer ONNX 相同且以 SHA 固定，但 browser 仍使用 PP-OCRv5 Mobile detector 與現有 broad VIZ crop，因此離線兩張 missing-candidate rescue 不能先換算成正式提升。固定 Validation 尚未重跑，基準維持護照 14/19、台胞證 13/13。

@@ -1227,3 +1227,13 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 使用者 Windows `npm.cmd run verify:ocr` 已在 `test-passport-crop-diagnostics.mjs` 中失敗：舊 regex 要求 `passportCropDiagnosis` 緊接 `passportExactDecision`，但 D-094 已加入 `passportCharacterCoverage`；這是測試契約過期，不是 OCR 實測失敗。
 - 修正該回歸守衛使其明確檢查新增字元覆蓋欄位與分類函式，不降低 OCR 正確率要求、不移除既有測試、不更動正式辨識程式。
 - 當前僅確認來源與錯誤訊息；完整 verify:ocr 及 Windows Build 仍待本機重跑。不得宣稱測試已全部通過。
+
+
+### D-103：PP-OCRv3 繁中第二模型只提供人工覆核候選（2026-10-16）
+- 決策：保留 PP-OCRv5 Mobile 為唯一正式自動填值模型；當護照中文姓名不是 strict-compatible 時，才可啟動隔離的繁中第二 recognizer。
+- 第二 recognizer 固定為 RapidOCR 私人實驗實際載入的 chinese_cht_PP-OCRv3_rec_mobile.onnx，SHA-256 779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6。不得再把 v4-traditional 參數名稱寫成 PP-OCRv4 權重。
+- Browser asset 使用固定 RapidOCR ONNX 加官方 PaddlePaddle chinese_cht_PP-OCRv3_mobile_rec 固定 commit 的 inference.yml，封裝成 PaddleOCR.js custom ustar。正式驗收前這只是假設相容的橋接，不是已驗證模型部署。
+- 候選必須通過既有 production compareChineseNameToMrzRomanization 且 compatible 候選唯一；否則不提供 suggestion。
+- suggestion 永不直接寫入 result.chineseName、scan item nameZh、旅客主資料或 originalFields。只保存於 ocrPayloadJson.secondaryChineseNameReview，審核畫面需人工按「人工套用候選」後再核對照片。
+- 第二模型任何錯誤都不得阻塞主流程；台胞證與身分證不受影響。
+- 驗收：先通過 npm verify:ocr 與 Docker/browser runtime；再以有權使用的護照確認 suggestion 顯示、人工套用及不自動覆寫；最後才跑固定 Validation。未取得真實 Validation 前正式數字維持護照 14/19、台胞證 13/13。

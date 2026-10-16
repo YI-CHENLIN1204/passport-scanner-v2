@@ -59,6 +59,7 @@ public sealed record ScanItemResponse(
     bool ImageAvailable,
     string NameZh,
     string NameZhOnDocument,
+    string? ChineseNameReviewCandidate,
     string NameEn,
     DateOnly? BirthDate,
     string Gender,

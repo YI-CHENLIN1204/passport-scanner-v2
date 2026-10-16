@@ -945,3 +945,15 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — 修正 npm verify:ocr 過時斷言（handoff blocker）
 - Windows 完整回歸於 test-server-recognition-smoke.mjs 失敗；實際來源使用 `return await execute('wasm', true)`，舊測試只接受無 `await` 的寫法。改為同時接受 `return execute(...)` 與 `return await execute(...)`，不更動 OCR 執行邏輯。
 - 前次測試亦曾於 permit-sex-retry 固定 ROI 高度 204 vs 205、passport-crop-diagnostics 匯出欄位插入、joined-han 判斷失敗。最新回歸輸出表示這些前段守衛已通過。尚待使用者重新跑完整 `npm.cmd run verify:ocr`；未通過前不能宣稱修復完成或交接完成。
+
+
+## 2026-10-16 — D-103：PP-OCRv3 繁中第二模型人工覆核候選（待 Windows runtime / Validation）
+- 這批不再擴張姓名組框、ROI 或拼音 fallback。正式 PP-OCRv5 Mobile 與 pipeline 2026.10.11.29 保持不變；第二模型只補充人工覆核候選。
+- 模型名稱固定更正為 chinese_cht_PP-OCRv3_rec_mobile.onnx。RapidOCR 的 v4-traditional 路由名稱不代表 PP-OCRv4 recognition 權重；本次 Docker 固定 RapidOCR 實驗同一 ONNX SHA-256：779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6。
+- Browser 橋接：Docker 下載上述固定 ONNX，搭配官方 PaddlePaddle chinese_cht_PP-OCRv3_mobile_rec 在固定 commit 083f1a89e8efdedbd748514157e12f5a05b33bc3 的 inference.yml，封裝為 PaddleOCR.js 所需未壓縮 ustar。這只是相容候選，仍需 Windows Docker build / browser runtime 證明；不得因程式已接線就宣稱模型可用。
+- 啟動門檻：只限護照，且正式結果 chineseNameRomanizationStatus 不是 compatible、MRZ 已有 surname / givenNames 時執行。台胞證與身分證完全不呼叫第二模型。
+- 安全門檻：第二模型所有候選仍使用 production compareChineseNameToMrzRomanization；只有 strict compatible 且 compatible 候選唯一時才形成 suggestion。零個或多個 compatible 候選都 abstain。
+- 絕不自動覆寫：suggestion 只寫入既有私人 ocrPayloadJson.secondaryChineseNameReview；result.chineseName、scan item nameZh、originalFields.nameZh 仍保持正式主模型輸出。Review queue API 只抽出 suggestion 給待審核畫面，操作員必須點「人工套用候選」並對照照片後才會進入表單。
+- 第二模型初始化、模型下載或推論失敗只標記 unavailable，不能阻止 PP-OCRv5 結果加入待審核。
+- 私人 19 張離線實驗證明此 recognizer 有互補性，但瀏覽器橋接使用 PP-OCRv5 Mobile detector + 現有 broad VIZ crop，不等同原 RapidOCR detector/runtime，故不能直接把離線 2 張 rescue 換算成 production 16/19。
+- 正式基準仍是護照 14/19、台胞證 13/13。只有完成本機 verify:ocr、Docker build/browser runtime，再跑固定 Validation，才能更新準確率。

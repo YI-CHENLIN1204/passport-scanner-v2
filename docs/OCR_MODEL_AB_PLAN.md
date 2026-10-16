@@ -250,3 +250,9 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 ## 2026-10-16 — Source image detail retry and second recognizer separated
 - 已在批次護照掃描中新增只對空白中文姓名的原圖細節二次 OCR（D-099），這是 **相同 PP-OCRv5 recognizer 的影像輸入對照**，不是 PP-OCRv3 CHT 第二模型。只看 attempted/accepted、同證件 MRZ 閘門、耗時和人工核對的真實姓名，正式 Validation pipeline 不能誤算此應用層重試為準確率增加。
 - CHT PP-OCRv3 仍然是離線候選研究，未接入瀏覽器；將其自動選錯候選直接納入旅客是禁止事項。兩條研究必須各自驗證並記錄成效。
+
+
+## 2026-10-16 — PP-OCRv3 CHT review-only browser candidate
+- 已從離線 A/B 進入最小 production seam：不是替換 PP-OCRv5，也不是自動 rescue；只在主模型中文姓名非 strict-compatible 時嘗試第二 recognizer，最後仍需人工覆核。
+- Runtime candidate 使用 exact RapidOCR chinese_cht_PP-OCRv3_rec_mobile.onnx SHA 779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6，配官方同模型 inference.yml 供 PaddleOCR.js preprocessing/postprocessing。
+- 因 browser detector/crop 與 RapidOCR 離線實驗不完全相同，驗收指標必須分開：模型能否初始化、是否產生 unique strict-compatible suggestion、人工套用是否正確、固定 Validation 是否真正提升；任何一項未完成都不能宣稱 15/19 或 16/19。

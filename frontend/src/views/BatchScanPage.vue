@@ -22,6 +22,10 @@ import {
   warmupPaddleOcr,
   type DetectedDocumentType,
 } from '../services/paddleOcr'
+import {
+  disposePassportChineseNameReviewRecognizer,
+  suggestPassportChineseNameForReview,
+} from '../services/passportChineseNameReviewCandidate'
 
 const props = defineProps<{
   tourId?: string | null
@@ -675,6 +679,67 @@ async function buildPassportItem(
     }
   }
 
+  const secondaryChineseNameReview: {
+    attempted: boolean
+    status:
+      | 'not-needed'
+      | 'suggested'
+      | 'no-compatible-candidate'
+      | 'ambiguous-compatible-candidates'
+      | 'unavailable'
+    candidate: string | null
+    model: string | null
+    candidateCount: number
+    compatibleCandidateCount: number
+  } = {
+    attempted: false,
+    status: 'not-needed',
+    candidate: null,
+    model: null,
+    candidateCount: 0,
+    compatibleCandidateCount: 0,
+  }
+
+  // D-103: the second recognizer is review-only. It runs only when the
+  // production result is not already strictly MRZ-compatible, and it never
+  // mutates result.chineseName / request.nameZh automatically.
+  const candidateMrz = result.parsedMrz
+  if (
+    result.chineseNameRomanizationStatus !== 'compatible' &&
+    candidateMrz?.surname &&
+    candidateMrz.givenNames
+  ) {
+    secondaryChineseNameReview.attempted = true
+    progressMessage.value =
+      '主模型中文姓名不可信，正在產生第二模型人工覆核候選'
+
+    try {
+      const secondaryInput =
+        prepared.originalWidth * prepared.originalHeight <= 12_000_000 &&
+        Math.max(prepared.originalWidth, prepared.originalHeight) <= 4200
+          ? sourceFile
+          : file
+      const suggestion =
+        await suggestPassportChineseNameForReview(
+          secondaryInput,
+          candidateMrz.surname,
+          candidateMrz.givenNames,
+        )
+
+      secondaryChineseNameReview.status = suggestion.status
+      secondaryChineseNameReview.candidate = suggestion.candidate
+      secondaryChineseNameReview.model = suggestion.model
+      secondaryChineseNameReview.candidateCount = suggestion.candidateCount
+      secondaryChineseNameReview.compatibleCandidateCount =
+        suggestion.compatibleCandidateCount
+    } catch {
+      // Optional local model failure must never block the normal review queue.
+      secondaryChineseNameReview.status = 'unavailable'
+      secondaryChineseNameReview.model =
+        'chinese_cht_PP-OCRv3_rec_mobile.onnx'
+    }
+  }
+
   const parsed = result.parsedMrz
   const actualOcrFile = detailRetryAccepted ? sourceFile : file
   const nationalIdNumber = parsed
@@ -744,6 +809,7 @@ async function buildPassportItem(
         attempted: detailRetryAttempted,
         accepted: detailRetryAccepted,
       },
+      secondaryChineseNameReview,
       ocrInput: {
         resized: detailRetryAccepted ? false : prepared.resized,
         originalWidth:
@@ -1230,6 +1296,7 @@ onBeforeUnmount(() => {
     handleBeforeUnload,
   )
 
+  void disposePassportChineseNameReviewRecognizer()
   emit('runningChange', false)
 })
 </script>

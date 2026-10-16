@@ -698,3 +698,10 @@ RapidOCR 官方列出 PP-OCRv4 Rec 支援 chinese_cht、ONNX Runtime、Mobile（
 
 ## 2026-10-16 — 繁體辨識模型實測更正
 本機 19 張護照 benchmark：獨立模型完整正確姓名 6 張，原本正式 .29 四張缺完整候選中有 2 張新增正確候選，但盲選仍有錯選，不能自動採用。實際載入模型為 chinese_cht_PP-OCRv3_rec_mobile.onnx；參數 v4-traditional 不代表 v4 模型權重。暫限人工覆核候選研究，正式基準 14/19、13/13 不變。參照 D-098。
+
+
+## 2026-10-16 — PP-OCRv3 Traditional Chinese browser bridge candidate
+- 模型身分已固定：RapidOCR v4-traditional 路由實際是 chinese_cht_PP-OCRv3_rec_mobile.onnx，而非 PP-OCRv4 recognition weights。
+- 本機 browser 候選以固定 SHA 的 RapidOCR ONNX，加官方 PaddlePaddle chinese_cht_PP-OCRv3_mobile_rec inference.yml 封裝成 PaddleOCR.js custom model tar；只作 review-only second source。
+- 這不是 Python server，也不使用付費 API。若 Docker/model/runtime 不相容，直接記錄失敗並停止，不放寬 production selector。
+- 待 Windows 實測前正式成績不變：passport 14/19, permit 13/13。

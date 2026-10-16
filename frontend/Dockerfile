@@ -54,6 +54,33 @@ RUN repack_model() { \
     && echo "Recognition archive:" \
     && tar -tvf PP-OCRv5_mobile_rec_onnx_infer.tar
 
+# Review-only Traditional Chinese recognition candidate.
+# The ONNX bytes are locked to the exact RapidOCR model used by the
+# 2026-10-16 private pilot. Metadata comes from the official PaddlePaddle
+# model at a pinned commit so PaddleOCR.js receives the matching v3 CHT
+# preprocessing, postprocessing, and character dictionary.
+RUN mkdir -p /models/experiments /tmp/cht-v3-model \
+    && curl -fL --retry 4 --retry-delay 2 \
+      https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv4/rec/chinese_cht_PP-OCRv3_rec_mobile.onnx \
+      -o /tmp/cht-v3-model/inference.onnx \
+    && echo "779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6  /tmp/cht-v3-model/inference.onnx" | sha256sum -c - \
+    && curl -fL --retry 4 --retry-delay 2 \
+      https://huggingface.co/PaddlePaddle/chinese_cht_PP-OCRv3_mobile_rec/resolve/083f1a89e8efdedbd748514157e12f5a05b33bc3/inference.yml \
+      -o /tmp/cht-v3-model/inference.yml \
+    && grep -Eq '^model_name:[[:space:]]*chinese_cht_PP-OCRv3_mobile_rec[[:space:]]*
+
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=paddle-models /models /usr/share/nginx/html/paddle-models
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+ /tmp/cht-v3-model/inference.yml \
+    && grep -q 'character_dict:' /tmp/cht-v3-model/inference.yml \
+    && tar --format=ustar -cf \
+      /models/experiments/chinese_cht_PP-OCRv3_mobile_rec_rapidocr.tar \
+      -C /tmp/cht-v3-model inference.onnx inference.yml \
+    && tar -tf /models/experiments/chinese_cht_PP-OCRv3_mobile_rec_rapidocr.tar | grep -qx 'inference.onnx' \
+    && tar -tf /models/experiments/chinese_cht_PP-OCRv3_mobile_rec_rapidocr.tar | grep -qx 'inference.yml'
 
 
 FROM nginx:alpine AS final
