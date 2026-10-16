@@ -14,6 +14,12 @@ assert.match(passport, /extra\.parsedMrz\?\.documentNumber === result\.parsedMrz
 assert.match(passport, /extra\.parsedMrz\?\.birthDate === result\.parsedMrz\.birthDate/)
 assert.match(passport, /extra\.parsedMrz\?\.surname === result\.parsedMrz\.surname/)
 assert.match(passport, /extra\.parsedMrz\?\.givenNames === result\.parsedMrz\.givenNames/)
+for (const field of ['sex', 'nationality', 'issuingState', 'expiryDate']) {
+  assert.ok(passport.includes(`extra.parsedMrz?.${field} === result.parsedMrz.${field}`))
+}
+assert.match(passport, /resized: detailRetryAccepted \? false : prepared\.resized/)
+assert.match(passport, /detailRetryAccepted \? prepared\.originalWidth : prepared\.workingWidth/)
+assert.match(passport, /detailRetryAccepted \? prepared\.originalHeight : prepared\.workingHeight/)
 assert.match(passport, /const actualOcrFile = detailRetryAccepted \? sourceFile : file/)
 assert.match(passport, /fileToBase64\(actualOcrFile\)/)
 assert.match(passport, /sourceDetailRetry: \{/)

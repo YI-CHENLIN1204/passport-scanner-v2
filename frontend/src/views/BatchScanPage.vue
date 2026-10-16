@@ -659,6 +659,10 @@ async function buildPassportItem(
         extra.parsedMrz?.birthDate === result.parsedMrz.birthDate &&
         extra.parsedMrz?.surname === result.parsedMrz.surname &&
         extra.parsedMrz?.givenNames === result.parsedMrz.givenNames
+        && extra.parsedMrz?.sex === result.parsedMrz.sex
+        && extra.parsedMrz?.nationality === result.parsedMrz.nationality
+        && extra.parsedMrz?.issuingState === result.parsedMrz.issuingState
+        && extra.parsedMrz?.expiryDate === result.parsedMrz.expiryDate
       ) {
         // Keep all fields internally consistent by using the full result.
         result = extra
@@ -739,15 +743,15 @@ async function buildPassportItem(
         accepted: detailRetryAccepted,
       },
       ocrInput: {
-        resized: prepared.resized,
+        resized: detailRetryAccepted ? false : prepared.resized,
         originalWidth:
           prepared.originalWidth,
         originalHeight:
           prepared.originalHeight,
         workingWidth:
-          prepared.workingWidth,
+          detailRetryAccepted ? prepared.originalWidth : prepared.workingWidth,
         workingHeight:
-          prepared.workingHeight,
+          detailRetryAccepted ? prepared.originalHeight : prepared.workingHeight,
       },
       originalFields: {
         nameZh: result.chineseName ?? '',

@@ -922,3 +922,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ### 2026-10-16 — Production batch passport missing-name source-detail retry
 - BatchScanPage 在護照第一次 OCR 姓名空白且原圖被縮小時，限定原圖 <=12MP/<=4200px 嘗試一次較高解析度 OCR；採納需第二次非空且 MRZ 姓、名、生日、證號與第一次全部一致。保留既有選取規則、已正確姓名不重跑；失敗不阻止原本審核流程。
 - 儲存採用的真實 OCR input image 並在 payload 記錄 sourceDetailRetry attempted/accepted；新增 frontend/scripts/test-passport-source-detail-retry.mjs 作源碼守衛。這是未驗證的新生產補救實驗，並非離線 CHT v3 模型已能安全上線。待 Windows build 和人工重試樣本測試；正式 14/19、13/13 未改。
+
+### 2026-10-16 — 原圖姓名重試安全與 OCR 輸入記錄一致性
+- 使用者已完成 D-099 前端 Docker image Built / container Started。針對新補救流程，要求二次 MRZ 的所有重要欄位（證號、生日、英文姓／名、性別、國籍、簽發國、有效期限）均與第一次一致才採用。
+- 修正採用原圖時的 ocrInput.resized/workingWidth/workingHeight 元資料；擴充 test-passport-source-detail-retry.mjs 守衛。待本機執行 verify:ocr；原本 Validation 14/19 與台胞證 13/13 未變。

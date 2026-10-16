@@ -556,3 +556,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — Source-detail passport retry after blank name
 批次掃描新加可控高解析度原圖二次 OCR，只限護照縮圖後 nameZh 空白、<=12MP/<=4200px 且第一次 MRZ 有證號；採用需第二次非空中文姓名和 MRZ 姓名、生日、證號完全相等。儲存真正採用的 OCR input，payload 記錄 attempted/accepted。需 Windows npm build 與實際用戶流程驗收；不改 .29 selector、不動台胞證及 ID、無 Actions。Decision D-099；此法不解決非空但錯字姓名。
+
+## 2026-10-16 — D-100 original-resolution retry evidence consistency
+使用者確認 Docker Build 成功。原圖重試採納條件新增性別／國籍／簽發國／效期 MRZ 完全一致，採納後保存正確 OCR input 的 resized/size 紀錄。只影響護照姓名空白且圖片確實被縮小的批次掃描；待 npm verify:ocr 和真實樣本覆核。不得稱正式辨識率已增加。決策 D-099/D-100，不能觸發 Actions 或外流照片。
