@@ -20,7 +20,7 @@ assert.match(page, /result\.recognizedSyntheticText/)
 assert.doesNotMatch(service, /obj\?\.rec_texts/)
 
 assert.match(service,/return await execute\('auto', false\)/)
-assert.match(service,/return execute\('wasm', true\)/)
+assert.match(service,/return (?:await )?execute\('wasm', true\)/)
 assert.match(service,/backend: 'wasm', numThreads: 1, wasmPaths: '\/ort-wasm\/'/)
 assert.match(service, /message\.includes\('ceil_mode'\)/)
 assert.match(service, /message\.includes\('WebGPU MaxPool'\)/)

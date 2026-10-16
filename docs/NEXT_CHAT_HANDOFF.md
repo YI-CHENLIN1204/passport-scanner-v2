@@ -571,3 +571,6 @@ selector 優先序：`visual-agreement > semantic-row > MRZ > label > semantic >
 
 ## 2026-10-16 — OCR regression suite source guard updated
 User's Windows verify:ocr reached passport crop diagnostic test, failed due to source order assertion missing newer `passportCharacterCoverage` field. Fixed test and documented D-102. Need rerun `cd frontend; npm.cmd run verify:ocr` locally; not a model accuracy change. Main-only, no Actions or personal data.
+
+## 2026-10-16 — 回歸測試阻塞修正待驗證
+Windows `npm.cmd run verify:ocr` 最新一次在 `test-server-recognition-smoke.mjs` 的 WASM fallback 靜態斷言失敗：服務實際 `return await execute('wasm', true)`，斷言僅認 `return execute`。最新 main 改斷言容許有／無 await；無服務行為變更。使用者要求先完整驗證再轉移對話。先取得完整回歸測試通過截圖；不需再跑 32 張 OCR Validation 或重新調模型。延續 main，不觸發 Actions。

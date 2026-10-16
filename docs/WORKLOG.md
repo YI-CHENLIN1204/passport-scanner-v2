@@ -941,3 +941,7 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 
 ### 2026-10-16 — Fix stale regression wiring assertion
 - Windows verify:ocr failed after earlier permit tests passed: `test-passport-crop-diagnostics.mjs` expected adjacent `passportCropDiagnosis, passportExactDecision`; additional `passportCharacterCoverage` in Validation outcomes makes this source guard obsolete. Adjusted assertion to require all three wired fields and coverage classifier. No OCR behavior changes; awaiting full local verify:ocr rerun.
+
+### 2026-10-16 — 修正 npm verify:ocr 過時斷言（handoff blocker）
+- Windows 完整回歸於 test-server-recognition-smoke.mjs 失敗；實際來源使用 `return await execute('wasm', true)`，舊測試只接受無 `await` 的寫法。改為同時接受 `return execute(...)` 與 `return await execute(...)`，不更動 OCR 執行邏輯。
+- 前次測試亦曾於 permit-sex-retry 固定 ROI 高度 204 vs 205、passport-crop-diagnostics 匯出欄位插入、joined-han 判斷失敗。最新回歸輸出表示這些前段守衛已通過。尚待使用者重新跑完整 `npm.cmd run verify:ocr`；未通過前不能宣稱修復完成或交接完成。
