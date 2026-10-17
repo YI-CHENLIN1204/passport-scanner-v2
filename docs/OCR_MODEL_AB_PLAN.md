@@ -256,3 +256,9 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 - 已從離線 A/B 進入最小 production seam：不是替換 PP-OCRv5，也不是自動 rescue；只在主模型中文姓名非 strict-compatible 時嘗試第二 recognizer，最後仍需人工覆核。
 - Runtime candidate 使用 exact RapidOCR chinese_cht_PP-OCRv3_rec_mobile.onnx SHA 779656d044ce388045e02ea9244724616194e63928606436cdfc6dc3c9528cc6，配官方同模型 inference.yml 供 PaddleOCR.js preprocessing/postprocessing。
 - 因 browser detector/crop 與 RapidOCR 離線實驗不完全相同，驗收指標必須分開：模型能否初始化、是否產生 unique strict-compatible suggestion、人工套用是否正確、固定 Validation 是否真正提升；任何一項未完成都不能宣稱 15/19 或 16/19。
+
+## 2026-10-17 — D-111：用私人 Train 分組做 v6 Small vs v3-CHT 配對辨識 A/B（待本機執行）
+- 先前離線 Validation 四張補救證據顯示 v3 有 2 張 exact OCR row，但 strict MRZ 唯一候選曾錯選 1 張、救回 0 張。停止在固定 Validation 反覆調 selector，也不放寬拼音門檻。
+- 新增 training/experiments/compare_passport_recognition_train.py，**只讀 splits/train.jsonl（record.split=train 且 documentType=PASSPORT）**，同一張 broad VIZ ROI 分別用 RapidOCR PP-OCRv6 Small 和 PP-OCRv3 Traditional Chinese Mobile recognition 比較 raw exact、原有 truth-blind spatial gate 唯一正確／錯誤／棄權、paired v6-only / v3-only / both / neither、median runtime。僅輸出匿名統計，不輸出圖片、OCR 原文、姓名或任何識別碼。
+- 嚴守：這不是可證明瀏覽器 D-103 的 PP-OCRv5 detector 行為，也不作正式 14/19、13/13 成績宣稱。只有 train 組表現有穩定互補、且錯選風險可控，才另提出隔離 browser-compatible recognition 候選驗證；固定 Validation/Test 最終獨立留用。不能以這份結果直接改正式 PP-OCRv5 或增加 fallback。
+- Windows (private ZIP only): `python training/experiments/compare_passport_recognition_train.py "$HOME\\Downloads\\ocr-training-dataset-20261017-051947.zip"`。若 train 組沒有護照，直接記錄不能實測，不拿 Validation 冒充。禁止 Actions。
