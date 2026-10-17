@@ -1254,3 +1254,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 繼承既有 convertSimplifiedNameToTraditional 的一對多歧義保守規則；另外在臺灣護照姓名顯示層規範 Unicode 字形 温→溫。這是地區呈現政策，不能替代查看護照上的真實登記字形，人工可修改。
 - 第二 PP-OCRv3 候選也先簡轉繁、略過一對多歧義，再經 strict MRZ comparator 與唯一候選門檻，絕不自動寫入正式旅客姓名。
 - 本批為後處理／顯示，不可據此聲稱 recognizer 成功率提高。正式 .29 14/19、台胞證 13/13 保持；Windows verify:ocr 與實際照片驗收待執行。
+
+
+### D-107：既有待審核護照開啟表單時補做繁體正規化（2026-10-17）
+- D-106 僅作用在新掃描建立的 nameZh；先前已進資料庫的 PENDING 護照在 TourDetailPage 審核表單初始化時仍直接採 document.nameZh。D-107 在待審核護照表單入口使用既有 convertSimplifiedNameToTraditional 及 温→溫 顯示正規化；已審核資料不變，未儲存前不寫 DB，原 OCR 影像與證據不變。
+- 此修正不提升 recognizer 命中率、不替空白姓名猜字，不改台胞證流程。正式 .29 14/19、台胞證 13/13 不變。

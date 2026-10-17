@@ -1618,6 +1618,16 @@ watch(
       convertSimplifiedNameToTraditional(
         printedName,
       ).value
+    // Pending passport entries created before D-106 also need the
+    // conversion at the actual review-form entry point. Use the persisted
+    // OCR text as evidence, and never silently rewrite reviewed records.
+    const passportReviewName =
+      document.documentType === 'PASSPORT' &&
+      document.reviewStatus === 'PENDING'
+        ? convertSimplifiedNameToTraditional(
+            (document.nameZh || printedName).replaceAll('温', '溫'),
+          ).value
+        : document.nameZh
 
     reviewForm.value = {
       nameZh:
@@ -1625,7 +1635,7 @@ watch(
           'TAIWAN_COMPATRIOT_PERMIT' &&
         document.reviewStatus === 'PENDING'
           ? suggestedTraditionalName
-          : document.nameZh,
+          : passportReviewName,
       nameZhOnDocument:
         document.documentType ===
           'TAIWAN_COMPATRIOT_PERMIT'

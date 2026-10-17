@@ -608,3 +608,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-17 — D-106 護照簡體 OCR 自動轉繁體顯示
 - 正式護照 nameZh 採既有單義簡→繁轉換（含臺灣姓名常見 温→溫 的顯示正規化），nameZhOnDocument 與原始 OCR payload 保留原樣。PP-OCRv3 第二模型建議也先安全轉繁再進既有 MRZ strict comparator；一對多映射不自行猜。沒有修改模型、影像、固定 Validation 或台胞證流程。
 - 待 Windows npm verify:ocr / Docker build 與真實證件人工確認，不能宣稱識別準確率改善。
+
+
+## 2026-10-17 — D-107 既有護照審核欄位繁體轉換入口修正
+- 使用者反饋 D-106 後待審核護照仍顯示 温、砚。根因：TourDetailPage watch(currentDocument.scanItemId) 初始化表單僅針對台胞證做繁轉；護照直接使用資料庫先前持久化的 nameZh。補上 PENDING 護照表單入口的唯一對應簡轉繁，保留已審核記錄及原始 OCR 證據，不改其他證件與第二模型門檻。
+- 尚待使用者 Windows npm verify:ocr / build 與待審核 UI 實測；不能宣稱自動 OCR 準確率上升。
