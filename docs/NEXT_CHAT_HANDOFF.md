@@ -646,3 +646,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - D-112 Train 86 張表明 v6 raw exact 77、v3 42，metadata 缺失 0；現有 label-only anchor 0/86，但去除錨點仍會產生錯選，故**禁止直接取消定位門檻**。
 - 新增 train A/B 中獨立 `bilingual_label_*` 診斷分支：識別護照常見 `姓名 / Name (Surname, Given names)` 的 OCR 文字形式，容許姓名位於標籤下方相鄰行；既有預設 `propose_names` 未修改行為，新增 `passport_label=False` 僅在 D-111 train-only A/B 明確啟用。
 - 分別輸出唯一正確、唯一錯誤、歧義與無候選次數；若新定位增加錯選或無收益即停止，不上線。這不是 v6 browser runtime，仍未驗證 v6 model 的 JS SDK metadata / preprocessing / decoder 相容性；不應把 v6 ONNX 當 v5 權重直接替換。正式 .29 護照 14/19、台胞證 13/13 不變；無 Actions、無證件內容上傳。
+
+
+## 2026-10-17 — D-113 語法錯誤修復
+- 使用者於原本 Windows .venv 執行 train A/B 回報 TRAIN_AB_FAILED: SyntaxError。確認 D-113 的 training/experiments/v6_name_gate.py 被字串替換操作破壞（未終止 regex、重複函式及多餘括號），不是虛擬環境問題。
+- 改從 D-112 的乾淨版本重建檔案，保留唯一 propose_names；雙語標籤支援僅在 passport_label=True 啟用。已於隔離 Python 驗證相同 regex / bilingual geometry 基本測試及語法，但未在使用者私有 ZIP 執行 86 張 Train，不能宣稱 A/B 結果或正式準確率改善。
+- 後續使用 python -m py_compile 做單檔語法 gate；不需 npm 或 Docker，不啟動 GitHub Actions。
