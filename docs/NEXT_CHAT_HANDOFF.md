@@ -672,3 +672,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 使用者實測：填入完整護照中文姓名，按「儲存審核」後彈窗於 5 筆與 2 筆護照分頁群組跳動，已審核勾選數增加。根因是 saveReview(false) 執行 reviewScanItem + reloadQueue 後，依新姓名合併結果重新綁定 updatedParent；此時人物分組可能變化。
 - 修正「儲存審核／儲存修改」成功後刷新 queue 並關閉彈窗，不再默默跳到另一人物分組；「儲存並審核下一位」仍走明確 next 流程，失敗時保留錯誤訊息，不改 DB 合併政策、OCR、照片或個資。
 - 加入 source regression guard，仍待 Windows verify:ocr 與前端實際操作驗收；未聲稱 OCR 精準度提升。GitHub Actions 禁止啟動。
+
+
+## 2026-10-17 — D-117：同一旅客多份證件審核頁籤版本顯示
+- 原審核視窗六個護照頁籤只標「護照」，使用者無法分辨資料來源的新舊。根據現有 ScanItemResponse.createdAt 與 scanItemId 穩定排序同證件類型掃描紀錄，顯示第 N 版、最新掃描；對當前頁加一行 版本 N/總數說明。
+- 僅前端顯示，不更改資料庫主檔、document_versions、人工審核與去重政策。不把「最新上傳」當「最新核發／有效」；核發時間並非目前欄位。待 Windows build 與瀏覽器操作驗收。

@@ -1410,6 +1410,24 @@ function closeReview() {
   resetReviewViewer()
 }
 
+// Version labels are based on capture time, not passport issue date.
+// Never infer which physical passport is currently valid from upload order.
+function documentVersionLabel(item: ScanItemResponse) {
+  const siblings = reviewPerson.value?.documents
+    .filter(value => value.documentType === item.documentType)
+    .slice()
+    .sort((a, b) =>
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.scanItemId.localeCompare(b.scanItemId)
+    ) ?? []
+  const index = siblings.findIndex(value => value.scanItemId === item.scanItemId)
+  return {
+    ordinal: Math.max(index + 1, 1),
+    total: siblings.length,
+    latest: index === siblings.length - 1 && siblings.length > 1,
+  }
+}
+
 const currentDocument = computed(() =>
   reviewPerson.value?.documents[
     reviewDocumentIndex.value
@@ -2780,11 +2798,15 @@ onBeforeUnmount(() => {
               selectReviewDocument(index)
             "
           >
-            {{
-              documentLabel(
-                document.documentType,
-              )
-            }}
+            <span>
+              {{ documentLabel(document.documentType) }}
+              <template v-if="documentVersionLabel(document).total > 1">
+                · 第{{ documentVersionLabel(document).ordinal }}版
+              </template>
+              <template v-if="documentVersionLabel(document).latest">
+                · 最新掃描
+              </template>
+            </span>
             <span>
               {{
                 document.reviewStatus ===
@@ -2795,6 +2817,16 @@ onBeforeUnmount(() => {
             </span>
           </button>
         </div>
+
+        <p
+          v-if="currentDocument && documentVersionLabel(currentDocument).total > 1"
+          class="conversion-note"
+        >
+          目前第 {{ documentVersionLabel(currentDocument).ordinal }} /
+          {{ documentVersionLabel(currentDocument).total }} 版；
+          {{ documentVersionLabel(currentDocument).latest ? '最新掃描紀錄' : '較早掃描紀錄' }}。
+          依上傳建立時間排序，不代表最新核發或目前有效的證件。
+        </p>
 
         <div class="review-layout">
           <div class="review-image-column">

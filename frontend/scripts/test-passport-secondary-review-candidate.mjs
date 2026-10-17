@@ -179,3 +179,10 @@ assert.match(saveFlow, /openReview\(next\)/)
 assert.match(saveFlow, /reviewPerson\.value = null/)
 assert.doesNotMatch(saveFlow, /reviewPerson\.value = updatedParent/)
 assert.doesNotMatch(saveFlow, /reviewDocumentIndex\.value =\s*Math\.max\(0, updatedIndex\)/)
+
+// D-117 multiple uploads display chronological versions, not ambiguous tabs.
+assert.match(tour, /function documentVersionLabel\(/)
+assert.match(tour, /createdAt\.localeCompare\(b\.createdAt\)/)
+assert.match(tour, /第\{\{ documentVersionLabel\(document\)\.ordinal \}\}版/)
+assert.match(tour, /最新掃描/)
+assert.match(tour, /不代表最新核發或目前有效的證件/)
