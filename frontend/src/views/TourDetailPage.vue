@@ -3052,6 +3052,17 @@ onBeforeUnmount(() => {
               }}
             </small>
 
+            <small
+              v-if="
+                currentDocument.documentType === 'PASSPORT' &&
+                currentDocument.reviewStatus === 'PENDING' &&
+                currentDocument.chineseNameReviewStageCounts
+              "
+              class="conversion-note"
+            >
+              第二模型匿名階段計數：{{ currentDocument.chineseNameReviewStageCounts }}
+            </small>
+
             <label
               v-if="
                 currentDocument.documentType ===

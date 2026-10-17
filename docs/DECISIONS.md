@@ -1259,3 +1259,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 ### D-107：既有待審核護照開啟表單時補做繁體正規化（2026-10-17）
 - D-106 僅作用在新掃描建立的 nameZh；先前已進資料庫的 PENDING 護照在 TourDetailPage 審核表單初始化時仍直接採 document.nameZh。D-107 在待審核護照表單入口使用既有 convertSimplifiedNameToTraditional 及 温→溫 顯示正規化；已審核資料不變，未儲存前不寫 DB，原 OCR 影像與證據不變。
 - 此修正不提升 recognizer 命中率、不替空白姓名猜字，不改台胞證流程。正式 .29 14/19、台胞證 13/13 不變。
+
+
+### D-108：護照第二模型候選漏失階段匿名計數（2026-10-17）
+- 在 D-103 瀏覽器第二 OCR 推論結果上計數：plausible 完整中文候選數、簡繁多義字候選數、實際轉換數、strict MRZ-compatible 候選數。無文字內容／樣本 ID 傳至審核 API；使用既有私人 ocrPayloadJson 持久化後在待審核頁顯示一行數字。
+- 此處 candidateCount 已通過前置候選篩選，不代表原始 Detection 框數；不能據此推斷 Detector 缺失原因。不得根據四張固定 Validation 樣本放寬安全門檻；姓名空白仍保持空白。
+- 本批只增加候選路徑觀測，不修改 PP-OCRv5、自動填值、台胞證、正式 Validation；需 Windows 建置及真實掃描驗收。正式護照 14/19、台胞證 13/13 不變。

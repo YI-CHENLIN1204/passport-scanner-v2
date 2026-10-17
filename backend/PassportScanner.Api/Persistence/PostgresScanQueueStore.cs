@@ -1369,6 +1369,7 @@ public sealed class PostgresScanQueueStore(
             item.NameZhOnDocument,
             ExtractChineseNameReviewCandidate(item.OcrPayloadJson),
             ExtractChineseNameReviewStatus(item.OcrPayloadJson),
+            ExtractChineseNameReviewStageCounts(item.OcrPayloadJson),
             item.NameEn,
             item.BirthDate,
             item.Gender,
@@ -1384,6 +1385,29 @@ public sealed class PostgresScanQueueStore(
             item.DeleteAfter,
             item.CreatedAt,
             item.UpdatedAt);
+
+    private static string? ExtractChineseNameReviewStageCounts(string json)
+    {
+        try
+        {
+            using var payload = JsonDocument.Parse(json);
+            if (!payload.RootElement.TryGetProperty(
+                    "secondaryChineseNameReview", out var data) ||
+                data.ValueKind != JsonValueKind.Object ||
+                !data.TryGetProperty("attempted", out var attempt) ||
+                attempt.ValueKind != JsonValueKind.True)
+                return null;
+
+            int Count(string key) =>
+                data.TryGetProperty(key, out var value) &&
+                value.ValueKind == JsonValueKind.Number &&
+                value.TryGetInt32(out var count) &&
+                count >= 0 && count <= 1000 ? count : 0;
+
+            return $"姓名候選 {Count("candidateCount")}、簡繁歧義 {Count("ambiguousScriptCount")}、簡繁轉換 {Count("scriptConvertedCount")}、MRZ 相容 {Count("compatibleCandidateCount")}";
+        }
+        catch (JsonException) { return null; }
+    }
 
     private static string? ExtractChineseNameReviewStatus(string ocrPayloadJson)
     {

@@ -30,6 +30,9 @@ export interface PassportChineseNameReviewCandidateResult {
   candidate: string | null
   candidateCount: number
   compatibleCandidateCount: number
+  rawHanLineCount: number
+  ambiguousScriptCount: number
+  scriptConvertedCount: number
   model: 'chinese_cht_PP-OCRv3_rec_mobile.onnx'
 }
 
@@ -79,16 +82,25 @@ export async function suggestPassportChineseNameForReview(
 
   const candidates =
     extractPassportChineseNameCandidatesForProbe(prediction)
+  // Anonymous stage counters only: never store raw OCR rows or rejected
+  // candidate text. These counters explain where suggestions disappear.
+  const rawHanLineCount = candidates.length
+  const conversions = candidates.map(candidate =>
+    convertSimplifiedNameToTraditional(
+      candidate.replaceAll('温', '溫'),
+    ),
+  )
+  const ambiguousScriptCount = conversions.filter(
+    item => item.ambiguousCharacters.length > 0,
+  ).length
+  const scriptConvertedCount = conversions.filter(
+    (item, index) => item.value !== candidates[index],
+  ).length
   const compatibleCandidates = Array.from(
     new Set(
-      candidates
-        .map(candidate =>
-          convertSimplifiedNameToTraditional(
-            candidate.replaceAll('温', '溫'),
-          ),
-        )
-        .filter(conversion => conversion.ambiguousCharacters.length === 0)
-        .map(conversion => conversion.value)
+      conversions
+        .filter(item => item.ambiguousCharacters.length === 0)
+        .map(item => item.value)
         .filter(candidate =>
           compareChineseNameToMrzRomanization(
             candidate,
@@ -105,6 +117,9 @@ export async function suggestPassportChineseNameForReview(
       candidate: compatibleCandidates[0],
       candidateCount: candidates.length,
       compatibleCandidateCount: 1,
+      rawHanLineCount,
+      ambiguousScriptCount,
+      scriptConvertedCount,
       model: 'chinese_cht_PP-OCRv3_rec_mobile.onnx',
     }
   }
@@ -118,6 +133,9 @@ export async function suggestPassportChineseNameForReview(
     candidateCount: candidates.length,
     compatibleCandidateCount:
       compatibleCandidates.length,
+    rawHanLineCount,
+    ambiguousScriptCount,
+    scriptConvertedCount,
     model: 'chinese_cht_PP-OCRv3_rec_mobile.onnx',
   }
 }

@@ -991,3 +991,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-17 — D-107 既有護照審核欄位繁體轉換入口修正
 - 使用者反饋 D-106 後待審核護照仍顯示 温、砚。根因：TourDetailPage watch(currentDocument.scanItemId) 初始化表單僅針對台胞證做繁轉；護照直接使用資料庫先前持久化的 nameZh。補上 PENDING 護照表單入口的唯一對應簡轉繁，保留已審核記錄及原始 OCR 證據，不改其他證件與第二模型門檻。
 - 尚待使用者 Windows npm verify:ocr / build 與待審核 UI 實測；不能宣稱自動 OCR 準確率上升。
+
+
+## 2026-10-17 — D-108 第二模型匿名候選流失計數
+- 候選源 service 輸出 candidateCount、ambiguousScriptCount、scriptConvertedCount、compatibleCandidateCount。批次掃描只寫有限數量到私人 OCR payload；後端 ScanItemResponse 只提供匿名中文計數字串；待審核護照姓名區下方一行顯示，不新增測試按鈕、不暴露實際 OCR candidate。已審核不顯示。
+- 重要限制：candidateCount 是通過 plausible 過濾後的候選數，不是 OCR 原始框數或可證明 Detection/Recognition 根因的數據。真實照片掃描與 Windows 編譯仍待跑，禁止宣稱準確率提升。
