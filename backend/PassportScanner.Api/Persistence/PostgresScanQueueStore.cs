@@ -1368,6 +1368,7 @@ public sealed class PostgresScanQueueStore(
             item.NameZh,
             item.NameZhOnDocument,
             ExtractChineseNameReviewCandidate(item.OcrPayloadJson),
+            ExtractChineseNameReviewStatus(item.OcrPayloadJson),
             item.NameEn,
             item.BirthDate,
             item.Gender,
@@ -1383,6 +1384,31 @@ public sealed class PostgresScanQueueStore(
             item.DeleteAfter,
             item.CreatedAt,
             item.UpdatedAt);
+
+    private static string? ExtractChineseNameReviewStatus(string ocrPayloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(ocrPayloadJson)) return null;
+        try
+        {
+            using var payload = JsonDocument.Parse(ocrPayloadJson);
+            if (!payload.RootElement.TryGetProperty("secondaryChineseNameReview", out var review) ||
+                review.ValueKind != JsonValueKind.Object ||
+                !review.TryGetProperty("attempted", out var attempted) ||
+                attempted.ValueKind != JsonValueKind.True ||
+                !review.TryGetProperty("status", out var status) ||
+                status.ValueKind != JsonValueKind.String)
+                return null;
+            return status.GetString() switch
+            {
+                "suggested" => "suggested",
+                "no-compatible-candidate" => "no-compatible-candidate",
+                "ambiguous-compatible-candidates" => "ambiguous-compatible-candidates",
+                "unavailable" => "unavailable",
+                _ => null
+            };
+        }
+        catch (JsonException) { return null; }
+    }
 
     private static string? ExtractChineseNameReviewCandidate(
         string ocrPayloadJson)

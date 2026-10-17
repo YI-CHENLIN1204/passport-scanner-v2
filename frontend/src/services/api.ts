@@ -801,6 +801,7 @@ export interface ScanItemResponse {
   nameZh: string
   nameZhOnDocument: string
   chineseNameReviewCandidate: string | null
+  chineseNameReviewStatus: 'suggested' | 'no-compatible-candidate' | 'ambiguous-compatible-candidates' | 'unavailable' | null
   nameEn: string
   birthDate: string | null
   gender: string

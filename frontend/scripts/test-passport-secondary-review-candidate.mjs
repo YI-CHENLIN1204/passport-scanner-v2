@@ -113,6 +113,12 @@ assert.match(
 assert.match(store, /"secondaryChineseNameReview"/)
 assert.match(tour, /第二模型人工覆核候選/)
 assert.match(tour, /人工套用候選/)
+assert.match(api, /chineseNameReviewStatus:/)
+assert.match(contracts, /string\? ChineseNameReviewStatus/)
+assert.match(store, /ExtractChineseNameReviewStatus\(item\.OcrPayloadJson\)/)
+assert.match(tour, /第二模型無法完成載入或辨識/)
+assert.match(tour, /第二模型找到多個相容姓名/)
+assert.match(tour, /第二模型未取得唯一且符合 MRZ 的姓名/)
 assert.match(
   tour,
   /reviewForm\.nameZh\s*=\s*currentDocument\.chineseNameReviewCandidate/,

@@ -60,6 +60,7 @@ public sealed record ScanItemResponse(
     string NameZh,
     string NameZhOnDocument,
     string? ChineseNameReviewCandidate,
+    string? ChineseNameReviewStatus,
     string NameEn,
     DateOnly? BirthDate,
     string Gender,

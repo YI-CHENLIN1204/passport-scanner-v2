@@ -598,3 +598,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - Windows 原本有私人 RapidOCR 虛擬環境即可於 repo 根目錄執行：
   `python training/experiments/diagnose_passport_name_texture.py "<private-export.zip>" --production-index "<private-29-index.json>"`
 - 尚未在使用者原主機執行，沒有任何真實辨識數字。禁止 GitHub Actions；私人資料不可上傳 GitHub／聊天。
+
+
+## 2026-10-17 — D-105 人工覆核候選狀態接線
+- 由既有 ocrPayloadJson 只抽取合法狀態 enum 到 ScanItemResponse.ChineseNameReviewStatus，待審核護照無候選時顯示簡短原因；suggested 沿用人工套用按鈕。沒有額外模型推論／個資輸出，也未更動正式 OCR。
+- 此提交僅為端到端可觀測性改進，尚待 Windows verify:ocr、Docker build 與四張授權護照測試。不宣稱準確率上升。

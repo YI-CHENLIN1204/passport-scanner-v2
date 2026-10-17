@@ -3024,6 +3024,24 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
+            <small
+              v-if="
+                currentDocument.documentType === 'PASSPORT' &&
+                currentDocument.reviewStatus === 'PENDING' &&
+                currentDocument.chineseNameReviewStatus &&
+                currentDocument.chineseNameReviewStatus !== 'suggested'
+              "
+              class="conversion-note"
+            >
+              {{
+                currentDocument.chineseNameReviewStatus === 'unavailable'
+                  ? '第二模型無法完成載入或辨識，請依照片人工核對。'
+                  : currentDocument.chineseNameReviewStatus === 'ambiguous-compatible-candidates'
+                    ? '第二模型找到多個相容姓名，未提供建議，請人工核對。'
+                    : '第二模型未取得唯一且符合 MRZ 的姓名，請人工核對。'
+              }}
+            </small>
+
             <label
               v-if="
                 currentDocument.documentType ===
