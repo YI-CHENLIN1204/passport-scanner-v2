@@ -60,6 +60,9 @@ def recognize(engine, roi, truth, propose):
                     require_label=False, upper_only=True)
     anchored = propose(texts, boxes, scores, roi.shape[0],
                        require_label=True, upper_only=False)
+    bilingual = propose(texts, boxes, scores, roi.shape[0],
+                        require_label=True, upper_only=True,
+                        passport_label=True)
     def bucket(items):
         if not items:
             return 'none'
@@ -92,6 +95,10 @@ def recognize(engine, roi, truth, propose):
         loose_correct=int(bucket(loose) == 'correct'),
         loose_wrong=int(bucket(loose) == 'wrong'),
         loose_ambiguous=int(bucket(loose) == 'ambiguous'),
+        bilingual_label_correct=int(bucket(bilingual) == 'correct'),
+        bilingual_label_wrong=int(bucket(bilingual) == 'wrong'),
+        bilingual_label_ambiguous=int(bucket(bilingual) == 'ambiguous'),
+        bilingual_label_no_proposal=int(bucket(bilingual) == 'none'),
     )
 
 

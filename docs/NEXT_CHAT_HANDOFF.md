@@ -640,3 +640,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - D-111 86 張 Train 護照：v6 Small raw exact 77/86、v3 CHT 42/86、v6-only 35、v3-only 0，兩模型 spatial gate 均 86/86 棄權；不能把棄權直接當模型失敗。
 - 在 train-only 比較工具增加匿名 metadata_missing、metadata_count_mismatch、no_ocr_rows、standalone Han row count，以及三個**唯讀** gate ablation（無 label 錨點、無 upper ROI、兩者皆無）的 unique_correct / unique_wrong / ambiguous。保留原正式 gate 指標，對所有模型使用相同評估。這僅用來找出棄權原因，不允許將 ablation 接入正式姓名選取器。
 - 重新跑 Train 86 張即可，不重跑固定 Validation，也不加 UI、影像規則或拼音 fallback。PP-OCRv5 正式 14/19、台胞證 13/13 均不變。Windows runtime 待執行；不啟動 GitHub Actions。
+
+
+## 2026-10-17 — D-113：護照雙語姓名標籤與姓名下一行的純離線定位對照
+- D-112 Train 86 張表明 v6 raw exact 77、v3 42，metadata 缺失 0；現有 label-only anchor 0/86，但去除錨點仍會產生錯選，故**禁止直接取消定位門檻**。
+- 新增 train A/B 中獨立 `bilingual_label_*` 診斷分支：識別護照常見 `姓名 / Name (Surname, Given names)` 的 OCR 文字形式，容許姓名位於標籤下方相鄰行；既有預設 `propose_names` 未修改行為，新增 `passport_label=False` 僅在 D-111 train-only A/B 明確啟用。
+- 分別輸出唯一正確、唯一錯誤、歧義與無候選次數；若新定位增加錯選或無收益即停止，不上線。這不是 v6 browser runtime，仍未驗證 v6 model 的 JS SDK metadata / preprocessing / decoder 相容性；不應把 v6 ONNX 當 v5 權重直接替換。正式 .29 護照 14/19、台胞證 13/13 不變；無 Actions、無證件內容上傳。
