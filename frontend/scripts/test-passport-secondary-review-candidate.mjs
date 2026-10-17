@@ -165,3 +165,17 @@ assert.match(
 console.log(
   'Passport secondary recognizer remains MRZ-gated and review-only',
 )
+
+// D-116: saving without "next" must not silently rebind the open modal
+// to another traveler group after name-based draft-person regrouping.
+const saveStart = tour.indexOf('async function saveReview(moveNext: boolean)')
+const saveEnd = tour.indexOf('function handleKeydown(', saveStart)
+assert.ok(saveStart >= 0 && saveEnd > saveStart)
+const saveFlow = tour.slice(saveStart, saveEnd)
+assert.match(saveFlow, /await reviewScanItem\(/)
+assert.match(saveFlow, /await reloadQueue\(\)/)
+assert.match(saveFlow, /if \(moveNext\)/)
+assert.match(saveFlow, /openReview\(next\)/)
+assert.match(saveFlow, /reviewPerson\.value = null/)
+assert.doesNotMatch(saveFlow, /reviewPerson\.value = updatedParent/)
+assert.doesNotMatch(saveFlow, /reviewDocumentIndex\.value =\s*Math\.max\(0, updatedIndex\)/)

@@ -1914,22 +1914,12 @@ async function saveReview(moveNext: boolean) {
       return
     }
 
-    if (!updatedParent) {
-      reviewPerson.value = null
-      return
-    }
-
-    reviewPerson.value = updatedParent
-
-    const updatedIndex =
-      updatedParent.documents.findIndex(
-        item =>
-          item.scanItemId ===
-          document.scanItemId,
-      )
-
-    reviewDocumentIndex.value =
-      Math.max(0, updatedIndex)
+    // Saving a corrected name can regroup the traveler. Never switch the
+    // open modal to a different person/document group as a side effect.
+    // The refreshed review queue already reflects the saved state.
+    reviewPerson.value = null
+    reviewError.value = ''
+    resetReviewViewer()
   } catch (err) {
     reviewError.value =
       err instanceof Error

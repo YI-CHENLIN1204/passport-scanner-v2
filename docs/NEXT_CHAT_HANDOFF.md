@@ -666,3 +666,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 使用者提供的真實拍照是上下兩頁同框；D-114 固定 broad VIZ ROI x=.24..98 / y=.12..70，中文姓名位在 ROI 下緣，實際 v6 僅有 1 候選、MRZ 相容 0。
 - 僅對長高比 >=1.2 的護照照片，且第一次 v6 沒有 strict-compatible 姓名時，再在 x=.16..96 / y=.43..81 做一次有界高品質 crop 的 v6 OCR；只有重試得到**唯一 strict-compatible** 才回傳人工 suggestion，否則保留第一次的無候選結果。不增加正式 PP-OCRv5 推論次數，不修改正式姓名欄、台胞證或身分證，也不加入自動採用。
 - 本次只是一項有真實畫面依據的可逆補救，不能聲稱能辨出潘姵君或提升固定 14/19。仍需 Windows npm verify:ocr 與 4 張原本失敗護照端到端實測，統計實際 suggestion 正確與否；錯選即停止此策略。不啟動 GitHub Actions。
+
+
+## 2026-10-17 — D-116：人工審核儲存後人物分組跳動修復
+- 使用者實測：填入完整護照中文姓名，按「儲存審核」後彈窗於 5 筆與 2 筆護照分頁群組跳動，已審核勾選數增加。根因是 saveReview(false) 執行 reviewScanItem + reloadQueue 後，依新姓名合併結果重新綁定 updatedParent；此時人物分組可能變化。
+- 修正「儲存審核／儲存修改」成功後刷新 queue 並關閉彈窗，不再默默跳到另一人物分組；「儲存並審核下一位」仍走明確 next 流程，失敗時保留錯誤訊息，不改 DB 合併政策、OCR、照片或個資。
+- 加入 source regression guard，仍待 Windows verify:ocr 與前端實際操作驗收；未聲稱 OCR 精準度提升。GitHub Actions 禁止啟動。
