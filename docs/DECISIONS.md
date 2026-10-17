@@ -1265,3 +1265,7 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 在 D-103 瀏覽器第二 OCR 推論結果上計數：plausible 完整中文候選數、簡繁多義字候選數、實際轉換數、strict MRZ-compatible 候選數。無文字內容／樣本 ID 傳至審核 API；使用既有私人 ocrPayloadJson 持久化後在待審核頁顯示一行數字。
 - 此處 candidateCount 已通過前置候選篩選，不代表原始 Detection 框數；不能據此推斷 Detector 缺失原因。不得根據四張固定 Validation 樣本放寬安全門檻；姓名空白仍保持空白。
 - 本批只增加候選路徑觀測，不修改 PP-OCRv5、自動填值、台胞證、正式 Validation；需 Windows 建置及真實掃描驗收。正式護照 14/19、台胞證 13/13 不變。
+
+
+### D-109：第二模型缺失紀錄與未執行明確區分（2026-10-17）
+- review-only 狀態在沒有 secondaryChineseNameReview 物件時回傳 legacy-no-record，在 attempted=false 時回傳 not-attempted；不改寫舊 payload，不據此自動重掃或猜測姓名。僅供待審核護照顯示，不影響其他證件與正式 OCR 結果。

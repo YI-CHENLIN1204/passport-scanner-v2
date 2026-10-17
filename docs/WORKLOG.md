@@ -996,3 +996,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-17 — D-108 第二模型匿名候選流失計數
 - 候選源 service 輸出 candidateCount、ambiguousScriptCount、scriptConvertedCount、compatibleCandidateCount。批次掃描只寫有限數量到私人 OCR payload；後端 ScanItemResponse 只提供匿名中文計數字串；待審核護照姓名區下方一行顯示，不新增測試按鈕、不暴露實際 OCR candidate。已審核不顯示。
 - 重要限制：candidateCount 是通過 plausible 過濾後的候選數，不是 OCR 原始框數或可證明 Detection/Recognition 根因的數據。真實照片掃描與 Windows 編譯仍待跑，禁止宣稱準確率提升。
+
+
+## 2026-10-17 — D-109 第二模型狀態缺席的根因可見化
+- 已確認 D-108 的匿名候選計數只在 secondaryChineseNameReview.attempted=true 時出現；舊資料或未執行完全沒提示，容易誤判。後端 ScanItemResponse 已把缺少紀錄標記 legacy-no-record，attempted=false 標記 not-attempted；審核頁僅對待審核護照顯示短句，不輸出任何 OCR 候選、個資或原文。
+- 這是舊資料可觀測性修正，不是 OCR 模型救回。使用者提供的完整資料頁不可再誤判成簽名頁；潘姵君仍需另查辨識候選。保持 PP-OCRv5 正式 selector 與台胞證 13/13，不宣稱準確率提升。

@@ -1411,17 +1411,19 @@ public sealed class PostgresScanQueueStore(
 
     private static string? ExtractChineseNameReviewStatus(string ocrPayloadJson)
     {
-        if (string.IsNullOrWhiteSpace(ocrPayloadJson)) return null;
+        if (string.IsNullOrWhiteSpace(ocrPayloadJson)) return "legacy-no-record";
         try
         {
             using var payload = JsonDocument.Parse(ocrPayloadJson);
             if (!payload.RootElement.TryGetProperty("secondaryChineseNameReview", out var review) ||
-                review.ValueKind != JsonValueKind.Object ||
-                !review.TryGetProperty("attempted", out var attempted) ||
-                attempted.ValueKind != JsonValueKind.True ||
-                !review.TryGetProperty("status", out var status) ||
+                review.ValueKind != JsonValueKind.Object)
+                return "legacy-no-record";
+            if (!review.TryGetProperty("attempted", out var attempted) ||
+                attempted.ValueKind != JsonValueKind.True)
+                return "not-attempted";
+            if (!review.TryGetProperty("status", out var status) ||
                 status.ValueKind != JsonValueKind.String)
-                return null;
+                return "legacy-no-record";
             return status.GetString() switch
             {
                 "suggested" => "suggested",
@@ -1431,7 +1433,7 @@ public sealed class PostgresScanQueueStore(
                 _ => null
             };
         }
-        catch (JsonException) { return null; }
+        catch (JsonException) { return "legacy-no-record"; }
     }
 
     private static string? ExtractChineseNameReviewCandidate(

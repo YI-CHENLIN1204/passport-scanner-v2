@@ -618,3 +618,7 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-17 — D-108 第二模型匿名候選流失計數
 - 候選源 service 輸出 candidateCount、ambiguousScriptCount、scriptConvertedCount、compatibleCandidateCount。批次掃描只寫有限數量到私人 OCR payload；後端 ScanItemResponse 只提供匿名中文計數字串；待審核護照姓名區下方一行顯示，不新增測試按鈕、不暴露實際 OCR candidate。已審核不顯示。
 - 重要限制：candidateCount 是通過 plausible 過濾後的候選數，不是 OCR 原始框數或可證明 Detection/Recognition 根因的數據。真實照片掃描與 Windows 編譯仍待跑，禁止宣稱準確率提升。
+
+
+## 2026-10-17 — D-109 missing record vs not attempted
+- Updated ScanItemResponse review-only status to distinguish legacy-no-record and not-attempted. No second inference or automatic traveler edits. Need Windows verify:ocr + docker and inspection of same pending review, do not rerun 32-image Validation.

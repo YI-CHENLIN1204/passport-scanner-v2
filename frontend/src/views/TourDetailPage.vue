@@ -3046,6 +3046,10 @@ onBeforeUnmount(() => {
               {{
                 currentDocument.chineseNameReviewStatus === 'unavailable'
                   ? '第二模型無法完成載入或辨識，請依照片人工核對。'
+                  : currentDocument.chineseNameReviewStatus === 'legacy-no-record'
+                    ? '此筆沒有第二模型執行紀錄（可能為舊掃描），無法由既有資料判斷結果。'
+                    : currentDocument.chineseNameReviewStatus === 'not-attempted'
+                      ? '這筆掃描未觸發第二模型；請確認主模型姓名及 MRZ 條件。'
                   : currentDocument.chineseNameReviewStatus === 'ambiguous-compatible-candidates'
                     ? '第二模型找到多個相容姓名，未提供建議，請人工核對。'
                     : '第二模型未取得唯一且符合 MRZ 的姓名，請人工核對。'
