@@ -677,3 +677,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-17 — D-117：同一旅客多份證件審核頁籤版本顯示
 - 原審核視窗六個護照頁籤只標「護照」，使用者無法分辨資料來源的新舊。根據現有 ScanItemResponse.createdAt 與 scanItemId 穩定排序同證件類型掃描紀錄，顯示第 N 版、最新掃描；對當前頁加一行 版本 N/總數說明。
 - 僅前端顯示，不更改資料庫主檔、document_versions、人工審核與去重政策。不把「最新上傳」當「最新核發／有效」；核發時間並非目前欄位。待 Windows build 與瀏覽器操作驗收。
+
+
+## 2026-10-18 — D-118：相同實體護照的精確分組補救（待本機驗證）
+- 發現 ReassignReviewedItem 在 nameZh 已填時，FindDraftMatches 只用中文姓名，不再比較相同護照上的英文姓名，造成先掃空白後人工補正時同一本護照的掃描被拆成不同 draft person。
+- 新增審核時強證據補救：同團別、護照類型、非空且完全相同護照號碼、英文姓名、生日、性別，且只有唯一其他 draft ID、有效身分證號無衝突時，才將目前 scan item 指回該 draft。任一條件不滿足維持原行為，不使用模糊字形或單純姓名合併。
+- 此項是後續人工審核／重新儲存時的 draft 分組修正，**不會偷偷合併過去已審核的正式 traveler 主檔，也不會自動修改舊掃描**；既有重複的正式旅客需另外安全更正流程。正式 OCR、台胞證不變；Windows dotnet build / 端到端覆核待驗證。

@@ -906,6 +906,63 @@ public sealed class PostgresScanQueueStore(
             return;
         }
 
+        // A repeated upload of the same physical passport is stronger
+        // evidence than Chinese OCR text. Only link when every identity
+        // field matches, and never cross a conflicting verified national ID.
+        if (item.DocumentType == "PASSPORT" &&
+            !string.IsNullOrWhiteSpace(item.DocumentNumber) &&
+            !string.IsNullOrWhiteSpace(nameEn) &&
+            birthDate.HasValue &&
+            !string.IsNullOrWhiteSpace(gender))
+        {
+            var samePassport = (
+                from other in db.ScanItems.AsNoTracking()
+                join batch in db.ScanBatches.AsNoTracking()
+                    on other.ScanBatchId equals batch.ScanBatchId
+                where batch.TourId == oldDraft.TourId &&
+                    other.ScanItemId != item.ScanItemId &&
+                    other.DraftPersonId != oldDraftId &&
+                    other.DocumentType == "PASSPORT" &&
+                    other.DocumentNumber == item.DocumentNumber &&
+                    other.NameEn == nameEn &&
+                    other.BirthDate == birthDate &&
+                    other.Gender == gender
+                select other
+            ).ToList();
+
+            var matchingDraftIds = samePassport
+                .Select(other => other.DraftPersonId)
+                .Distinct()
+                .ToList();
+            if (matchingDraftIds.Count == 1)
+            {
+                var idConflict = db.ScanItems.AsNoTracking()
+                    .Where(other =>
+                        (other.DraftPersonId == oldDraftId ||
+                         matchingDraftIds.Contains(other.DraftPersonId)) &&
+                        other.NationalIdNumber != null)
+                    .Select(other => other.NationalIdNumber)
+                    .ToList()
+                    .Select(ValidGroupingNationalId)
+                    .Where(id => id is not null)
+                    .Distinct()
+                    .Count() > 1;
+
+                if (!idConflict &&
+                    (nationalIdNumber is null ||
+                     !db.ScanItems.AsNoTracking()
+                       .Where(other => matchingDraftIds.Contains(other.DraftPersonId))
+                       .Select(other => other.NationalIdNumber)
+                       .ToList()
+                       .Select(ValidGroupingNationalId)
+                       .Any(id => id is not null && id != nationalIdNumber)))
+                {
+                    item.DraftPersonId = matchingDraftIds[0];
+                    return;
+                }
+            }
+        }
+
         if (nationalIdNumber is not null)
         {
             var strongMatches =
