@@ -603,3 +603,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-17 — D-105 人工覆核候選狀態接線
 - 由既有 ocrPayloadJson 只抽取合法狀態 enum 到 ScanItemResponse.ChineseNameReviewStatus，待審核護照無候選時顯示簡短原因；suggested 沿用人工套用按鈕。沒有額外模型推論／個資輸出，也未更動正式 OCR。
 - 此提交僅為端到端可觀測性改進，尚待 Windows verify:ocr、Docker build 與四張授權護照測試。不宣稱準確率上升。
+
+
+## 2026-10-17 — D-106 護照簡體 OCR 自動轉繁體顯示
+- 正式護照 nameZh 採既有單義簡→繁轉換（含臺灣姓名常見 温→溫 的顯示正規化），nameZhOnDocument 與原始 OCR payload 保留原樣。PP-OCRv3 第二模型建議也先安全轉繁再進既有 MRZ strict comparator；一對多映射不自行猜。沒有修改模型、影像、固定 Validation 或台胞證流程。
+- 待 Windows npm verify:ocr / Docker build 與真實證件人工確認，不能宣稱識別準確率改善。

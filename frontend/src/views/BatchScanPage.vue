@@ -740,6 +740,14 @@ async function buildPassportItem(
     }
   }
 
+  // Display Taiwanese passport names in Traditional Chinese, keeping the
+  // literal OCR text separately for traceability and review.
+  const rawPassportChineseName = result.chineseName ?? ''
+  const passportNameScript = convertSimplifiedNameToTraditional(
+    rawPassportChineseName.replaceAll('温', '溫'),
+  )
+  const normalizedPassportChineseName = passportNameScript.value
+
   const parsed = result.parsedMrz
   const actualOcrFile = detailRetryAccepted ? sourceFile : file
   const nationalIdNumber = parsed
@@ -774,8 +782,8 @@ async function buildPassportItem(
     ocrInputImageContentType:
       actualOcrFile.type || 'image/jpeg',
     ocrInputImageBase64,
-    nameZh: result.chineseName ?? '',
-    nameZhOnDocument: result.chineseName ?? '',
+    nameZh: normalizedPassportChineseName,
+    nameZhOnDocument: rawPassportChineseName,
     nameEn: parsed
       ? [parsed.surname, parsed.givenNames]
           .filter(Boolean)
@@ -810,6 +818,10 @@ async function buildPassportItem(
         accepted: detailRetryAccepted,
       },
       secondaryChineseNameReview,
+      passportNameScript: {
+        normalized: normalizedPassportChineseName !== rawPassportChineseName,
+        ambiguousCharacters: passportNameScript.ambiguousCharacters,
+      },
       ocrInput: {
         resized: detailRetryAccepted ? false : prepared.resized,
         originalWidth:

@@ -1247,3 +1247,10 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 ### D-105：第二模型候選缺失狀態於人工審核呈現（2026-10-17）
 - 審核畫面僅顯示 existing OCR payload 的限定枚舉：unavailable、no-compatible-candidate、ambiguous-compatible-candidates、suggested；後者仍以原本按鍵人工套用。
 - 不新增 OCR 推論、測試按鈕，不修改正式姓名欄或已審核資料，不影響台胞證。正式 14/19、13/13 不變，Windows 建置及真實掃描仍待驗證。
+
+
+### D-106：護照中文姓名繁體呈現與原始 OCR 證據分離（2026-10-17）
+- 護照正常掃描直接將單一對應的簡體 OCR 字轉為繁體呈現在 nameZh；保留原始 OCR 於 nameZhOnDocument、ocrPayloadJson.originalFields.nameZh，不改原始照片或 PP-OCRv5 辨識模型。
+- 繼承既有 convertSimplifiedNameToTraditional 的一對多歧義保守規則；另外在臺灣護照姓名顯示層規範 Unicode 字形 温→溫。這是地區呈現政策，不能替代查看護照上的真實登記字形，人工可修改。
+- 第二 PP-OCRv3 候選也先簡轉繁、略過一對多歧義，再經 strict MRZ comparator 與唯一候選門檻，絕不自動寫入正式旅客姓名。
+- 本批為後處理／顯示，不可據此聲稱 recognizer 成功率提高。正式 .29 14/19、台胞證 13/13 保持；Windows verify:ocr 與實際照片驗收待執行。

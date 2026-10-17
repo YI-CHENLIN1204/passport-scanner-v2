@@ -6,6 +6,7 @@ import {
 import {
   compareChineseNameToMrzRomanization,
 } from './nameRomanization'
+import { convertSimplifiedNameToTraditional } from './nameScriptConversion'
 
 const paddleModelBaseUrl =
   import.meta.env.VITE_PADDLE_MODEL_BASE_URL?.replace(/\/$/, '') ??
@@ -80,14 +81,21 @@ export async function suggestPassportChineseNameForReview(
     extractPassportChineseNameCandidatesForProbe(prediction)
   const compatibleCandidates = Array.from(
     new Set(
-      candidates.filter(
-        candidate =>
+      candidates
+        .map(candidate =>
+          convertSimplifiedNameToTraditional(
+            candidate.replaceAll('温', '溫'),
+          ),
+        )
+        .filter(conversion => conversion.ambiguousCharacters.length === 0)
+        .map(conversion => conversion.value)
+        .filter(candidate =>
           compareChineseNameToMrzRomanization(
             candidate,
             surname,
             givenNames,
           ) === 'compatible',
-      ),
+        ),
     ),
   )
 

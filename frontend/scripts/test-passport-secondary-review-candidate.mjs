@@ -50,6 +50,12 @@ assert.match(
 assert.match(service, /compareChineseNameToMrzRomanization/)
 assert.match(service, /=== 'compatible'/)
 assert.match(service, /compatibleCandidates\.length === 1/)
+assert.match(service, /convertSimplifiedNameToTraditional/)
+assert.match(service, /ambiguousCharacters\.length === 0/)
+assert.match(batch, /nameZh: normalizedPassportChineseName/)
+assert.match(batch, /nameZhOnDocument: rawPassportChineseName/)
+assert.match(batch, /passportNameScript:/)
+assert.match(batch, /originalFields: \{[\s\S]*?nameZh: result\.chineseName \?\? ''/)
 
 const passportStart = batch.indexOf(
   'async function buildPassportItem(',
