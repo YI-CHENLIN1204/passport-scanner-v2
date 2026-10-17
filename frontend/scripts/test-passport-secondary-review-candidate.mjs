@@ -6,6 +6,7 @@ const service = readFileSync(
   'utf8',
 )
 const batch = readFileSync('src/views/BatchScanPage.vue', 'utf8')
+const v6 = readFileSync('src/services/passportV6ChineseNameReviewCandidate.ts', 'utf8')
 const api = readFileSync('src/services/api.ts', 'utf8')
 const tour = readFileSync('src/views/TourDetailPage.vue', 'utf8')
 const contracts = readFileSync(
@@ -72,14 +73,21 @@ assert.match(
   passport,
   /chineseNameRomanizationStatus !== 'compatible'/,
 )
-assert.match(passport, /suggestPassportChineseNameForReview/)
+assert.match(passport, /suggestPassportV6NameForReview/)
+assert.match(v6, /ocrVersion: 'PP-OCRv6'/)
+assert.match(v6, /textDetectionModelName: 'PP-OCRv6_small_det'/)
+assert.match(v6, /textRecognitionModelName: 'PP-OCRv6_small_rec'/)
+assert.match(v6, /compareChineseNameToMrzRomanization/)
+assert.match(v6, /compatibleCandidates.length === 1/)
+assert.match(docker, /PP-OCRv6_small_rec_onnx_infer.tar/)
+assert.match(docker, /PP-OCRv6_small_det_onnx_infer.tar/)
 assert.match(passport, /secondaryChineseNameReview/)
 assert.doesNotMatch(
   passport,
   /result\.chineseName\s*=\s*(?:suggestion|secondary)/,
 )
 assert.ok(
-  !nonPassport.includes('suggestPassportChineseNameForReview('),
+  !nonPassport.includes('suggestPassportV6NameForReview('),
   'permit and ID flows must not invoke the passport second recognizer',
 )
 

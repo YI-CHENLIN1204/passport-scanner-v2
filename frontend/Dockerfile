@@ -76,6 +76,34 @@ RUN mkdir -p /models/experiments /tmp/cht-v3-model \
     && tar -tf /models/experiments/chinese_cht_PP-OCRv3_mobile_rec_rapidocr.tar | grep -qx 'inference.yml'
 
 
+# D-114: isolated browser PP-OCRv6 Small review candidate. Model archives
+# are served locally by nginx, never sent to an external OCR service.
+# Source is a third-party mirror of PaddlePaddle ONNX bundles at an immutable
+# repository revision; tar entries and model identity are checked at build.
+RUN mkdir -p /models/experiments /tmp/v6-det /tmp/v6-rec \
+    && curl -fL --retry 4 --retry-delay 2 \
+      https://huggingface.co/LunarOilRig/paddleocr-onnx/resolve/e6fe11f/PP-OCRv6_small_det_onnx_infer.tar \
+      -o /tmp/v6-det-source.tar \
+    && curl -fL --retry 4 --retry-delay 2 \
+      https://huggingface.co/LunarOilRig/paddleocr-onnx/resolve/e6fe11f/PP-OCRv6_small_rec_onnx_infer.tar \
+      -o /tmp/v6-rec-source.tar \
+    && tar -xf /tmp/v6-det-source.tar -C /tmp/v6-det \
+    && tar -xf /tmp/v6-rec-source.tar -C /tmp/v6-rec \
+    && for item in det rec; do \
+         input="/tmp/v6-${item}"; \
+         target="/models/experiments/PP-OCRv6_small_${item}_onnx_infer.tar"; \
+         mkdir -p "/tmp/v6-canonical-${item}"; \
+         onnx="$(find "$input" -type f -name inference.onnx | head -n 1)"; \
+         yml="$(find "$input" -type f -name inference.yml | head -n 1)"; \
+         test -n "$onnx" && test -n "$yml"; \
+         grep -Eq "^[[:space:]]*model_name:[[:space:]]*PP-OCRv6_small_${item}[[:space:]]*$" "$yml"; \
+         cp "$onnx" "/tmp/v6-canonical-${item}/inference.onnx"; \
+         cp "$yml" "/tmp/v6-canonical-${item}/inference.yml"; \
+         tar --format=ustar -cf "$target" -C "/tmp/v6-canonical-${item}" inference.onnx inference.yml; \
+         tar -tf "$target" | grep -qx inference.onnx; \
+         tar -tf "$target" | grep -qx inference.yml; \
+       done
+
 FROM nginx:alpine AS final
 
 COPY --from=build /app/dist /usr/share/nginx/html

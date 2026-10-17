@@ -262,3 +262,11 @@ main 現將單張 A/B 的選樣改成：只讀 Validation PASSPORT，依既有 `
 - 新增 training/experiments/compare_passport_recognition_train.py，**只讀 splits/train.jsonl（record.split=train 且 documentType=PASSPORT）**，同一張 broad VIZ ROI 分別用 RapidOCR PP-OCRv6 Small 和 PP-OCRv3 Traditional Chinese Mobile recognition 比較 raw exact、原有 truth-blind spatial gate 唯一正確／錯誤／棄權、paired v6-only / v3-only / both / neither、median runtime。僅輸出匿名統計，不輸出圖片、OCR 原文、姓名或任何識別碼。
 - 嚴守：這不是可證明瀏覽器 D-103 的 PP-OCRv5 detector 行為，也不作正式 14/19、13/13 成績宣稱。只有 train 組表現有穩定互補、且錯選風險可控，才另提出隔離 browser-compatible recognition 候選驗證；固定 Validation/Test 最終獨立留用。不能以這份結果直接改正式 PP-OCRv5 或增加 fallback。
 - Windows (private ZIP only): `python training/experiments/compare_passport_recognition_train.py "$HOME\\Downloads\\ocr-training-dataset-20261017-051947.zip"`。若 train 組沒有護照，直接記錄不能實測，不拿 Validation 冒充。禁止 Actions。
+
+
+## 2026-10-17 — D-114：PP-OCRv6 Small browser review-only 方案（未經 Windows runtime 驗證）
+- 經查 @paddleocr/paddleocr-js@0.4.2 已內建 ocrVersion=PP-OCRv6 及 small detector/recognizer，無須自己改 v5 字典；參考 https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr-js/packages/core/README.md。
+- 在 frontend/src/services/passportV6ChineseNameReviewCandidate.ts 建立獨立 v6 Worker（PP-OCRv6_small_det + PP-OCRv6_small_rec），只取代原 D-103 的護照 review-only 第二來源，PP-OCRv5 正式掃描流程未改。原 v3 service 和模型仍保留可回退。
+- Docker 使用固定鏡像修訂 e6fe11f 的 v6 det/rec ONNX tar，重新封裝成本機模型資產，檢查模型名稱及 tar 結構。只有在實際 Windows Docker build、browser Worker runtime 成功後可認定可用。固定上游 revision 不等於已取得本地 SHA 校驗證據，後續應記錄實際哈希。
+- 與既有 D-103 完全同一安全政策：僅 PP-OCRv5 未有 reliable Chinese name + MRZ 存在時執行；只有唯一 strict-compatible 才提出人工審核 suggestion，不能改 result.chineseName 或 traveler.nameZh。錯誤時 unavailable，台胞證／身分證不受影響。
+- Train 86 張的 v6 raw exact 77/86 不是正式準確率；bilingual A/B 22 correct、1 wrong，故不允許無人覆核自動採用。正式 .29 保持護照 14/19、台胞證 13/13。必須驗證已知困難姓名及已正確樣本無回歸，再談 19/19。

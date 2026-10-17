@@ -23,9 +23,9 @@ import {
   type DetectedDocumentType,
 } from '../services/paddleOcr'
 import {
-  disposePassportChineseNameReviewRecognizer,
-  suggestPassportChineseNameForReview,
-} from '../services/passportChineseNameReviewCandidate'
+  disposePassportV6ReviewRecognizer,
+  suggestPassportV6NameForReview,
+} from '../services/passportV6ChineseNameReviewCandidate'
 
 const props = defineProps<{
   tourId?: string | null
@@ -724,7 +724,7 @@ async function buildPassportItem(
           ? sourceFile
           : file
       const suggestion =
-        await suggestPassportChineseNameForReview(
+        await suggestPassportV6NameForReview(
           secondaryInput,
           candidateMrz.surname,
           candidateMrz.givenNames,
@@ -744,7 +744,7 @@ async function buildPassportItem(
       // Optional local model failure must never block the normal review queue.
       secondaryChineseNameReview.status = 'unavailable'
       secondaryChineseNameReview.model =
-        'chinese_cht_PP-OCRv3_rec_mobile.onnx'
+        'PP-OCRv6_small_rec'
     }
   }
 
@@ -1316,7 +1316,7 @@ onBeforeUnmount(() => {
     handleBeforeUnload,
   )
 
-  void disposePassportChineseNameReviewRecognizer()
+  void disposePassportV6ReviewRecognizer()
   emit('runningChange', false)
 })
 </script>

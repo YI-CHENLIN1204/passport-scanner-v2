@@ -652,3 +652,11 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 使用者於原本 Windows .venv 執行 train A/B 回報 TRAIN_AB_FAILED: SyntaxError。確認 D-113 的 training/experiments/v6_name_gate.py 被字串替換操作破壞（未終止 regex、重複函式及多餘括號），不是虛擬環境問題。
 - 改從 D-112 的乾淨版本重建檔案，保留唯一 propose_names；雙語標籤支援僅在 passport_label=True 啟用。已於隔離 Python 驗證相同 regex / bilingual geometry 基本測試及語法，但未在使用者私有 ZIP 執行 86 張 Train，不能宣稱 A/B 結果或正式準確率改善。
 - 後續使用 python -m py_compile 做單檔語法 gate；不需 npm 或 Docker，不啟動 GitHub Actions。
+
+
+## 2026-10-17 — D-114：PP-OCRv6 Small browser review-only 方案（未經 Windows runtime 驗證）
+- 經查 @paddleocr/paddleocr-js@0.4.2 已內建 ocrVersion=PP-OCRv6 及 small detector/recognizer，無須自己改 v5 字典；參考 https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr-js/packages/core/README.md。
+- 在 frontend/src/services/passportV6ChineseNameReviewCandidate.ts 建立獨立 v6 Worker（PP-OCRv6_small_det + PP-OCRv6_small_rec），只取代原 D-103 的護照 review-only 第二來源，PP-OCRv5 正式掃描流程未改。原 v3 service 和模型仍保留可回退。
+- Docker 使用固定鏡像修訂 e6fe11f 的 v6 det/rec ONNX tar，重新封裝成本機模型資產，檢查模型名稱及 tar 結構。只有在實際 Windows Docker build、browser Worker runtime 成功後可認定可用。固定上游 revision 不等於已取得本地 SHA 校驗證據，後續應記錄實際哈希。
+- 與既有 D-103 完全同一安全政策：僅 PP-OCRv5 未有 reliable Chinese name + MRZ 存在時執行；只有唯一 strict-compatible 才提出人工審核 suggestion，不能改 result.chineseName 或 traveler.nameZh。錯誤時 unavailable，台胞證／身分證不受影響。
+- Train 86 張的 v6 raw exact 77/86 不是正式準確率；bilingual A/B 22 correct、1 wrong，故不允許無人覆核自動採用。正式 .29 保持護照 14/19、台胞證 13/13。必須驗證已知困難姓名及已正確樣本無回歸，再談 19/19。
