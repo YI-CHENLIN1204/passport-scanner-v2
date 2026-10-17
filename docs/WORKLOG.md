@@ -1013,3 +1013,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 新增 training/experiments/compare_passport_recognition_train.py，**只讀 splits/train.jsonl（record.split=train 且 documentType=PASSPORT）**，同一張 broad VIZ ROI 分別用 RapidOCR PP-OCRv6 Small 和 PP-OCRv3 Traditional Chinese Mobile recognition 比較 raw exact、原有 truth-blind spatial gate 唯一正確／錯誤／棄權、paired v6-only / v3-only / both / neither、median runtime。僅輸出匿名統計，不輸出圖片、OCR 原文、姓名或任何識別碼。
 - 嚴守：這不是可證明瀏覽器 D-103 的 PP-OCRv5 detector 行為，也不作正式 14/19、13/13 成績宣稱。只有 train 組表現有穩定互補、且錯選風險可控，才另提出隔離 browser-compatible recognition 候選驗證；固定 Validation/Test 最終獨立留用。不能以這份結果直接改正式 PP-OCRv5 或增加 fallback。
 - Windows (private ZIP only): `python training/experiments/compare_passport_recognition_train.py "$HOME\\Downloads\\ocr-training-dataset-20261017-051947.zip"`。若 train 組沒有護照，直接記錄不能實測，不拿 Validation 冒充。禁止 Actions。
+
+
+## 2026-10-17 — D-112：Train A/B 選取器全棄權的評估歸因（待本機驗證）
+- D-111 86 張 Train 護照：v6 Small raw exact 77/86、v3 CHT 42/86、v6-only 35、v3-only 0，兩模型 spatial gate 均 86/86 棄權；不能把棄權直接當模型失敗。
+- 在 train-only 比較工具增加匿名 metadata_missing、metadata_count_mismatch、no_ocr_rows、standalone Han row count，以及三個**唯讀** gate ablation（無 label 錨點、無 upper ROI、兩者皆無）的 unique_correct / unique_wrong / ambiguous。保留原正式 gate 指標，對所有模型使用相同評估。這僅用來找出棄權原因，不允許將 ablation 接入正式姓名選取器。
+- 重新跑 Train 86 張即可，不重跑固定 Validation，也不加 UI、影像規則或拼音 fallback。PP-OCRv5 正式 14/19、台胞證 13/13 均不變。Windows runtime 待執行；不啟動 GitHub Actions。

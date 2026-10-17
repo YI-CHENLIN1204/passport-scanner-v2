@@ -50,14 +50,48 @@ def recognize(engine, roi, truth, propose):
     texts = [''.join(str(x).split()) for x in (getattr(prediction,'txts',None) or [])]
     boxes = getattr(prediction,'boxes',None)
     scores = getattr(prediction,'scores',None)
+    # Attribute selection loss without changing the production name selector.
+    # RapidOCR may return absent geometry/confidence; treat this separately
+    # from a legitimately rejected candidate.
     candidates = propose(texts, boxes, scores, roi.shape[0])
+    loose = propose(texts, boxes, scores, roi.shape[0],
+                    require_label=False, upper_only=False)
+    upper = propose(texts, boxes, scores, roi.shape[0],
+                    require_label=False, upper_only=True)
+    anchored = propose(texts, boxes, scores, roi.shape[0],
+                       require_label=True, upper_only=False)
+    def bucket(items):
+        if not items:
+            return 'none'
+        if len(items) > 1:
+            return 'ambiguous'
+        return 'correct' if items[0].text == truth else 'wrong'
     unique = len(candidates) == 1
+    count_boxes = len(boxes) if boxes is not None else -1
+    count_scores = len(scores) if scores is not None else -1
     return dict(
         duration_ms=duration_ms,
-        raw_exact=truth in texts,
+        raw_exact=int(truth in texts),
         unique_correct=int(unique and candidates[0].text == truth),
         unique_wrong=int(unique and candidates[0].text != truth),
         abstained=int(not unique),
+        metadata_missing=int(boxes is None or scores is None),
+        metadata_count_mismatch=int(boxes is not None and scores is not None
+                                    and (count_boxes != len(texts)
+                                         or count_scores != len(texts))),
+        no_ocr_rows=int(not texts),
+        han_standalone_present=int(any(
+            2 <= len(t) <= 4 and all('\u3400' <= ch <= '\u9fff' for ch in t)
+            for t in texts)),
+        no_anchor_gate_correct=int(bucket(anchored) == 'correct'),
+        no_anchor_gate_wrong=int(bucket(anchored) == 'wrong'),
+        no_anchor_gate_ambiguous=int(bucket(anchored) == 'ambiguous'),
+        upper_only_correct=int(bucket(upper) == 'correct'),
+        upper_only_wrong=int(bucket(upper) == 'wrong'),
+        upper_only_ambiguous=int(bucket(upper) == 'ambiguous'),
+        loose_correct=int(bucket(loose) == 'correct'),
+        loose_wrong=int(bucket(loose) == 'wrong'),
+        loose_ambiguous=int(bucket(loose) == 'ambiguous'),
     )
 
 
@@ -116,7 +150,7 @@ def main(zip_path, limit):
             for name in engines
         },
         paired_exact=dict(paired),
-        warning='This is offline RapidOCR candidate evidence, not browser OCR or production accuracy. No private strings exported.'
+        warning='Offline RapidOCR only. Ablations are evaluation diagnostics, NOT production selectors; wrong unique proposals must never auto-fill. No private strings exported.'
     )
 
 
