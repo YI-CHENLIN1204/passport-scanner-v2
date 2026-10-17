@@ -1,6 +1,7 @@
 import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import {
   createPassportBroadVizProbeImage,
+  createPassportLowerPageNameProbeImage,
   extractPassportChineseNameCandidatesForProbe,
 } from './paddleOcr'
 import { compareChineseNameToMrzRomanization } from './nameRomanization'
@@ -59,29 +60,56 @@ export async function suggestPassportV6NameForReview(
   surname: string,
   givenNames: string,
 ): Promise<PassportV6ReviewResult> {
-  const roi = await createPassportBroadVizProbeImage(image)
   const recognizer = await getRecognizer()
-  const prediction = await recognizer.predict(roi)
-  const candidates = extractPassportChineseNameCandidatesForProbe(prediction)
-  const conversions = candidates.map(candidate =>
-    convertSimplifiedNameToTraditional(candidate.replaceAll('温', '溫')),
-  )
-  const ambiguousScriptCount = conversions.filter(
-    entry => entry.ambiguousCharacters.length > 0,
-  ).length
-  const scriptConvertedCount = conversions.filter(
-    (entry, index) => entry.value !== candidates[index],
-  ).length
-  const compatibleCandidates = [...new Set(
-    conversions
-      .filter(entry => entry.ambiguousCharacters.length === 0)
-      .map(entry => entry.value)
-      .filter(candidate =>
-        compareChineseNameToMrzRomanization(
-          candidate, surname, givenNames,
-        ) === 'compatible',
-      ),
-  )]
+
+  const evaluatePrediction = (prediction: unknown) => {
+    const candidates = extractPassportChineseNameCandidatesForProbe(prediction)
+    const conversions = candidates.map(candidate =>
+      convertSimplifiedNameToTraditional(candidate.replaceAll('温', '溫')),
+    )
+    const ambiguousScriptCount = conversions.filter(
+      entry => entry.ambiguousCharacters.length > 0,
+    ).length
+    const scriptConvertedCount = conversions.filter(
+      (entry, index) => entry.value !== candidates[index],
+    ).length
+    const compatibleCandidates = [...new Set(
+      conversions
+        .filter(entry => entry.ambiguousCharacters.length === 0)
+        .map(entry => entry.value)
+        .filter(candidate =>
+          compareChineseNameToMrzRomanization(
+            candidate, surname, givenNames,
+          ) === 'compatible',
+        ),
+    )]
+    return {
+      candidates,
+      ambiguousScriptCount,
+      scriptConvertedCount,
+      compatibleCandidates,
+    }
+  }
+
+  const roi = await createPassportBroadVizProbeImage(image)
+  let evidence = evaluatePrediction(await recognizer.predict(roi))
+  if (evidence.compatibleCandidates.length === 0) {
+    // Run only for tall, stacked passport images when the broad VIZ misses.
+    // It is still a review-only proposal; no candidate is auto-applied.
+    const lowerPage = await createPassportLowerPageNameProbeImage(image)
+    if (lowerPage) {
+      const retry = evaluatePrediction(await recognizer.predict(lowerPage))
+      if (retry.compatibleCandidates.length === 1) {
+        evidence = retry
+      }
+    }
+  }
+  const {
+    candidates,
+    ambiguousScriptCount,
+    scriptConvertedCount,
+    compatibleCandidates,
+  } = evidence
   return {
     status: compatibleCandidates.length === 1
       ? 'suggested'
@@ -97,6 +125,7 @@ export async function suggestPassportV6NameForReview(
     model: 'PP-OCRv6_small_rec',
   }
 }
+
 export async function disposePassportV6ReviewRecognizer() {
   const pending = recognizerPromise
   recognizerPromise = null

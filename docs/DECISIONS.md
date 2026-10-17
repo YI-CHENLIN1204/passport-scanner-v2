@@ -1301,3 +1301,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - Docker 使用固定鏡像修訂 e6fe11f 的 v6 det/rec ONNX tar，重新封裝成本機模型資產，檢查模型名稱及 tar 結構。只有在實際 Windows Docker build、browser Worker runtime 成功後可認定可用。固定上游 revision 不等於已取得本地 SHA 校驗證據，後續應記錄實際哈希。
 - 與既有 D-103 完全同一安全政策：僅 PP-OCRv5 未有 reliable Chinese name + MRZ 存在時執行；只有唯一 strict-compatible 才提出人工審核 suggestion，不能改 result.chineseName 或 traveler.nameZh。錯誤時 unavailable，台胞證／身分證不受影響。
 - Train 86 張的 v6 raw exact 77/86 不是正式準確率；bilingual A/B 22 correct、1 wrong，故不允許無人覆核自動採用。正式 .29 保持護照 14/19、台胞證 13/13。必須驗證已知困難姓名及已正確樣本無回歸，再談 19/19。
+
+
+## 2026-10-17 — D-115：雙頁縱向護照 v6 下半頁姓名候選補救（待 Windows 實測）
+- 使用者提供的真實拍照是上下兩頁同框；D-114 固定 broad VIZ ROI x=.24..98 / y=.12..70，中文姓名位在 ROI 下緣，實際 v6 僅有 1 候選、MRZ 相容 0。
+- 僅對長高比 >=1.2 的護照照片，且第一次 v6 沒有 strict-compatible 姓名時，再在 x=.16..96 / y=.43..81 做一次有界高品質 crop 的 v6 OCR；只有重試得到**唯一 strict-compatible** 才回傳人工 suggestion，否則保留第一次的無候選結果。不增加正式 PP-OCRv5 推論次數，不修改正式姓名欄、台胞證或身分證，也不加入自動採用。
+- 本次只是一項有真實畫面依據的可逆補救，不能聲稱能辨出潘姵君或提升固定 14/19。仍需 Windows npm verify:ocr 與 4 張原本失敗護照端到端實測，統計實際 suggestion 正確與否；錯選即停止此策略。不啟動 GitHub Actions。

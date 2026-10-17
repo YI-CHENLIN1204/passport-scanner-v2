@@ -1672,6 +1672,30 @@ export async function createPassportBroadVizProbeImage(
   return createTaiwanVizCrop(image)
 }
 
+// D-115: stacked/open passport photos can place the VIZ name at the bottom
+// edge of the broad upper crop. This is a review-only v6 alternative input,
+// never used by production PP-OCRv5 or other document types.
+export async function createPassportLowerPageNameProbeImage(
+  image: File,
+): Promise<Blob | null> {
+  const bitmap = await createImageBitmap(image)
+  const width = bitmap.width
+  const height = bitmap.height
+  bitmap.close()
+  // Avoid additional inference on ordinary landscape/single-page images.
+  if (height < width * 1.2) return null
+
+  return createPixelCrop(
+    image,
+    width * 0.16,
+    height * 0.43,
+    width * 0.80,
+    height * 0.38,
+    1500,
+    true,
+  )
+}
+
 export function extractPassportChineseNameCandidatesForProbe(
   prediction: unknown,
 ) {
