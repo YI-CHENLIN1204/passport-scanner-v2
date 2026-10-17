@@ -622,3 +622,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 
 ## 2026-10-17 — D-109 missing record vs not attempted
 - Updated ScanItemResponse review-only status to distinguish legacy-no-record and not-attempted. No second inference or automatic traveler edits. Need Windows verify:ocr + docker and inspection of same pending review, do not rerun 32-image Validation.
+
+
+## 2026-10-17 — D-110：第二模型四張候選缺失的本機 comparator 稽核工具
+- 新增 training/experiments/audit_passport_secondary_candidates.py。僅讀私人 Validation ZIP 和 .29 本機錯誤索引，RapidOCR v3-CHT 對四張樣本執行 broad VIZ，將姓名候選送進既有 frontend/scripts/eval-v6-mrz-candidates.mjs 正式 comparator，輸出匿名 Validation 序號、正確姓名是否曾出現在 raw row，以及 comparator 匯總；不印出姓名、樣本 ID、影像或原始候選。
+- 明確限制：Python 使用 v6 detector，瀏覽器 D-103 使用 v5 detector；此工具只能區分離線候選與 MRZ comparator 假設，不會重建 browser 的 6 個候選，也不能稱已救回潘姵君。D-103 selector 與 .29 正式基準完全不變。不執行 GitHub Actions。

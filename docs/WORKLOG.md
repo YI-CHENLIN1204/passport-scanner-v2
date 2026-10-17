@@ -1001,3 +1001,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-17 — D-109 第二模型狀態缺席的根因可見化
 - 已確認 D-108 的匿名候選計數只在 secondaryChineseNameReview.attempted=true 時出現；舊資料或未執行完全沒提示，容易誤判。後端 ScanItemResponse 已把缺少紀錄標記 legacy-no-record，attempted=false 標記 not-attempted；審核頁僅對待審核護照顯示短句，不輸出任何 OCR 候選、個資或原文。
 - 這是舊資料可觀測性修正，不是 OCR 模型救回。使用者提供的完整資料頁不可再誤判成簽名頁；潘姵君仍需另查辨識候選。保持 PP-OCRv5 正式 selector 與台胞證 13/13，不宣稱準確率提升。
+
+
+## 2026-10-17 — D-110：第二模型四張候選缺失的本機 comparator 稽核工具
+- 新增 training/experiments/audit_passport_secondary_candidates.py。僅讀私人 Validation ZIP 和 .29 本機錯誤索引，RapidOCR v3-CHT 對四張樣本執行 broad VIZ，將姓名候選送進既有 frontend/scripts/eval-v6-mrz-candidates.mjs 正式 comparator，輸出匿名 Validation 序號、正確姓名是否曾出現在 raw row，以及 comparator 匯總；不印出姓名、樣本 ID、影像或原始候選。
+- 明確限制：Python 使用 v6 detector，瀏覽器 D-103 使用 v5 detector；此工具只能區分離線候選與 MRZ comparator 假設，不會重建 browser 的 6 個候選，也不能稱已救回潘姵君。D-103 selector 與 .29 正式基準完全不變。不執行 GitHub Actions。
