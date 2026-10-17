@@ -1237,3 +1237,8 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - suggestion 永不直接寫入 result.chineseName、scan item nameZh、旅客主資料或 originalFields。只保存於 ocrPayloadJson.secondaryChineseNameReview，審核畫面需人工按「人工套用候選」後再核對照片。
 - 第二模型任何錯誤都不得阻塞主流程；台胞證與身分證不受影響。
 - 驗收：先通過 npm verify:ocr 與 Docker/browser runtime；再以有權使用的護照確認 suggestion 顯示、人工套用及不自動覆寫；最後才跑固定 Validation。未取得真實 Validation 前正式數字維持護照 14/19、台胞證 13/13。
+
+### D-104：照片反光／防偽底紋影響辨識的證據式診斷（2026-10-17）
+- 四張候選缺失護照的局部截圖呈現光點、水平防偽紋與紅色防偽底圖。先做獨立離線影像 variant 診斷，不直接對正式掃描加濾鏡，也不因人眼可辨就臆斷哪個 OCR 階段失敗。
+- 診斷只跑本機 ZIP 與當次 .29 私人索引，不打印任何姓名／識別碼。觀察原圖與三種簡單變體的匿名候選與幾何彙總；不得將四張固定 Validation 困難樣本作為正式調參並在同一批樣本宣稱泛化收益。
+- 原有 D-103 與護照 14/19、台胞證 13/13 不變。要決定是否把預處理納入正式流程，須有獨立開發資料和未參與選型的驗收資料，再評估錯選、耗時與對現有正確樣本的回歸。

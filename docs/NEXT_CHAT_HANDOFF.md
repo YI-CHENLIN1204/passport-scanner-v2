@@ -589,3 +589,12 @@ Windows `npm.cmd run verify:ocr` 最新一次在 `test-server-recognition-smoke.
 
 ## 2026-10-16 — D-103 wiring correction before user validation
 Post-commit diff review caught and corrected a malformed Docker candidate-model block plus a misplaced backend positional argument. The corrected tree keeps ChineseNameReviewCandidate only in ScanItemResponse, never ReviewedDocumentInput, and adds regression guards for both mistakes. No Windows build/runtime claim yet; next step is local pull + verify:ocr + Docker build/browser smoke, then authorized real passport check.
+
+## 2026-10-17 — D-104：護照局部反光與防偽底紋離線診斷（尚未執行）
+- 使用者提供四個護照中文姓名區域截圖。觀察到密集水平防偽紋、局部反光、紅色底圖交疊文字；影像問題只是合理假說，不可從截圖直接確定 Detector 或 Recognizer 責任。
+- 新增 `training/experiments/diagnose_passport_name_texture.py`，只讀本機私人 ZIP 的 `splits/validation.jsonl` 及當次 `.29` 的 `missingCandidateSampleIds`（四張），比較 original、local_luminance、reduced_chroma、grayscale；均用同一個 RapidOCR model 與既有 broad VIZ 座標。只輸出匯總計數，不列姓名、OCR 文字、樣本 ID 或照片。
+- 影像變體只用來診斷可能的反光／防偽色彩干擾，不修改圖片或訓練資料、不修改 PP-OCRv5 正式流程、D-103、台胞證或身分證。模型預設 `v3-cht` 使用 RapidOCR v4-traditional 路由（實為 PP-OCRv3 繁體字權重），也可切換 `v6-small`。
+- OCR boxes 是模型自己預測的幾何，非人工真值標註框；不能據此證明 Detection 漏掉正確姓名。固定 Validation 失敗四張只用於診斷，任何產生的增益不可視為獨立泛化或正式 pipeline 準確率提高。正式基準仍護照 14/19、台胞證 13/13。
+- Windows 原本有私人 RapidOCR 虛擬環境即可於 repo 根目錄執行：
+  `python training/experiments/diagnose_passport_name_texture.py "<private-export.zip>" --production-index "<private-29-index.json>"`
+- 尚未在使用者原主機執行，沒有任何真實辨識數字。禁止 GitHub Actions；私人資料不可上傳 GitHub／聊天。
