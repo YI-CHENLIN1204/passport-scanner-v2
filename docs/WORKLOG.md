@@ -1074,3 +1074,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 發現目前 shared extractPassportChineseNameCandidatesForProbe 遇到同列 `姓名XXX` 時直接由 isPlausibleTaiwanChineseName 的標籤排除規則拒絕，可能在進 MRZ 比對之前丟失正確姓名。
 - 新增 v6-only `extractPassportV6ReviewCandidates`：只接受 OCR 原始列或現有文字列明確以 `姓名`／`中文姓名` 開頭且**其後恰好 2–4 個漢字**的格式；保持原候選管線，合併去重、既有簡繁與 strict MRZ 過濾。不加入人名答案、寬鬆拼音或新影像 ROI。
 - v6 一律只產生人工建議，PP-OCRv5 正式 selector 與台胞證不變；不能聲稱正式 14/19 已提高。提交後須本機 verify:ocr、Docker 與新一批有授權護照真實驗收。Actions 不執行。
+
+
+## 2026-10-18 — D-121 全批 OCR 0.7 秒模型／執行資源下載失敗：資產隔離預檢
+- 使用者在 4 張護照上均於 0.7 秒左右出現「PaddleOCR 模型／執行資源下載失敗」；這發生於正式 PP-OCRv5 初始化，不能歸因於剛新增的 PP-OCRv6 候選規則，且不代表網路本身故障。
+- 新增 frontend/scripts/check-local-ocr-assets.mjs，可在 Docker 運行時由原主機 Node 直接檢查 4 個同源模型 tar HTTP 回應、大小與 ustar header；不載入私人證件或資料庫、不修改任何主線 OCR。以 `node frontend/scripts/check-local-ocr-assets.mjs` 執行。預檢通過只證明模型 HTTP 資產存在，仍須針對 browser Worker、WASM 與 Console Error 進一步辨識。
+- 本批只建立故障定位手段，未宣稱已修復全部失敗；不需要重新上傳 4 張或做 Validation。GitHub Actions 禁止執行。
