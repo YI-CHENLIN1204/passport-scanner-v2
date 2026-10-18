@@ -194,3 +194,12 @@ assert.match(paddle, /\(\?:姓名\|中文姓名\)/)
 assert.match(paddle, /prefixedNames\.filter\(isPlausibleTaiwanChineseName\)/)
 assert.match(paddle, /extractPassportChineseNameCandidatesForProbe\(prediction\)/)
 assert.doesNotMatch(v6, /result\.chineseName\s*=/)
+
+
+// D-122: an optional lower-page retry cannot erase first-pass evidence.
+assert.match(v6, /candidateSource: 'broad-viz' \| 'lower-page'/)
+assert.match(v6, /candidateSource = 'lower-page'/)
+assert.match(v6, /if \(retry\.compatibleCandidates\.length === 1\)/)
+assert.match(v6, /catch \{[\s\S]*?Keep first-pass evidence/)
+assert.match(batch, /secondaryChineseNameReview\.candidateSource =/)
+assert.doesNotMatch(v6, /result\.chineseName\s*=/)

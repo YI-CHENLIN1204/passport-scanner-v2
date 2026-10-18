@@ -701,3 +701,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 使用者在 4 張護照上均於 0.7 秒左右出現「PaddleOCR 模型／執行資源下載失敗」；這發生於正式 PP-OCRv5 初始化，不能歸因於剛新增的 PP-OCRv6 候選規則，且不代表網路本身故障。
 - 新增 frontend/scripts/check-local-ocr-assets.mjs，可在 Docker 運行時由原主機 Node 直接檢查 4 個同源模型 tar HTTP 回應、大小與 ustar header；不載入私人證件或資料庫、不修改任何主線 OCR。以 `node frontend/scripts/check-local-ocr-assets.mjs` 執行。預檢通過只證明模型 HTTP 資產存在，仍須針對 browser Worker、WASM 與 Console Error 進一步辨識。
 - 本批只建立故障定位手段，未宣稱已修復全部失敗；不需要重新上傳 4 張或做 Validation。GitHub Actions 禁止執行。
+
+
+## 2026-10-19 — D-122：v6 兩段辨識證據容錯與來源追溯
+- 使用者的真實掃描已取得 PP-OCRv6 正確「人工覆核候選」，MRZ 相容 1；**這不是自動填入正確率或固定 19 張正式 Validation 的提升**。D-120 / D-115 哪個裁切實際命中尚未確認。
+- 修補 v6 第二次 lower-page crop / predict 發生異常時會直接丟棄第一次 broad-viz 結果的容錯缺口；現在第一輪辨識完成後，第二輪例外只會保留第一輪匿名結果，維持 strict MRZ 人工覆核門檻。若下半頁唯一相容則 candidateSource='lower-page'，否則 'broad-viz'；僅寫到現有私人 OCR payload，不新增 UI、不包含姓名。
+- 不改 PP-OCRv5 主模型、自動填值、台胞證、資料庫結構與既有旅客。待本機 npm verify:ocr 及 Docker Build；此項是容錯／可觀測性，不宣稱 19/19。禁止 Actions。

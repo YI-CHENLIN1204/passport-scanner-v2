@@ -693,6 +693,7 @@ async function buildPassportItem(
     compatibleCandidateCount: number
     ambiguousScriptCount: number
     scriptConvertedCount: number
+    candidateSource: 'broad-viz' | 'lower-page' | null
   } = {
     attempted: false,
     status: 'not-needed',
@@ -702,6 +703,7 @@ async function buildPassportItem(
     compatibleCandidateCount: 0,
     ambiguousScriptCount: 0,
     scriptConvertedCount: 0,
+    candidateSource: null,
   }
 
   // D-103: the second recognizer is review-only. It runs only when the
@@ -740,6 +742,8 @@ async function buildPassportItem(
         suggestion.ambiguousScriptCount
       secondaryChineseNameReview.scriptConvertedCount =
         suggestion.scriptConvertedCount
+      secondaryChineseNameReview.candidateSource =
+        suggestion.candidateSource
     } catch {
       // Optional local model failure must never block the normal review queue.
       secondaryChineseNameReview.status = 'unavailable'

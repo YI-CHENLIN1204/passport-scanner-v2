@@ -24,6 +24,7 @@ export interface PassportV6ReviewResult {
   ambiguousScriptCount: number
   scriptConvertedCount: number
   model: 'PP-OCRv6_small_rec'
+  candidateSource: 'broad-viz' | 'lower-page'
 }
 
 let recognizerPromise: ReturnType<typeof PaddleOCR.create> | null = null
@@ -93,15 +94,21 @@ export async function suggestPassportV6NameForReview(
 
   const roi = await createPassportBroadVizProbeImage(image)
   let evidence = evaluatePrediction(await recognizer.predict(roi))
+  let candidateSource: PassportV6ReviewResult['candidateSource'] = 'broad-viz'
   if (evidence.compatibleCandidates.length === 0) {
-    // Run only for tall, stacked passport images when the broad VIZ misses.
-    // It is still a review-only proposal; no candidate is auto-applied.
-    const lowerPage = await createPassportLowerPageNameProbeImage(image)
-    if (lowerPage) {
-      const retry = evaluatePrediction(await recognizer.predict(lowerPage))
-      if (retry.compatibleCandidates.length === 1) {
-        evidence = retry
+    // A second crop is optional. Its failure must not erase successful
+    // first-pass OCR evidence or turn the overall review result unavailable.
+    try {
+      const lowerPage = await createPassportLowerPageNameProbeImage(image)
+      if (lowerPage) {
+        const retry = evaluatePrediction(await recognizer.predict(lowerPage))
+        if (retry.compatibleCandidates.length === 1) {
+          evidence = retry
+          candidateSource = 'lower-page'
+        }
       }
+    } catch {
+      // Keep first-pass evidence, including its anonymized counts.
     }
   }
   const {
@@ -123,6 +130,7 @@ export async function suggestPassportV6NameForReview(
     ambiguousScriptCount,
     scriptConvertedCount,
     model: 'PP-OCRv6_small_rec',
+    candidateSource,
   }
 }
 
