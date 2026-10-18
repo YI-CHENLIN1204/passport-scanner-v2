@@ -96,7 +96,7 @@ export async function suggestPassportV6NameForReview(
  * D-128: restrained luminance normalization for optional review-only OCR.
  * Preserve chroma and geometry. No OCR text, image, or identity is logged.
  */
-export async function normalizePassportNameRoiLuminance(input: Blob): Promise<Blob> {
+async function normalizePassportNameRoiLuminance(input: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(input)
   try {
     const canvas = document.createElement('canvas')

@@ -744,3 +744,7 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - D-127 實測主模型 14/19、v6 正確人工候選 1；主模型拼音相容但錯誤 3 張，shadow 正確 0、錯誤 1、棄權 2。停止調整模型啟動條件與拼音 fallback。
 - 新增僅 v6 **人工覆核**使用的溫和亮度／對比 normalization：先統計 ROI 亮度 5/95 百分位，排除過低動態範圍及已有充分曝光情形，限制 gain <=1.4，保留原色與幾何，獨立再辨識一次。只有既有 broad 和適用的 lower-page 均無相容候選時觸發，重試即使有候選也不自動寫入；失敗保留原證據。候選來源記為 contrast-review；正常 OCR 主線／台胞證不變。
 - 此方法不能消除已飽和反光，也尚無 Train 或端到端增益證據；若錯選或耗時增加過多即移除。不可在固定 Validation/Test 上持續微調；正式 14/19 未變。禁止 Actions。
+
+
+## 2026-10-19 — D-128 編譯修復
+- Windows Docker frontend build 報 TS1184: nested `export async function normalizePassportNameRoiLuminance` 與 TS2322: batch review source union 缺少 `contrast-review`。前者移除錯置的 export 以保留函式內局部 helper，後者同步 union。僅修復型別/作用域，未變更候選選取規則與正式 OCR。等待原主機 `npm.cmd run build` / `verify:ocr` 結果；不得宣稱已通過。

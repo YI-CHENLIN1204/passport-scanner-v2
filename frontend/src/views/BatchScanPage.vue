@@ -693,7 +693,7 @@ async function buildPassportItem(
     compatibleCandidateCount: number
     ambiguousScriptCount: number
     scriptConvertedCount: number
-    candidateSource: 'broad-viz' | 'lower-page' | null
+    candidateSource: 'broad-viz' | 'lower-page' | 'contrast-review' | null
   } = {
     attempted: false,
     status: 'not-needed',
