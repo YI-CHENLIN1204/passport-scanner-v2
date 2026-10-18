@@ -136,6 +136,8 @@ async function evaluateBrowserV6Validation() {
   let shadowAmbiguous = 0
   let shadowAbstained = 0
   let shadowErrors = 0
+  const shadowOnWrong = { correct: 0, wrong: 0, ambiguous: 0, abstained: 0, errors: 0 }
+  const shadowOnCorrect = { correct: 0, wrong: 0, ambiguous: 0, abstained: 0, errors: 0 }
   try {
     const samples = (await getTrainingEvaluationSamples('validation'))
       .filter(sample => sample.documentType === 'PASSPORT')
@@ -159,11 +161,13 @@ async function evaluateBrowserV6Validation() {
         if (production.chineseNameRomanizationStatus === 'compatible') {
           if (primaryName === truth) skippedCompatibleCorrect++
           else skippedCompatibleWrong++
+          const shadowBucket = primaryName === truth ? shadowOnCorrect : shadowOnWrong
           // Shadow-only: explore a potential bypass without changing the
           // production gate. Do not use truth to choose when v6 runs.
           const shadowMrz = production.parsedMrz
           if (!shadowMrz?.surname || !shadowMrz.givenNames) {
             shadowAbstained++
+            shadowBucket.abstained++
             continue
           }
           try {
@@ -172,15 +176,20 @@ async function evaluateBrowserV6Validation() {
             )
             if (shadow.status === 'ambiguous-compatible-candidates') {
               shadowAmbiguous++
+              shadowBucket.ambiguous++
             } else if (shadow.status !== 'suggested' || !shadow.candidate) {
               shadowAbstained++
+              shadowBucket.abstained++
             } else if (shadow.candidate === truth) {
               shadowCorrect++
+              shadowBucket.correct++
             } else {
               shadowWrong++
+              shadowBucket.wrong++
             }
           } catch {
             shadowErrors++
+            shadowBucket.errors++
           }
           continue
         }
@@ -214,6 +223,8 @@ async function evaluateBrowserV6Validation() {
        拼音相容而跳過 v6：主模型正確 ${skippedCompatibleCorrect}、錯誤 ${skippedCompatibleWrong}；
        唯讀 shadow：正確 ${shadowCorrect}、錯誤 ${shadowWrong}、歧義 ${shadowAmbiguous}、
        棄權 ${shadowAbstained}、錯誤 ${shadowErrors}。
+       Shadow × 主模型錯誤 ${skippedCompatibleWrong} 張：正確 ${shadowOnWrong.correct}、錯誤 ${shadowOnWrong.wrong}、歧義 ${shadowOnWrong.ambiguous}、棄權 ${shadowOnWrong.abstained}、執行錯誤 ${shadowOnWrong.errors}；
+       Shadow × 主模型正確 ${skippedCompatibleCorrect} 張：正確 ${shadowOnCorrect.correct}、錯誤 ${shadowOnCorrect.wrong}、歧義 ${shadowOnCorrect.ambiguous}、棄權 ${shadowOnCorrect.abstained}、執行錯誤 ${shadowOnCorrect.errors}。
        shadow 結果不會套用；候選不計入正式自動正確率，不能當成 19/19。`
   } catch {
     v6ValidationError.value = '匿名瀏覽器 v6 驗收無法完成，請確認固定 Validation 样本及本機模型。'

@@ -218,3 +218,9 @@ assert.match(quality, /shadowCorrect\+\+/)
 assert.match(quality, /shadowWrong\+\+/)
 assert.match(quality, /shadowAmbiguous\+\+/)
 assert.match(quality, /shadow 結果不會套用/)
+
+// D-127 truth-blind activation, private aggregate cross-tab only.
+assert.match(quality, /const shadowBucket = primaryName === truth \? shadowOnCorrect : shadowOnWrong/)
+assert.match(quality, /shadowBucket\.wrong\+\+/)
+assert.match(quality, /Shadow × 主模型錯誤/)
+assert.match(quality, /Shadow × 主模型正確/)

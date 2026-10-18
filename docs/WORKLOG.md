@@ -1113,3 +1113,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - D-125 19 張實測主模型 14/19；v6 1 張正確候選、0 錯誤唯一候選、3 歧義、0 棄權與執行錯誤。五張主模型錯誤並非全部必然啟動 v6；`chineseNameRomanizationStatus === compatible` 會直接跳過。
 - 在既有 19 張驗收按鈕內，新增「拼音相容因此跳過 v6」之主模型正確／錯誤統計，並為此類全數在瀏覽器做**唯讀 shadow**（不以答案決定觸發，僅比較最後結果），分開計數唯一正確、唯一錯誤、歧義、棄權、錯誤。不得將 shadow 用於正式掃描或自動填值，也不得把有人工候選算為正式 19/19。
 - 不新增 UI 控制項，不改 PP-OCRv5 判斷／台胞證／證件資料；待本機 verify:ocr + Docker 與固定 19 張一批驗收。禁止 Actions。
+
+
+## 2026-10-19 — D-127：拼音相容跳過 v6 的匿名交叉統計
+- D-126 使用者實測：主模型 14/19，錯誤 5；拼音相容跳過 v6 的主模型正確 12、錯誤 3，該 15 張 shadow 匯總正確 5、錯誤 1、歧義 9。聚合數字不足以推論三張主模型錯誤是否被 v6 救回。
+- 沿用既有瀏覽器 19 張驗收入口，新增唯讀 `shadowOnWrong` / `shadowOnCorrect` 兩組匿名正確、錯誤、歧義、棄權與執行錯誤交叉統計。模型啟動仍只由 `chineseNameRomanizationStatus` 及真實 MRZ 決定，ground truth 僅供統計；不記錄逐人姓名、證號或 ID，不修改主模型、DB、台胞證、候選採用政策。
+- 本機驗收待 `npm run verify:ocr`、前端 Docker build 及頁面同一個 v6 19 張按鈕；不能據此宣稱 19/19，固定 Validation 不可再調參。禁止 Actions。
