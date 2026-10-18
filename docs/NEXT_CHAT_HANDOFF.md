@@ -738,3 +738,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - D-126 使用者實測：主模型 14/19，錯誤 5；拼音相容跳過 v6 的主模型正確 12、錯誤 3，該 15 張 shadow 匯總正確 5、錯誤 1、歧義 9。聚合數字不足以推論三張主模型錯誤是否被 v6 救回。
 - 沿用既有瀏覽器 19 張驗收入口，新增唯讀 `shadowOnWrong` / `shadowOnCorrect` 兩組匿名正確、錯誤、歧義、棄權與執行錯誤交叉統計。模型啟動仍只由 `chineseNameRomanizationStatus` 及真實 MRZ 決定，ground truth 僅供統計；不記錄逐人姓名、證號或 ID，不修改主模型、DB、台胞證、候選採用政策。
 - 本機驗收待 `npm run verify:ocr`、前端 Docker build 及頁面同一個 v6 19 張按鈕；不能據此宣稱 19/19，固定 Validation 不可再調參。禁止 Actions。
+
+
+## 2026-10-19 — D-128：護照姓名反光低對比的隔離候選補救（待實測）
+- D-127 實測主模型 14/19、v6 正確人工候選 1；主模型拼音相容但錯誤 3 張，shadow 正確 0、錯誤 1、棄權 2。停止調整模型啟動條件與拼音 fallback。
+- 新增僅 v6 **人工覆核**使用的溫和亮度／對比 normalization：先統計 ROI 亮度 5/95 百分位，排除過低動態範圍及已有充分曝光情形，限制 gain <=1.4，保留原色與幾何，獨立再辨識一次。只有既有 broad 和適用的 lower-page 均無相容候選時觸發，重試即使有候選也不自動寫入；失敗保留原證據。候選來源記為 contrast-review；正常 OCR 主線／台胞證不變。
+- 此方法不能消除已飽和反光，也尚無 Train 或端到端增益證據；若錯選或耗時增加過多即移除。不可在固定 Validation/Test 上持續微調；正式 14/19 未變。禁止 Actions。

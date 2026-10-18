@@ -224,3 +224,10 @@ assert.match(quality, /const shadowBucket = primaryName === truth \? shadowOnCor
 assert.match(quality, /shadowBucket\.wrong\+\+/)
 assert.match(quality, /Shadow × 主模型錯誤/)
 assert.match(quality, /Shadow × 主模型正確/)
+
+// D-128 bounded contrast branch is review-only and never modifies primary OCR.
+assert.match(v6, /normalizePassportNameRoiLuminance/)
+assert.match(v6, /normalizedResult\.compatibleCandidates\.length > 0/)
+assert.match(v6, /candidateSource = 'contrast-review'/)
+assert.match(v6, /Math\.min\(1\.4, 210 \/ \(high - low\)\)/)
+assert.doesNotMatch(v6, /result\.chineseName\s*=/)
