@@ -2,7 +2,7 @@ import { PaddleOCR } from '@paddleocr/paddleocr-js'
 import {
   createPassportBroadVizProbeImage,
   createPassportLowerPageNameProbeImage,
-  extractPassportChineseNameCandidatesForProbe,
+  extractPassportV6ReviewCandidates,
 } from './paddleOcr'
 import { compareChineseNameToMrzRomanization } from './nameRomanization'
 import { convertSimplifiedNameToTraditional } from './nameScriptConversion'
@@ -63,7 +63,7 @@ export async function suggestPassportV6NameForReview(
   const recognizer = await getRecognizer()
 
   const evaluatePrediction = (prediction: unknown) => {
-    const candidates = extractPassportChineseNameCandidatesForProbe(prediction)
+    const candidates = extractPassportV6ReviewCandidates(prediction)
     const conversions = candidates.map(candidate =>
       convertSimplifiedNameToTraditional(candidate.replaceAll('温', '溫')),
     )

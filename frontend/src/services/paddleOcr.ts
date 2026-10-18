@@ -1727,6 +1727,30 @@ export function extractPassportChineseNameCandidatesForProbe(
   )
 }
 
+// D-120: only v6 review candidates may recover Han names directly attached
+// to an explicit printed "姓名" label. Do not relax the production selector.
+export function extractPassportV6ReviewCandidates(
+  prediction: unknown,
+) {
+  const result = Array.isArray(prediction)
+    ? prediction[0]
+    : prediction
+  const items = predictionItems(result)
+  const texts = [
+    ...items.map(item => typeof item.text === 'string' ? item.text : ''),
+    ...buildTextRows(items),
+  ]
+  const prefixedNames = texts.flatMap(text => {
+    const joined = text.replace(/\s+/g, '').replace(/[：:]/g, '')
+    const match = /^(?:姓名|中文姓名)([\p{Script=Han}]{2,4})$/u.exec(joined)
+    return match ? [match[1]] : []
+  })
+  return [...new Set([
+    ...extractPassportChineseNameCandidatesForProbe(prediction),
+    ...prefixedNames.filter(isPlausibleTaiwanChineseName),
+  ])]
+}
+
 
 async function createBottomCrop(
   image: File,

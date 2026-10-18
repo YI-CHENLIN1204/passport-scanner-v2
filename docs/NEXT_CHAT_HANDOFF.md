@@ -689,3 +689,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 發現既有 TravelersPage 與 PostgresTravelerStore.MergeTravelers 已有正式人工合併流程，會保留並搬移證件版本、團別關聯、掃描草稿。因此不再新增重複 Merge API。
 - 現有阻擋僅依出生日期、性別、身分證號衝突，可能誤把同生日同性別但英文／中文姓名不同的兩人合併。新增**前端及後端一致的保守檢查**：兩筆都有非空英文姓名但不同（忽略 ASCII 大小寫）、或都有非空中文姓名但不同，阻擋合併並要求先人工核實修正。任一方缺中文姓名仍可沿用原明確人工確認流程（例如 OCR 當初空白者）。
 - 不自動更動既有旅客／資料庫，也不為已審核資料執行自動合併。正式主檔合併必須使用既有旅客頁手動操作；仍待 dotnet build、npm build 與完整端到端測試。未碰 OCR，也不宣稱 19/19。
+
+
+## 2026-10-18 — D-120：PP-OCRv6 標籤黏連姓名候選補救（僅人工覆核）
+- 發現目前 shared extractPassportChineseNameCandidatesForProbe 遇到同列 `姓名XXX` 時直接由 isPlausibleTaiwanChineseName 的標籤排除規則拒絕，可能在進 MRZ 比對之前丟失正確姓名。
+- 新增 v6-only `extractPassportV6ReviewCandidates`：只接受 OCR 原始列或現有文字列明確以 `姓名`／`中文姓名` 開頭且**其後恰好 2–4 個漢字**的格式；保持原候選管線，合併去重、既有簡繁與 strict MRZ 過濾。不加入人名答案、寬鬆拼音或新影像 ROI。
+- v6 一律只產生人工建議，PP-OCRv5 正式 selector 與台胞證不變；不能聲稱正式 14/19 已提高。提交後須本機 verify:ocr、Docker 與新一批有授權護照真實驗收。Actions 不執行。

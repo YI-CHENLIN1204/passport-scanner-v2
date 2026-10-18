@@ -186,3 +186,11 @@ assert.match(tour, /createdAt\.localeCompare\(b\.createdAt\)/)
 assert.match(tour, /第\{\{ documentVersionLabel\(document\)\.ordinal \}\}版/)
 assert.match(tour, /最新掃描/)
 assert.match(tour, /不代表最新核發或目前有效的證件/)
+
+// D-120: protect exact label-prefix extraction and unchanged production selector.
+assert.match(v6, /extractPassportV6ReviewCandidates/)
+assert.match(paddle, /export function extractPassportV6ReviewCandidates/)
+assert.match(paddle, /\(\?:姓名\|中文姓名\)/)
+assert.match(paddle, /prefixedNames\.filter\(isPlausibleTaiwanChineseName\)/)
+assert.match(paddle, /extractPassportChineseNameCandidatesForProbe\(prediction\)/)
+assert.doesNotMatch(v6, /result\.chineseName\s*=/)
