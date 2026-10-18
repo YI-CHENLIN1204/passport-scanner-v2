@@ -1092,3 +1092,10 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 檢查 D-122 發現 lower-page 第二次 OCR 取得多個 strict MRZ 相容候選時，現有 `retry.compatibleCandidates.length === 1` 將整筆重試證據丟棄，使狀態誤標 `no-compatible-candidate`。
 - 改為只要 retry 有至少 1 個相容候選即保留該次證據；1 個維持 review-only suggestion，2 個以上正確標記 `ambiguous-compatible-candidates` 並絕不提供自動或人工一鍵套用候選。重試 0 候選或異常繼續保留 broad-viz 的原始證據。
 - 這是風險分類正確性修補，不提高 PP-OCRv5 正式 14/19，不動台胞證 13/13，也不能據此稱 19/19。仍待 Windows verify:ocr 與 Docker / 真實資料驗收。GitHub Actions 不可啟動。
+
+
+## 2026-10-19 — D-124：凍結 19 張護照的離線 v6 獨立候選驗收
+- 已確認 D-123 Windows `verify:ocr` / Docker 無錯、原本難例實際 PP-OCRv6 有正確人工覆核候選（MRZ 相容 1），但主線正式 .29 仍護照 14/19、台胞證 13/13。
+- 新增 `training/experiments/evaluate_v6_frozen_passports.py`。只讀原本私人 ZIP `splits/validation.jsonl` 的 19 張護照，使用既有 RapidOCR v6 Small + D-113 雙語標籤定位 gate 統計 `raw_exact`、`unique_correct`、`unique_wrong`、`ambiguous`、`abstained`。強制總數 19、不輸出 OCR 文字、身份或 sample ID，不改任何正式演算法、Validation split 或 OCR Quality baseline。
+- **限制**：Python v6 detector/crop/gate 與瀏覽器 PaddleOCR.js/D-115 的實際輸入不同；這只是固定 cohort 的 read-only 風險評估，不能認定瀏覽器可自動達 19/19；結果不得拿來反覆調整 selector。高錯選或高棄權時應停止此推論路線並保持人工覆核。
+- 原主機指令：`& .\\.venv\\Scripts\\python.exe training/experiments/evaluate_v6_frozen_passports.py "$HOME\\Downloads\\ocr-training-dataset-20261017-051947.zip"`。Python / Windows 未執行，無正式準確率更新。禁止 GitHub Actions。
