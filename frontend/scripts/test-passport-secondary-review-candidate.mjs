@@ -203,3 +203,11 @@ assert.match(v6, /if \(retry\.compatibleCandidates\.length > 0\)/)
 assert.match(v6, /catch \{[\s\S]*?Keep first-pass evidence/)
 assert.match(batch, /secondaryChineseNameReview\.candidateSource =/)
 assert.doesNotMatch(v6, /result\.chineseName\s*=/)
+
+// D-125 browser candidate evaluation must use real production MRZ, not truth for gating.
+const quality = readFileSync('src/views/OcrQualityPage.vue', 'utf8')
+assert.match(quality, /async function evaluateBrowserV6Validation/)
+assert.match(quality, /suggestPassportV6NameForReview\(/)
+assert.match(quality, /mrz\.surname, mrz\.givenNames/)
+assert.match(quality, /v6Wrong\+\+/)
+assert.match(quality, /samples\.length !== 19/)

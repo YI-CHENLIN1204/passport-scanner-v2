@@ -27,6 +27,7 @@ import {
   type ValidationPaddleInstance,
   OCR_PIPELINE_VERSION,
 } from '../services/paddleOcr'
+import { suggestPassportV6NameForReview } from '../services/passportV6ChineseNameReviewCandidate'
 import { aggregatePermitRetryDetection, type PermitRetryDetectionSummary } from '../services/permitRetryDetection'
 import { convertTraditionalNameToSimplified } from '../services/nameScriptConversion'
 import { classifyPermitNameRawFailure, type PermitNameRawFailureBucket } from '../services/permitValidationBuckets'
@@ -104,6 +105,83 @@ async function runAlternativeChineseRecognition() {
     }
     alternativeRecognitionProgress.value = ''
     alternativeRecognitionRunning.value = false
+  }
+}
+
+// D-125: Actual browser PP-OCRv6 model and real production MRZ, not Python.
+// No per-person output, no edits, no Test reads or benchmark baseline writes.
+const v6ValidationRunning = ref(false)
+const v6ValidationProgress = ref('')
+const v6ValidationSummary = ref('')
+const v6ValidationError = ref('')
+async function evaluateBrowserV6Validation() {
+  if (v6ValidationRunning.value || profilingValidation.value || retesting.value) return
+  v6ValidationRunning.value = true
+  v6ValidationProgress.value = ''
+  v6ValidationSummary.value = ''
+  v6ValidationError.value = ''
+  let processed = 0
+  let mainCorrect = 0
+  let mainWrong = 0
+  let v6Correct = 0
+  let v6Wrong = 0
+  let v6Ambiguous = 0
+  let v6Abstained = 0
+  let errors = 0
+  try {
+    const samples = (await getTrainingEvaluationSamples('validation'))
+      .filter(sample => sample.documentType === 'PASSPORT')
+    if (samples.length !== 19) {
+      throw new Error('固定 Validation 護照數量不是 19，已停止。')
+    }
+    for (const sample of samples) {
+      processed++
+      v6ValidationProgress.value = `瀏覽器 v6：${processed}/19`
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      try {
+        const truth = groundTruthForSample(sample).nameZh?.trim() ?? ''
+        if (!truth) throw new Error('missing private truth')
+        const image = await getTrainingSampleImageFile(sample.trainingSampleId)
+        const production = await recognizePassportWithPaddle(image)
+        const primaryName = production.chineseName?.trim() ?? ''
+        if (primaryName === truth) {
+          mainCorrect++
+          // Same guard as batch scan: don't run v6 when v5 is reliable.
+          continue
+        }
+        mainWrong++
+        const mrz = production.parsedMrz
+        if (!mrz?.surname || !mrz.givenNames) {
+          v6Abstained++
+          continue
+        }
+        const candidate = await suggestPassportV6NameForReview(
+          image, mrz.surname, mrz.givenNames,
+        )
+        if (candidate.status === 'ambiguous-compatible-candidates') {
+          v6Ambiguous++
+        } else if (candidate.status !== 'suggested' || !candidate.candidate) {
+          v6Abstained++
+        } else if (candidate.candidate === truth) {
+          v6Correct++
+        } else {
+          v6Wrong++
+        }
+      } catch {
+        // Never print filenames, OCR strings, label values or sample IDs.
+        errors++
+      }
+    }
+    v6ValidationSummary.value =
+      `共 19 張：主模型正確 ${mainCorrect}、主模型錯誤 ${mainWrong}；
+       v6 正確人工候選 ${v6Correct}、錯誤人工候選 ${v6Wrong}、
+       歧義 ${v6Ambiguous}、棄權 ${v6Abstained}、執行錯誤 ${errors}。
+       v6 候選不計入正式自動正確率，不能當成 19/19。`
+  } catch {
+    v6ValidationError.value = '匿名瀏覽器 v6 驗收無法完成，請確認固定 Validation 样本及本機模型。'
+  } finally {
+    v6ValidationRunning.value = false
+    v6ValidationProgress.value = ''
   }
 }
 
@@ -2848,6 +2926,25 @@ onMounted(load)
       <!-- Retired browser model experiments: deliberately unrendered.
            References remain temporarily for typechecked archival until
            their script dependencies can be removed in a separate refactor. -->
+      <section class="retest-card">
+        <div class="retest-copy">
+          <p class="page-kicker">BROWSER V6 VALIDATION</p>
+          <h2>19 張護照：實際瀏覽器第二模型驗收</h2>
+          <p>使用固定 Validation 的 19 張護照、PP-OCRv5 真正 MRZ 與目前的 PP-OCRv6 Small 瀏覽器辨識，獨立統計人工候選的正確、錯誤、歧義及棄權。不修改旅客資料或正式 baseline。</p>
+          <small>本次僅匿名統計，不顯示姓名或證號。曾用這批資料做模型探索，不能把結果當作獨立 Test 或泛化率。測試需要重新跑 19 張的瀏覽器推論，但不執行任何 GitHub Actions。</small>
+        </div>
+        <div class="retest-action">
+          <button type="button" class="secondary-action"
+            :disabled="v6ValidationRunning || profilingValidation || retesting"
+            @click="evaluateBrowserV6Validation">
+            {{ v6ValidationRunning ? '正在驗收…' : '執行瀏覽器 v6 19 張候選驗收' }}
+          </button>
+          <p v-if="v6ValidationProgress" class="validation-legacy-note">{{ v6ValidationProgress }}</p>
+          <p v-if="v6ValidationSummary" class="validation-legacy-note">{{ v6ValidationSummary }}</p>
+          <p v-if="v6ValidationError" class="error-message">{{ v6ValidationError }}</p>
+        </div>
+      </section>
+
       <section v-if="false" class="retest-card">
         <div class="retest-copy">
           <p class="page-kicker">EXPERIMENTAL MODEL SMOKE</p>

@@ -1099,3 +1099,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 新增 `training/experiments/evaluate_v6_frozen_passports.py`。只讀原本私人 ZIP `splits/validation.jsonl` 的 19 張護照，使用既有 RapidOCR v6 Small + D-113 雙語標籤定位 gate 統計 `raw_exact`、`unique_correct`、`unique_wrong`、`ambiguous`、`abstained`。強制總數 19、不輸出 OCR 文字、身份或 sample ID，不改任何正式演算法、Validation split 或 OCR Quality baseline。
 - **限制**：Python v6 detector/crop/gate 與瀏覽器 PaddleOCR.js/D-115 的實際輸入不同；這只是固定 cohort 的 read-only 風險評估，不能認定瀏覽器可自動達 19/19；結果不得拿來反覆調整 selector。高錯選或高棄權時應停止此推論路線並保持人工覆核。
 - 原主機指令：`& .\\.venv\\Scripts\\python.exe training/experiments/evaluate_v6_frozen_passports.py "$HOME\\Downloads\\ocr-training-dataset-20261017-051947.zip"`。Python / Windows 未執行，無正式準確率更新。禁止 GitHub Actions。
+
+
+## 2026-10-19 — D-125：瀏覽器原生 v6 19 張候選驗收（待 Windows 實測）
+- OCR 品質頁新增一個獨立固定 Validation 操作，僅從 private Validation 取得 19 張護照，不碰 Test；逐張用正式 PP-OCRv5 取得 MRZ，再讓真實 PaddleOCR.js PP-OCRv6 在主模型姓名不正確時候選辨識，統計 v6 正確／錯誤／歧義／棄權／錯誤次數，僅呈現匿名匯總。
+- **此為研發診斷**：比較 ground truth 只用來評分、不當 MRZ 提示；不寫 benchmark baseline、不存個資，也不自動套用姓名。固定 Validation 此前已參與研究，不能稱為 hold-out Test；Python D-124 的 2/19 不等於瀏覽器結果。主模型正式基準仍 14/19、台胞證 13/13。
+- 待原 Windows npm verify:ocr、Docker 建置與瀏覽器操作檢查；GitHub Actions 禁止啟動。
