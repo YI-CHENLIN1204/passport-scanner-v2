@@ -128,6 +128,11 @@ async function evaluateBrowserV6Validation() {
   let v6Wrong = 0
   let v6Ambiguous = 0
   let v6Abstained = 0
+  const v6Sources: Record<'broad-viz' | 'lower-page' | 'contrast-review', {correct: number; wrong: number; ambiguous: number}> = {
+    'broad-viz': {correct: 0, wrong: 0, ambiguous: 0},
+    'lower-page': {correct: 0, wrong: 0, ambiguous: 0},
+    'contrast-review': {correct: 0, wrong: 0, ambiguous: 0},
+  }
   let errors = 0
   let skippedCompatibleCorrect = 0
   let skippedCompatibleWrong = 0
@@ -204,12 +209,15 @@ async function evaluateBrowserV6Validation() {
         )
         if (candidate.status === 'ambiguous-compatible-candidates') {
           v6Ambiguous++
+          v6Sources[candidate.candidateSource].ambiguous++
         } else if (candidate.status !== 'suggested' || !candidate.candidate) {
           v6Abstained++
         } else if (candidate.candidate === truth) {
           v6Correct++
+          v6Sources[candidate.candidateSource].correct++
         } else {
           v6Wrong++
+          v6Sources[candidate.candidateSource].wrong++
         }
       } catch {
         // Never print filenames, OCR strings, label values or sample IDs.
@@ -225,6 +233,9 @@ async function evaluateBrowserV6Validation() {
        棄權 ${shadowAbstained}、錯誤 ${shadowErrors}。
        Shadow × 主模型錯誤 ${skippedCompatibleWrong} 張：正確 ${shadowOnWrong.correct}、錯誤 ${shadowOnWrong.wrong}、歧義 ${shadowOnWrong.ambiguous}、棄權 ${shadowOnWrong.abstained}、執行錯誤 ${shadowOnWrong.errors}；
        Shadow × 主模型正確 ${skippedCompatibleCorrect} 張：正確 ${shadowOnCorrect.correct}、錯誤 ${shadowOnCorrect.wrong}、歧義 ${shadowOnCorrect.ambiguous}、棄權 ${shadowOnCorrect.abstained}、執行錯誤 ${shadowOnCorrect.errors}。
+       第二模型來源：原 broad VIZ 正確 ${v6Sources['broad-viz'].correct}、錯誤 ${v6Sources['broad-viz'].wrong}、歧義 ${v6Sources['broad-viz'].ambiguous}；
+       雙頁補救正確 ${v6Sources['lower-page'].correct}、錯誤 ${v6Sources['lower-page'].wrong}、歧義 ${v6Sources['lower-page'].ambiguous}；
+       D-128 對比補救正確 ${v6Sources['contrast-review'].correct}、錯誤 ${v6Sources['contrast-review'].wrong}、歧義 ${v6Sources['contrast-review'].ambiguous}。
        shadow 結果不會套用；候選不計入正式自動正確率，不能當成 19/19。`
   } catch {
     v6ValidationError.value = '匿名瀏覽器 v6 驗收無法完成，請確認固定 Validation 样本及本機模型。'

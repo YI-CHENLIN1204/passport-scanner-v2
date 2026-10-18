@@ -1129,3 +1129,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 
 ## 2026-10-19 — D-128 編譯修復
 - Windows Docker frontend build 報 TS1184: nested `export async function normalizePassportNameRoiLuminance` 與 TS2322: batch review source union 缺少 `contrast-review`。前者移除錯置的 export 以保留函式內局部 helper，後者同步 union。僅修復型別/作用域，未變更候選選取規則與正式 OCR。等待原主機 `npm.cmd run build` / `verify:ocr` 結果；不得宣稱已通過。
+
+
+## 2026-10-19 — D-129：來源歸因與對比度補救去留驗收
+- D-128 Windows npm build + Docker 已確認通過，尚無 19 張 v6 重新驗收結果。把低對比 helper 從巢狀內部移到 module 私有函式（不 export），減少後續誤用與編譯事故，保持行為不變。
+- 在既有『瀏覽器 v6 19 張』驗收結果增加實際啟動 v6 的來源三分類 `broad-viz`、`lower-page`、`contrast-review` 之正確／錯誤／歧義匿名統計；僅已執行第二模型且未因正式拼音門檻跳過的結果納入。Shadow 仍獨立，不算任何新補救。
+- 決策門檻：如果 contrast-review 無新增正確候選，或產生錯誤／明顯增加耗時，直接撤回 D-128，不繼續調對比參數。資料集已多次用於研究，不能稱為 holdout 泛化率；不改主模型、台胞證、正式姓名、資料庫或 Test。待本機 verify:ocr、Docker、同一個 19 張驗收按鈕。

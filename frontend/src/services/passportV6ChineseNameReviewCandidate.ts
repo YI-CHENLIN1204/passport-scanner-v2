@@ -55,43 +55,6 @@ async function getRecognizer() {
   return recognizerPromise
 }
 
-/** Review-only. Never writes to passport official Chinese name. */
-export async function suggestPassportV6NameForReview(
-  image: File,
-  surname: string,
-  givenNames: string,
-): Promise<PassportV6ReviewResult> {
-  const recognizer = await getRecognizer()
-
-  const evaluatePrediction = (prediction: unknown) => {
-    const candidates = extractPassportV6ReviewCandidates(prediction)
-    const conversions = candidates.map(candidate =>
-      convertSimplifiedNameToTraditional(candidate.replaceAll('温', '溫')),
-    )
-    const ambiguousScriptCount = conversions.filter(
-      entry => entry.ambiguousCharacters.length > 0,
-    ).length
-    const scriptConvertedCount = conversions.filter(
-      (entry, index) => entry.value !== candidates[index],
-    ).length
-    const compatibleCandidates = [...new Set(
-      conversions
-        .filter(entry => entry.ambiguousCharacters.length === 0)
-        .map(entry => entry.value)
-        .filter(candidate =>
-          compareChineseNameToMrzRomanization(
-            candidate, surname, givenNames,
-          ) === 'compatible',
-        ),
-    )]
-    return {
-      candidates,
-      ambiguousScriptCount,
-      scriptConvertedCount,
-      compatibleCandidates,
-    }
-  }
-
 /**
  * D-128: restrained luminance normalization for optional review-only OCR.
  * Preserve chroma and geometry. No OCR text, image, or identity is logged.
@@ -142,6 +105,45 @@ async function normalizePassportNameRoiLuminance(input: Blob): Promise<Blob> {
     bitmap.close()
   }
 }
+
+
+/** Review-only. Never writes to passport official Chinese name. */
+export async function suggestPassportV6NameForReview(
+  image: File,
+  surname: string,
+  givenNames: string,
+): Promise<PassportV6ReviewResult> {
+  const recognizer = await getRecognizer()
+
+  const evaluatePrediction = (prediction: unknown) => {
+    const candidates = extractPassportV6ReviewCandidates(prediction)
+    const conversions = candidates.map(candidate =>
+      convertSimplifiedNameToTraditional(candidate.replaceAll('温', '溫')),
+    )
+    const ambiguousScriptCount = conversions.filter(
+      entry => entry.ambiguousCharacters.length > 0,
+    ).length
+    const scriptConvertedCount = conversions.filter(
+      (entry, index) => entry.value !== candidates[index],
+    ).length
+    const compatibleCandidates = [...new Set(
+      conversions
+        .filter(entry => entry.ambiguousCharacters.length === 0)
+        .map(entry => entry.value)
+        .filter(candidate =>
+          compareChineseNameToMrzRomanization(
+            candidate, surname, givenNames,
+          ) === 'compatible',
+        ),
+    )]
+    return {
+      candidates,
+      ambiguousScriptCount,
+      scriptConvertedCount,
+      compatibleCandidates,
+    }
+  }
+
 
   const roi = await createPassportBroadVizProbeImage(image)
   let evidence = evaluatePrediction(await recognizer.predict(roi))
