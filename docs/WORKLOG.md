@@ -1086,3 +1086,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 使用者的真實掃描已取得 PP-OCRv6 正確「人工覆核候選」，MRZ 相容 1；**這不是自動填入正確率或固定 19 張正式 Validation 的提升**。D-120 / D-115 哪個裁切實際命中尚未確認。
 - 修補 v6 第二次 lower-page crop / predict 發生異常時會直接丟棄第一次 broad-viz 結果的容錯缺口；現在第一輪辨識完成後，第二輪例外只會保留第一輪匿名結果，維持 strict MRZ 人工覆核門檻。若下半頁唯一相容則 candidateSource='lower-page'，否則 'broad-viz'；僅寫到現有私人 OCR payload，不新增 UI、不包含姓名。
 - 不改 PP-OCRv5 主模型、自動填值、台胞證、資料庫結構與既有旅客。待本機 npm verify:ocr 及 Docker Build；此項是容錯／可觀測性，不宣稱 19/19。禁止 Actions。
+
+
+## 2026-10-19 — D-123：第二模型下半頁歧義候選不得被當作無候選
+- 檢查 D-122 發現 lower-page 第二次 OCR 取得多個 strict MRZ 相容候選時，現有 `retry.compatibleCandidates.length === 1` 將整筆重試證據丟棄，使狀態誤標 `no-compatible-candidate`。
+- 改為只要 retry 有至少 1 個相容候選即保留該次證據；1 個維持 review-only suggestion，2 個以上正確標記 `ambiguous-compatible-candidates` 並絕不提供自動或人工一鍵套用候選。重試 0 候選或異常繼續保留 broad-viz 的原始證據。
+- 這是風險分類正確性修補，不提高 PP-OCRv5 正式 14/19，不動台胞證 13/13，也不能據此稱 19/19。仍待 Windows verify:ocr 與 Docker / 真實資料驗收。GitHub Actions 不可啟動。

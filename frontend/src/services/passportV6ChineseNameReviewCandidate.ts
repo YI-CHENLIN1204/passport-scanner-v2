@@ -102,7 +102,10 @@ export async function suggestPassportV6NameForReview(
       const lowerPage = await createPassportLowerPageNameProbeImage(image)
       if (lowerPage) {
         const retry = evaluatePrediction(await recognizer.predict(lowerPage))
-        if (retry.compatibleCandidates.length === 1) {
+        if (retry.compatibleCandidates.length > 0) {
+          // Keep BOTH unique suggestions and ambiguous findings.
+          // An ambiguous retry must abstain, never silently become
+          // "no compatible candidate" or auto-fill a person's name.
           evidence = retry
           candidateSource = 'lower-page'
         }
