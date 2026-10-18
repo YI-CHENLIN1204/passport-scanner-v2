@@ -124,6 +124,7 @@ async function evaluateBrowserV6Validation() {
   let mainCorrect = 0
   let mainWrong = 0
   let v6Correct = 0
+  let v6Attempted = 0
   let v6Wrong = 0
   let v6Ambiguous = 0
   let v6Abstained = 0
@@ -144,17 +145,19 @@ async function evaluateBrowserV6Validation() {
         const image = await getTrainingSampleImageFile(sample.trainingSampleId)
         const production = await recognizePassportWithPaddle(image)
         const primaryName = production.chineseName?.trim() ?? ''
-        if (primaryName === truth) {
-          mainCorrect++
-          // Same guard as batch scan: don't run v6 when v5 is reliable.
+        if (primaryName === truth) mainCorrect++
+        else mainWrong++
+        // Follow the real batch-scan guard. Never inspect ground truth to
+        // decide whether the second model should run.
+        if (production.chineseNameRomanizationStatus === 'compatible') {
           continue
         }
-        mainWrong++
         const mrz = production.parsedMrz
         if (!mrz?.surname || !mrz.givenNames) {
           v6Abstained++
           continue
         }
+        v6Attempted++
         const candidate = await suggestPassportV6NameForReview(
           image, mrz.surname, mrz.givenNames,
         )

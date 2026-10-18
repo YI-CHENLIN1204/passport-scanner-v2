@@ -1105,3 +1105,5 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - OCR 品質頁新增一個獨立固定 Validation 操作，僅從 private Validation 取得 19 張護照，不碰 Test；逐張用正式 PP-OCRv5 取得 MRZ，再讓真實 PaddleOCR.js PP-OCRv6 在主模型姓名不正確時候選辨識，統計 v6 正確／錯誤／歧義／棄權／錯誤次數，僅呈現匿名匯總。
 - **此為研發診斷**：比較 ground truth 只用來評分、不當 MRZ 提示；不寫 benchmark baseline、不存個資，也不自動套用姓名。固定 Validation 此前已參與研究，不能稱為 hold-out Test；Python D-124 的 2/19 不等於瀏覽器結果。主模型正式基準仍 14/19、台胞證 13/13。
 - 待原 Windows npm verify:ocr、Docker 建置與瀏覽器操作檢查；GitHub Actions 禁止啟動。
+
+- 交付前修正啟動條件：v6 是否執行嚴格使用正式 `chineseNameRomanizationStatus !== compatible` 加真實 MRZ 是否有 surname/givenNames；ground truth 只在評分步驟比較，不用來選擇啟動 v6。故正式主模型即使錯但自稱 compatible，也不會偷跑 v6。另記錄 v6Attempted。
