@@ -129,6 +129,13 @@ async function evaluateBrowserV6Validation() {
   let v6Ambiguous = 0
   let v6Abstained = 0
   let errors = 0
+  let skippedCompatibleCorrect = 0
+  let skippedCompatibleWrong = 0
+  let shadowCorrect = 0
+  let shadowWrong = 0
+  let shadowAmbiguous = 0
+  let shadowAbstained = 0
+  let shadowErrors = 0
   try {
     const samples = (await getTrainingEvaluationSamples('validation'))
       .filter(sample => sample.documentType === 'PASSPORT')
@@ -150,6 +157,31 @@ async function evaluateBrowserV6Validation() {
         // Follow the real batch-scan guard. Never inspect ground truth to
         // decide whether the second model should run.
         if (production.chineseNameRomanizationStatus === 'compatible') {
+          if (primaryName === truth) skippedCompatibleCorrect++
+          else skippedCompatibleWrong++
+          // Shadow-only: explore a potential bypass without changing the
+          // production gate. Do not use truth to choose when v6 runs.
+          const shadowMrz = production.parsedMrz
+          if (!shadowMrz?.surname || !shadowMrz.givenNames) {
+            shadowAbstained++
+            continue
+          }
+          try {
+            const shadow = await suggestPassportV6NameForReview(
+              image, shadowMrz.surname, shadowMrz.givenNames,
+            )
+            if (shadow.status === 'ambiguous-compatible-candidates') {
+              shadowAmbiguous++
+            } else if (shadow.status !== 'suggested' || !shadow.candidate) {
+              shadowAbstained++
+            } else if (shadow.candidate === truth) {
+              shadowCorrect++
+            } else {
+              shadowWrong++
+            }
+          } catch {
+            shadowErrors++
+          }
           continue
         }
         const mrz = production.parsedMrz
@@ -179,7 +211,10 @@ async function evaluateBrowserV6Validation() {
       `共 19 張：主模型正確 ${mainCorrect}、主模型錯誤 ${mainWrong}；
        v6 正確人工候選 ${v6Correct}、錯誤人工候選 ${v6Wrong}、
        歧義 ${v6Ambiguous}、棄權 ${v6Abstained}、執行錯誤 ${errors}。
-       v6 候選不計入正式自動正確率，不能當成 19/19。`
+       拼音相容而跳過 v6：主模型正確 ${skippedCompatibleCorrect}、錯誤 ${skippedCompatibleWrong}；
+       唯讀 shadow：正確 ${shadowCorrect}、錯誤 ${shadowWrong}、歧義 ${shadowAmbiguous}、
+       棄權 ${shadowAbstained}、錯誤 ${shadowErrors}。
+       shadow 結果不會套用；候選不計入正式自動正確率，不能當成 19/19。`
   } catch {
     v6ValidationError.value = '匿名瀏覽器 v6 驗收無法完成，請確認固定 Validation 样本及本機模型。'
   } finally {

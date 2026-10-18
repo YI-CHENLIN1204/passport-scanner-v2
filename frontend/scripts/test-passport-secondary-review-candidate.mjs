@@ -211,3 +211,10 @@ assert.match(quality, /suggestPassportV6NameForReview\(/)
 assert.match(quality, /mrz\.surname, mrz\.givenNames/)
 assert.match(quality, /v6Wrong\+\+/)
 assert.match(quality, /samples\.length !== 19/)
+
+// D-126: count compatible-gated misses without changing production activation.
+assert.match(quality, /skippedCompatibleWrong\+\+/)
+assert.match(quality, /shadowCorrect\+\+/)
+assert.match(quality, /shadowWrong\+\+/)
+assert.match(quality, /shadowAmbiguous\+\+/)
+assert.match(quality, /shadow 結果不會套用/)
