@@ -1391,3 +1391,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - D-128 Windows npm build + Docker 已確認通過，尚無 19 張 v6 重新驗收結果。把低對比 helper 從巢狀內部移到 module 私有函式（不 export），減少後續誤用與編譯事故，保持行為不變。
 - 在既有『瀏覽器 v6 19 張』驗收結果增加實際啟動 v6 的來源三分類 `broad-viz`、`lower-page`、`contrast-review` 之正確／錯誤／歧義匿名統計；僅已執行第二模型且未因正式拼音門檻跳過的結果納入。Shadow 仍獨立，不算任何新補救。
 - 決策門檻：如果 contrast-review 無新增正確候選，或產生錯誤／明顯增加耗時，直接撤回 D-128，不繼續調對比參數。資料集已多次用於研究，不能稱為 holdout 泛化率；不改主模型、台胞證、正式姓名、資料庫或 Test。待本機 verify:ocr、Docker、同一個 19 張驗收按鈕。
+
+
+## 2026-10-19 — D-130：停止無收益的低對比護照補救
+- D-129 固定 19 張瀏覽器實測：正式護照 14/19，v6 唯一正確人工候選 1，錯誤 0，歧義 3。broad VIZ 正確 0；lower-page 正確 1、歧義 3；D-128 contrast-review 正確 0、錯誤 0、歧義 0。
+- 依預設停止標準撤回 D-128 的 contrast normalization helper 與第三次模型辨識，移除其來源型別和驗收統計，保留 PP-OCRv5 正式主線與 v6 lower-page 人工候選；不再用這組固定 Validation 微調亮度增益或裁切參數。
+- 本次僅修正程式及文件，尚待 Windows verify:ocr / Docker Build；不能宣稱正式準確率改善。GitHub Actions 禁止執行。

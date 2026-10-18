@@ -225,17 +225,7 @@ assert.match(quality, /shadowBucket\.wrong\+\+/)
 assert.match(quality, /Shadow × 主模型錯誤/)
 assert.match(quality, /Shadow × 主模型正確/)
 
-// D-128 bounded contrast branch is review-only and never modifies primary OCR.
-assert.match(v6, /normalizePassportNameRoiLuminance/)
-assert.match(v6, /normalizedResult\.compatibleCandidates\.length > 0/)
-assert.match(v6, /candidateSource = 'contrast-review'/)
-assert.match(v6, /Math\.min\(1\.4, 210 \/ \(high - low\)\)/)
-assert.doesNotMatch(v6, /result\.chineseName\s*=/)
-
-// D-129: attribution of actual browser candidate sources, without changing
-// the production trigger or score denominator.
-assert.match(quality, /v6Sources\[candidate\.candidateSource\]\.correct\+\+/)
-assert.match(quality, /v6Sources\[candidate\.candidateSource\]\.wrong\+\+/)
-assert.match(quality, /D-128 對比補救正確/)
-assert.match(v6, /async function normalizePassportNameRoiLuminance/)
-assert.doesNotMatch(v6, /export async function normalizePassportNameRoiLuminance/)
+// D-130: no unnecessary contrast fallback
+assert.doesNotMatch(v6, /normalizePassportNameRoiLuminance/)
+assert.doesNotMatch(v6, /contrast-review/)
+assert.match(v6, /createPassportLowerPageNameProbeImage/)
