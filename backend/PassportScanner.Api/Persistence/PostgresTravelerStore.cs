@@ -984,6 +984,26 @@ public sealed class PostgresTravelerStore(
                 "兩筆旅客都有身分證字號且內容不同，為避免誤合併，請先確認並修正資料。");
         }
 
+        // Manual merge must not allow two complete, contradictory names
+        // solely because date of birth and gender match.
+        if (!string.IsNullOrWhiteSpace(target.NameEn) &&
+            !string.IsNullOrWhiteSpace(source.NameEn) &&
+            !string.Equals(target.NameEn, source.NameEn,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "兩筆旅客的英文姓名不同，請先人工確認並修正，系統不會直接合併。");
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.NameZh) &&
+            !string.IsNullOrWhiteSpace(source.NameZh) &&
+            !string.Equals(target.NameZh, source.NameZh,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "兩筆旅客的中文姓名不同，請先人工確認並修正，系統不會直接合併。");
+        }
+
         if (
             string.IsNullOrWhiteSpace(target.NameEn) &&
             !string.IsNullOrWhiteSpace(source.NameEn))

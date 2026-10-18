@@ -74,6 +74,22 @@ const mergeBlockedReason = computed(() => {
     return '兩筆都有身分證字號且內容不同，為避免誤合併，請先確認並修正資料。'
   }
 
+  if (
+    target.nameEn?.trim() &&
+    source.nameEn?.trim() &&
+    target.nameEn.trim().toUpperCase() !== source.nameEn.trim().toUpperCase()
+  ) {
+    return '英文姓名不同，請先確認及修正，不能直接合併。'
+  }
+
+  if (
+    target.nameZh?.trim() &&
+    source.nameZh?.trim() &&
+    target.nameZh.trim() !== source.nameZh.trim()
+  ) {
+    return '中文姓名不同，請先確認及修正，不能直接合併。'
+  }
+
   return ''
 })
 

@@ -1062,3 +1062,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 發現 ReassignReviewedItem 在 nameZh 已填時，FindDraftMatches 只用中文姓名，不再比較相同護照上的英文姓名，造成先掃空白後人工補正時同一本護照的掃描被拆成不同 draft person。
 - 新增審核時強證據補救：同團別、護照類型、非空且完全相同護照號碼、英文姓名、生日、性別，且只有唯一其他 draft ID、有效身分證號無衝突時，才將目前 scan item 指回該 draft。任一條件不滿足維持原行為，不使用模糊字形或單純姓名合併。
 - 此項是後續人工審核／重新儲存時的 draft 分組修正，**不會偷偷合併過去已審核的正式 traveler 主檔，也不會自動修改舊掃描**；既有重複的正式旅客需另外安全更正流程。正式 OCR、台胞證不變；Windows dotnet build / 端到端覆核待驗證。
+
+
+## 2026-10-18 — D-119：既有手動旅客合併加入姓名衝突保護
+- 發現既有 TravelersPage 與 PostgresTravelerStore.MergeTravelers 已有正式人工合併流程，會保留並搬移證件版本、團別關聯、掃描草稿。因此不再新增重複 Merge API。
+- 現有阻擋僅依出生日期、性別、身分證號衝突，可能誤把同生日同性別但英文／中文姓名不同的兩人合併。新增**前端及後端一致的保守檢查**：兩筆都有非空英文姓名但不同（忽略 ASCII 大小寫）、或都有非空中文姓名但不同，阻擋合併並要求先人工核實修正。任一方缺中文姓名仍可沿用原明確人工確認流程（例如 OCR 當初空白者）。
+- 不自動更動既有旅客／資料庫，也不為已審核資料執行自動合併。正式主檔合併必須使用既有旅客頁手動操作；仍待 dotnet build、npm build 與完整端到端測試。未碰 OCR，也不宣稱 19/19。
