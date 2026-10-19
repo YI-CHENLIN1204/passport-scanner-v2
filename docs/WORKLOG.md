@@ -1165,3 +1165,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 使用者提供完整截圖，證實上一個「成功了」實際是誤報：Windows 驗收進入 [4/8] 後失敗，`Review queue should be empty after both reviews. Expected 0 Actual 1`，後續 [5/8]～[8/8] 未執行；**D-131 目前不是 PASS，D-132 尚未開始**。
 - 檢查 `PostgresScanQueueStore.ListReviewQueue`：此 API 故意保留已審核 draft person 及其掃描項目以供重新編輯，不只回傳 pending。因此 1 個 review queue 分組並不是漏審。修正 `scripts/verify-v2-launch.ps1`，改驗證分組 1、該分組證件 2、PENDING 0、REVIEWED 2。production backend/OCR 不變，不能宣稱此次完整驗收已通過。
 - 保留本機隔離驗收策略，等待原 Windows 主機重新執行整批腳本，禁止 Actions；發現的後續 blocker 集中修正，不做 OCR 新實驗。
+
+
+## 2026-10-19 — D-131 最終 Windows 驗收 8/8 PASS（以最新截圖為準）
+- 使用者提供最終 Windows PowerShell 截圖，明確顯示 `[8/8] Automated V2 launch acceptance passed`、`Restore completed successfully`、`[7/8] Persistence after backend restart`，並顯示獨立驗收 frontend/backend/database containers、network 與 PostgreSQL volume 已清除。此前 [4/8] 失敗及更早誤報 PASS 均為歷史，**本次最新結果是真正通過**。
+- 本次只代表 D-131 自動驗收：synthetic batch/review、build、retention、backup/restore、restart persistence 等；不代表真實影像三證件 OCR、審核 UI、CSV 下載已完成。下一階段 D-132 集中真實操作驗收，禁止 Actions、禁止上傳個資、不要重跑 D-124～D-129。
