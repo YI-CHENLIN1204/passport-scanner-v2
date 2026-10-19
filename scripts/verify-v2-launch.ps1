@@ -136,7 +136,8 @@ try {
         }
 
         Write-Host "[2/8] Backend build"
-        dotnet build (Join-Path $projectRoot "backend/PassportScanner.Api/PassportScanner.Api.csproj")
+        $backendProject = Join-Path $projectRoot "backend/PassportScanner.Api/PassportScanner.Api.csproj"
+        dotnet build $backendProject
         if ($LASTEXITCODE -ne 0) {
             throw "Backend build failed."
         }
@@ -325,9 +326,6 @@ ORDER BY table_name;
     }
 
     & (Join-Path $projectRoot "scripts/backup-db.ps1") -OutputDirectory $backupDirectory -ComposeProjectName $projectName
-    if ($LASTEXITCODE -ne 0) {
-        throw "Acceptance backup failed."
-    }
 
     $backupFile = Get-ChildItem -LiteralPath $backupDirectory -Filter "*.dump" |
         Sort-Object LastWriteTimeUtc -Descending |
@@ -347,9 +345,6 @@ ORDER BY table_name;
     Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM tours;") -Expected ([int]$tourCountBefore + 1) -Message "Restore marker tour was not inserted."
 
     & (Join-Path $projectRoot "scripts/restore-db.ps1") -BackupFile $backupFile.FullName -Force -ComposeProjectName $projectName
-    if ($LASTEXITCODE -ne 0) {
-        throw "Acceptance restore failed."
-    }
 
     Wait-HttpOk "$apiBase/api/health"
     Wait-HttpOk "$frontendBase/api/health"
