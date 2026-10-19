@@ -808,3 +808,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-19 — D-132 異體字端到端驗收暫停於 HTTP 400（原因待回應內容）
 - Windows 截圖：原本 D-131 步驟成功啟動隔離 Docker 並進入 [4/8]，新增 D-132 `manual merge with equivalent name glyphs` 測試呼叫 API 時得到 HTTP 400；故 D-132 此案例 **沒有 PASS**，亦未進入後續 retention/restore 段落。本次隔離 stack / volume 已清除，不影響原本資料。
 - 目前錯誤輸出只有 Invoke-RestMethod 400，**不足以判斷是護照或台胞證請求、欄位格式、抑或後端驗證**。不得猜測原因或放寬正式驗證器。更新 `scripts/verify-v2-launch.ps1` 的純合成資料 Invoke-Api 錯誤處理，補印 HTTP method、endpoint、status 與 JSON response details，下一次執行可直接知道根因。此次僅改善診斷，尚待 Windows 結果；禁止 Actions。
+
+
+## 2026-10-19 — D-132 CSV 真正函式合成測試（待 Windows 實跑）
+- 新增 `frontend/scripts/test-v2-export-functional.mjs`，從 `TourDetailPage.vue` 擷取實際 `escapeCsv`、`membersForExport`、`buildExportCsv` 函式並以 TypeScript transpile 執行合成案例，而不重寫 production CSV 邏輯。驗證中文姓名、含逗號欄位、欄位順序與值對齊、不同證件表的篩選、CRLF、Excel UTF-8 BOM 程式碼存在。
+- 將此測試接入前端 `verify:v2`。不讀真實證件、不上傳個資、不變更 production OCR 或 CSV 邏輯、不啟動 Actions。**尚未在 Windows 執行，不能宣稱 CSV 已實際 PASS。** 真實下載的內容與 Excel 開啟仍需 D-132 一次操作驗收。
