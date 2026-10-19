@@ -1154,3 +1154,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-131 Windows first run: secondary-review guard regex typo
 - Windows `verify-v2-launch.ps1` 成功進入 [1/8] `verify:v2`; 前段 OCR synthetic regressions 皆通過，於 `test-passport-secondary-review-candidate.mjs` line 81 的 v6 lower-page regex assertion 中止。實際 service 含 `if (retry.compatibleCandidates.length > 0)`，但該行誤用重複跳脫 `\\(`／`\\.`，是測試本身錯誤，而非 v6 OCR 行為退步。
 - 將該一筆 regex 改成正確的 JavaScript literal；不改 production v5/v6 pipeline、模型、資料庫，也不宣稱後續 build / Docker / 真實驗收已通過。自動腳本在啟動隔離 Docker 前失敗並清理，正常 Docker 資料未受影響。需原 Windows 再集中執行一次完整驗收；GitHub Actions 禁止啟動。
+
+
+## 2026-10-19 — D-131 Windows 整批上線自動驗收完成
+- 使用者回報於原 Windows 主機重新執行 `scripts/verify-v2-launch.ps1` **成功**。這是操作者回報的完成狀態；本對話未收到最終 console log，不能據此另外聲稱逐項輸出細節、完整瀏覽器 UI 或真實照片 OCR 已驗收。
+- D-131 自動驗收視為使用者回報 PASS，正式轉入 D-132 真實操作驗收：三類證件上傳與重試、人工審核/重新編輯、同人多證件/版本、錯人合併保護、可配置 CSV 匯出。不要重跑已過的 D-131，不做 D-124～D-129 OCR 研究，不啟動 GitHub Actions。
