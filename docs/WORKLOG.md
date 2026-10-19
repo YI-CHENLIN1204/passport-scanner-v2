@@ -1225,3 +1225,10 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-132 CSV Windows verify:v2 PASS
 - 使用者提供 Windows PowerShell 成功截圖：既有 OCR regression、Vue TypeScript/Vite build、`test:v2-launch-guards` 與新加入的 `test:v2-export-functional` 全部執行完成，最後明確輸出 `D-132 production CSV synthetic content, filtering, and column order passed.` 並返回提示字元。
 - Vite 的 browser-externalization 與 bundle size 警告不影響本次 build 成功，不表示 CSV 下載介面或真實 Excel 開檔已經驗收。下一步只需以本機 UI 驗證 CSV 實際下載與旅客證件版本，勿重跑這組 regression，不上傳個資，不啟動 GitHub Actions。
+
+
+## 2026-10-19 — D-132 匯出真實 CSV 回饋：英文姓／英文名、日期格式與 Excel 欄寬
+- 使用者提供兩份實際 CSV（僅在當前對話中檢查，不上傳 GitHub），現有日期來源已為 `YYYY-MM-DD`，但 Excel 開啟 CSV 會自行推斷日期顯示和欄寬；CSV 格式本身無法指定欄寬、日期儲存格格式、證件號碼文字格式。
+- 前端 CSV 欄位新增 `nameEnSurname` 英文姓、`nameEnGivenNames` 英文名選項，從既有護照 MRZ 表示的 `SURNAME, GIVEN NAMES` 拆解；無逗號時留白避免猜錯姓。維持原英文全名欄位。生日／護照和台胞證有效期限在輸出前若符合年-月-日格式則月日補零；不改正式存檔資料。
+- 更新 `test-v2-export-functional.mjs` 涵蓋姓名拆解和日期補零。CSV 純文字檔不能解決 Excel 欄寬及 Excel 自行轉型，應另新增正式 xlsx 匯出能力後再進行實際 UI 驗收；目前未宣稱系統已支援 xlsx。用上傳 CSV 另生成對話內 Excel 排版檢視版，並未上傳個資 GitHub。
+- 證號應保留原始英數字串、不得去掉英文字母或轉數字；使用者對英文字母「不一樣」的具體期待待釐清。證件版本測試使用同人另一本有效證件（或純合成測試資料），不得任意改造真實護照號碼。
