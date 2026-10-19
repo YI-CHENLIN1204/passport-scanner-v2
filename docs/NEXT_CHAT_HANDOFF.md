@@ -787,3 +787,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-19 — D-131 最終通過；D-132 啟動
 - 最新使用者 Windows 截圖已證實 `scripts/verify-v2-launch.ps1` 全部完成：`[8/8] Automated V2 launch acceptance passed`，backup restore 成功、restart persistence 階段完成、隔離 Docker stack/volume 成功清理。先前 4/8 failure 和誤記錄 PASS 已被此新證據取代。
 - D-131 結案，轉為 D-132 真實瀏覽器整批驗收：護照/台胞證/身分證掃描與重試、人工審核／再編輯、版本／合併保護、CSV。正式 pipeline `.29`，自動 OCR 基準 14/19 護照、13/13 台胞證；v6 人工候選不算自動正確率。不得啟動 Actions 或提交證件資料。
+
+
+## D-132 目前已提交程式（待本機驗證）
+- Pending passport 主模型姓名空白且 v6 唯一 MRZ 相容 candidate 時，**只在審核表單預填**，沒有自動寫入正式資料，仍須人工確認與明確儲存。
+- 「温／溫」在旅客**人工合併**時視為同等字形，並保留出生日期/性別/身分證號/英文姓名衝突保護；證件原文不更動。自動歸組仍未擴大，不能宣稱已完成全系統姓名標準化。
+- 前後端及 guards 尚待 Windows `npm.cmd run verify:v2` 與 `dotnet build`；沒有啟動 GitHub Actions。
