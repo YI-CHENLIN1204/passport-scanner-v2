@@ -1209,3 +1209,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-132 Windows HTTP 400 原因定位與 UTF-8 修復（待重測）
 - Windows 驗收 [4/8] 護照合成 review 回傳 ValidationProblem，唯一錯誤為 `chineseName` 不符合中文字元格式。合成姓名由 U+6E29 與 U+660E 組成，均是有效漢字；推測 Windows PowerShell 5.1 `Invoke-RestMethod` 以 `Body` 字串發送 JSON 時發生編碼差異。
 - 改為先 `ConvertTo-Json` 再以 `[System.Text.Encoding]::UTF8.GetBytes($json)` 明確發送 bytes，ContentType 設定 `application/json; charset=utf-8`。不改 API 姓名驗證 regex、不改 OCR 或合併規則。需 Windows 同一隔離驗收重測才能確定此修復有效；未經重測不得標 PASS。禁止 Actions。
+
+
+## 2026-10-19 — D-132 異體字跨證件合成驗收最終 PASS
+- 使用者 Windows 截圖顯示 `scripts/verify-v2-launch.ps1` 最終 `[8/8] Automated V2 launch acceptance passed`、`Restore completed successfully`，並成功清除驗收隔離 containers/network/volume。新增 D-132 合成異體字人工合併檢查位於 [4/8]，完整通過才會抵達 [8/8]。先前 JSON UTF-8 的 HTTP 400 已排除。
+- 另一張截圖是在腳本執行結束後直接輸入範例 `$parameters` 造成的互動式 PowerShell NullArray 錯誤，不屬於本次驗收失敗。
+- 範圍只包含合成資料的**明確人工合併**及資料保存，不等於真實跨證件掃描 UI、歷史多版本或 CSV 操作均已通過，也不代表字形等價可觸發自動合併。禁止 GitHub Actions；不記錄個資。
