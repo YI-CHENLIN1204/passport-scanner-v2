@@ -793,3 +793,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - Pending passport 主模型姓名空白且 v6 唯一 MRZ 相容 candidate 時，**只在審核表單預填**，沒有自動寫入正式資料，仍須人工確認與明確儲存。
 - 「温／溫」在旅客**人工合併**時視為同等字形，並保留出生日期/性別/身分證號/英文姓名衝突保護；證件原文不更動。自動歸組仍未擴大，不能宣稱已完成全系統姓名標準化。
 - 前後端及 guards 尚待 Windows `npm.cmd run verify:v2` 與 `dotnet build`；沒有啟動 GitHub Actions。
+
+
+## 2026-10-19 — D-132 實測進度
+- 使用者真實瀏覽器截圖已證實：v6 唯一 MRZ 相容候選在空白待審核護照中預填、操作員儲存後顯示已審核、正式旅客資料可用英文姓名搜尋且列出護照版本數 1。
+- 保持後續待驗收：跨證件合併及异體字處理、同類證件多版本、CSV 欄位順序與內容、三證件批次失敗重試。任何真實姓名、身分證號、護照號、生日或原始圖片均不上傳 GitHub。
