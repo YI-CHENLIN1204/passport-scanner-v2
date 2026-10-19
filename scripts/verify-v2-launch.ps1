@@ -58,7 +58,26 @@ function Invoke-Api {
         $parameters["Body"] = $Body | ConvertTo-Json -Depth 20 -Compress
     }
 
-    return Invoke-RestMethod @parameters
+    try {
+        return Invoke-RestMethod @parameters
+    }
+    catch {
+        # This runner uses synthetic test data only. Keep API status and
+        # validation error details instead of hiding the root cause.
+        $response = $_.Exception.Response
+        $status = if ($null -ne $response) { [int]$response.StatusCode } else { "unknown" }
+        $details = $_.ErrorDetails.Message
+        if ([string]::IsNullOrWhiteSpace($details) -and $null -ne $response) {
+            try {
+                $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                $details = $reader.ReadToEnd()
+            }
+            catch {
+                $details = "(response body unavailable)"
+            }
+        }
+        throw "Synthetic API request failed: $Method $Uri; HTTP $status; details: $details"
+    }
 }
 
 function Invoke-Psql {
