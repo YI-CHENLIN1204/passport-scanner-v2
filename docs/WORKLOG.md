@@ -1177,3 +1177,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 修改 `frontend/src/views/TourDetailPage.vue`：僅當證件是 PENDING PASSPORT、正式主模型審核姓名空白、v6 status 為 suggested 且候選非空，於審核表單預填第二模型候選；其餘情況維持原欄位。僅 UI 表單暫存值，不改掃描 OCR payload、掃描原始結果、已審核資料或自動建立正式旅客。操作員仍須對照照片並明確儲存。
 - 更新 `frontend/scripts/test-passport-secondary-review-candidate.mjs` 靜態 guard，確保只在 PENDING、主模型空白且唯一建議時預填。不放寬 MRZ gate，也不能因此把 PP-OCRv6 覆核建議算入正式 OCR 準確率。
 - 異體字 `温／溫` 的需求列為獨立安全比對鍵設計：證件原文字形與正式主檔保留，姓名比對可使用受限等價鍵，仍須出生日期、性別及不衝突的身分證據。**本次尚未修改後端合併**，不宣稱字形合併已修好。等待原 Windows `verify:ocr` / build 與真實操作。
+
+
+## 2026-10-19 — D-132 補充：人工合併可接受「温／溫」字形等價（待 Windows 驗證）
+- 保留中文姓名、護照原文與資料庫欄位原字形；僅在 **使用者明確操作的人工旅客合併** 檢查中，把 U+6E29「温」與 U+6EAB「溫」轉為相同比較鍵。前端 TravelersPage 和後端 PostgresTravelerStore 雙重檢查一致；出生日期、性別、身分證號、英文姓名等既有衝突保護維持。
+- 尚未修改自動歸組／自動正式旅客合併，避免僅因姓名同音或異體就錯合兩人；後續需配合可辨識唯一同人證據及完整回歸測試另行設計。已補靜態守衛，待 Windows verify:v2 / dotnet build 實測。不要宣稱已自動合併成功。
