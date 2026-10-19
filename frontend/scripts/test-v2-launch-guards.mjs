@@ -33,7 +33,6 @@ assert.match(travelers, /中文姓名不同，請先確認及修正，不能直�
 assert.match(travelerStore, /兩筆旅客的英文姓名不同，請先人工確認並修正，系統不會直接合併/)
 assert.match(travelerStore, /兩筆旅客的中文姓名不同，請先人工確認並修正，系統不會直接合併/)
 
-console.log('V2 launch static guards passed.')
 
 // D-131 local acceptance must stay isolated from the operator's normal stack.
 assert.match(compose, /\$\{FRONTEND_PORT:-5173\}:80/)
@@ -45,3 +44,5 @@ assert.match(acceptance, /15173/)
 assert.match(acceptance, /15080/)
 assert.match(acceptance, /down -v --remove-orphans/)
 assert.doesNotMatch(acceptance, /workflow_dispatch|gh workflow|GitHub Actions/)
+
+console.log('V2 launch static guards passed.')
