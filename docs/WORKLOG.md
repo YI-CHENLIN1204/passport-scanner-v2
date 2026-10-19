@@ -1170,3 +1170,10 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-131 最終 Windows 驗收 8/8 PASS（以最新截圖為準）
 - 使用者提供最終 Windows PowerShell 截圖，明確顯示 `[8/8] Automated V2 launch acceptance passed`、`Restore completed successfully`、`[7/8] Persistence after backend restart`，並顯示獨立驗收 frontend/backend/database containers、network 與 PostgreSQL volume 已清除。此前 [4/8] 失敗及更早誤報 PASS 均為歷史，**本次最新結果是真正通過**。
 - 本次只代表 D-131 自動驗收：synthetic batch/review、build、retention、backup/restore、restart persistence 等；不代表真實影像三證件 OCR、審核 UI、CSV 下載已完成。下一階段 D-132 集中真實操作驗收，禁止 Actions、禁止上傳個資、不要重跑 D-124～D-129。
+
+
+## 2026-10-19 — D-132：第二模型唯一候選改成待審核表單預填（待 Windows 驗證）
+- 真實操作觀察：護照主模型姓名空白，PP-OCRv6 得到唯一且 MRZ 拼音相容的人工候選，使用者希望避免多按一次「人工套用候選」。
+- 修改 `frontend/src/views/TourDetailPage.vue`：僅當證件是 PENDING PASSPORT、正式主模型審核姓名空白、v6 status 為 suggested 且候選非空，於審核表單預填第二模型候選；其餘情況維持原欄位。僅 UI 表單暫存值，不改掃描 OCR payload、掃描原始結果、已審核資料或自動建立正式旅客。操作員仍須對照照片並明確儲存。
+- 更新 `frontend/scripts/test-passport-secondary-review-candidate.mjs` 靜態 guard，確保只在 PENDING、主模型空白且唯一建議時預填。不放寬 MRZ gate，也不能因此把 PP-OCRv6 覆核建議算入正式 OCR 準確率。
+- 異體字 `温／溫` 的需求列為獨立安全比對鍵設計：證件原文字形與正式主檔保留，姓名比對可使用受限等價鍵，仍須出生日期、性別及不衝突的身分證據。**本次尚未修改後端合併**，不宣稱字形合併已修好。等待原 Windows `verify:ocr` / build 與真實操作。
