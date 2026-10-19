@@ -1256,3 +1256,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 已檢查 `TourDetailPage.vue` 審核及 `PostgresScanQueueStore.ReviewItem`：批次正式審核先有原圖保存判斷及後端正式證件格式驗證，但 UI 未強制核對護照號碼。
 - 新增護照號碼高對比欄位、明確原圖核對 checkbox、每次換證／輸入更動清除核對、未核對禁止儲存；加入 V2 regression static guards。沒有改 OCR、MRZ 安全門檻或既有 DB 欄位。
 - 尚待原 Windows `npm.cmd run verify:v2` 與實際 UI 審核測試。後續再針對真正可用的 MRZ/checkdigit evidence 決定是否強化 API 記錄；避免盲目新增模型或無效診斷。
+
+
+## 2026-10-20 — V2 功能凍結：撤回 D-133 多餘的護照號碼勾選
+- 使用者確認 V2 核心流程與效能已接近完成，要求停止擴充低效益功能，降低操作複雜度。據此撤回 D-133 的「每次護照審核／修改必須額外勾選確認」及其 reset/watcher/UI 提示，保留護照號碼醒目顯示及 5–20 碼英數格式檢查。
+- 既有人工審核按儲存仍須明確操作；沒有改 OCR、MRZ、後端正式儲存、合併、版本、照片 retention、Excel 或資料庫。回歸守衛改為確認強制勾選不存在。
+- 正式進入 **V2 功能凍結與上線收尾**：只修阻斷性錯誤（資料遺失、錯人合併、錯誤證號／匯出、重要效能問題）；不為小改善繼續開新功能／測試介面／模型實驗。這輪修改已提交，但 Windows verify:v2 / Docker 仍待集中驗證，不能宣稱已在原機 PASS。禁止 GitHub Actions。
