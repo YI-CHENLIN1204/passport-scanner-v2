@@ -9,12 +9,12 @@ const backup = readFileSync('../scripts/backup-db.ps1', 'utf8')
 const restore = readFileSync('../scripts/restore-db.ps1', 'utf8')
 const acceptance = readFileSync('../scripts/verify-v2-launch.ps1', 'utf8')
 
-// Launch-critical CSV behavior stays configurable and local to reviewed formal data.
+// Launch-critical XLSX behavior stays configurable and local to reviewed formal data.
 assert.match(tour, /type ExportKind =[\s\S]*'TOTAL'[\s\S]*'PASSPORT'[\s\S]*'TAIWAN_COMPATRIOT_PERMIT'[\s\S]*'TAIWAN_NATIONAL_ID'/)
 assert.match(tour, /const exportColumns = ref<Record<ExportKind, string\[\]>>/)
-assert.match(tour, /function buildExportCsv\(kind: ExportKind\)/)
-assert.match(tour, /function downloadCsvFile/)
-assert.match(tour, /\\ufeff/)
+assert.match(tour, /function buildExportSheet\(kind: ExportKind\)/)
+assert.match(tour, /function exportConfiguredExcel/)
+assert.match(tour, /createExcelWorkbook/)
 assert.match(tour, /CSV 只會使用已審核並寫入正式資料的內容/)
 assert.match(tour, /function dropExportField\(/)
 assert.match(tour, /persistExportColumns\(kind\)/)
