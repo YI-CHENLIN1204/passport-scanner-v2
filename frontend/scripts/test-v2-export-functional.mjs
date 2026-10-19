@@ -14,6 +14,7 @@ function extract(start, end) {
 }
 
 const code = [
+  extract('function passportEnglishNameParts(', 'function exportFieldValue('),
   extract('function escapeCsv(', 'function membersForExport('),
   extract('function membersForExport(', 'function buildExportCsv('),
   extract('function buildExportCsv(', 'function safeFilename('),
@@ -74,10 +75,20 @@ const exportFieldValue = (member, key) => ({
 
 const load = new Function(
   'detail', 'exportColumns', 'exportFieldsFor', 'exportFieldValue',
-  `${js}; return { escapeCsv, membersForExport, buildExportCsv }`,
+  `${js}; return { escapeCsv, membersForExport, buildExportCsv, passportEnglishNameParts, isoExportDate }`,
 )
-const { escapeCsv, membersForExport, buildExportCsv } =
+const { escapeCsv, membersForExport, buildExportCsv, passportEnglishNameParts, isoExportDate } =
   load(detail, exportColumns, exportFieldsFor, exportFieldValue)
+
+
+assert.deepEqual(passportEnglishNameParts('PAN, PEI JUN'), { surname: 'PAN', givenNames: 'PEI JUN' })
+assert.deepEqual(passportEnglishNameParts('LEE, AN'), { surname: 'LEE', givenNames: 'AN' })
+assert.deepEqual(passportEnglishNameParts('UNSTRUCTURED NAME'), { surname: '', givenNames: '' })
+assert.equal(isoExportDate('2035-4-7'), '2035-04-07')
+assert.equal(isoExportDate('2035-04-07'), '2035-04-07')
+assert.ok(source.includes("case 'nameEnSurname':"))
+assert.ok(source.includes("case 'nameEnGivenNames':"))
+assert.ok(source.includes("return isoExportDate(passport?.expiryDate)"))
 
 assert.equal(escapeCsv('a"b,c'), '"a""b,c"')
 assert.equal(escapeCsv('溫明'), '"溫明"')
