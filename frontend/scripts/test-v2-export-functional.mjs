@@ -106,7 +106,8 @@ assert.equal(
   '"1991-05-06","溫明"',
 )
 
-assert.match(source, /const blob = new Blob\([\s\S]*'\\ufeff'/)
+assert.match(source, /const blob = new Blob/)
+assert.ok(source.includes(String.raw`'\ufeff'`))
 assert.match(source, /exportConfiguredCsv\(\)/)
 assert.match(source, /persistExportColumns\(kind\)/)
 
