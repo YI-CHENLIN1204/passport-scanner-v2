@@ -1204,3 +1204,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-132 診斷腳本 PowerShell StrictMode 二次阻擋已修正
 - 原 Windows 回報 D-132 [4/8] API 失敗後，`Invoke-Api` catch 區塊因 `ErrorDetails` 為 null 而直接讀取 `.Message`，產生 `PropertyNotFoundException`，遮蔽原始 HTTP 400；並非證明正式 OCR 或旅客合併邏輯錯誤。
 - 已先把錯誤紀錄保存為 `$caught`，確認 `ErrorDetails` 非 null 才取 `.Message`，否則嘗試讀 response stream，最後以 exception 訊息 fallback。下一次可顯示 endpoint、HTTP code 與後端回應，確認真實欄位問題。本次未碰 backend 業務驗證；D-132 測試仍待 Windows 通過。禁止 Actions。
+
+
+## 2026-10-19 — D-132 Windows HTTP 400 原因定位與 UTF-8 修復（待重測）
+- Windows 驗收 [4/8] 護照合成 review 回傳 ValidationProblem，唯一錯誤為 `chineseName` 不符合中文字元格式。合成姓名由 U+6E29 與 U+660E 組成，均是有效漢字；推測 Windows PowerShell 5.1 `Invoke-RestMethod` 以 `Body` 字串發送 JSON 時發生編碼差異。
+- 改為先 `ConvertTo-Json` 再以 `[System.Text.Encoding]::UTF8.GetBytes($json)` 明確發送 bytes，ContentType 設定 `application/json; charset=utf-8`。不改 API 姓名驗證 regex、不改 OCR 或合併規則。需 Windows 同一隔離驗收重測才能確定此修復有效；未經重測不得標 PASS。禁止 Actions。
