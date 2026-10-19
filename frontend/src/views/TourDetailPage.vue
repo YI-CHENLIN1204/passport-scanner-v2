@@ -1231,20 +1231,24 @@ async function exportConfiguredExcel() {
   exporting.value = true
   error.value = ''
   try {
-    const bytes = createExcelWorkbook(kinds.map(buildExportSheet))
-    const blob = new Blob([Uint8Array.from(bytes)], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
-    const url = URL.createObjectURL(blob)
-    try {
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${safeFilename(detail.value.tour.tourName)}.xlsx`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-    } finally {
-      URL.revokeObjectURL(url)
+    const tourName = safeFilename(detail.value.tour.tourName)
+    for (const kind of kinds) {
+      const bytes = createExcelWorkbook([buildExportSheet(kind)])
+      const blob = new Blob([Uint8Array.from(bytes)], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      try {
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${tourName}-${safeFilename(exportKindLabel(kind))}.xlsx`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+      } finally {
+        // Allow the browser to start the file download before revoking its URL.
+        window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+      }
     }
     exportOpen.value = false
   } catch (err) {
@@ -2630,7 +2634,7 @@ onBeforeUnmount(() => {
                 ? '匯出中…'
                 : '匯出 ' +
                   exportSelectedKinds.length +
-                  ' 個工作表（Excel）'
+                  ' 個 Excel 檔案'
             }}
           </button>
         </footer>
