@@ -47,7 +47,9 @@
     "test:passport-joined-han-name": "node scripts/test-passport-joined-han-name.mjs",
     "test:passport-joined-han-functional": "node scripts/test-passport-joined-han-functional.mjs",
     "test:alternative-chinese-recognition": "node scripts/test-alternative-chinese-recognition.mjs",
-    "test:training-quality-audit": "node scripts/test-training-quality-audit.mjs"
+    "test:training-quality-audit": "node scripts/test-training-quality-audit.mjs",
+    "test:v2-launch-guards": "node scripts/test-v2-launch-guards.mjs",
+    "verify:v2": "npm run verify:ocr && npm run test:v2-launch-guards"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
