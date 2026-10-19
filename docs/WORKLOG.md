@@ -1149,3 +1149,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 新驗收環境與日常 5173/5080、正常 PostgreSQL volume 隔離：Docker project `passport-scanner-v2-acceptance`、ports 15173/15080、獨立 volume；完成後預設刪除。腳本會跑 `npm.cmd run verify:v2`（含既有 `verify:ocr`）、`dotnet build`、Docker build/health/schema、合成 batch/review、正式資料建立、已審核不可刪除、retention、Training copy、backup/restore、restart persistence。
 - `docker-compose.yml` host port 改成環境變數可覆寫但預設仍 5173/5080；`backup-db.ps1` / `restore-db.ps1` 新增可選 Compose project，正常手動備份／還原指令不變。新增靜態 guard 防止驗收腳本誤用正常 ports/project。
 - `docs/V2_LAUNCH_ACCEPTANCE.md` 明確拆成「自動驗收」與「必須用私人真實影像／瀏覽器完成的一次驗收」。本環境無法替代使用者 Windows + Docker 執行，**尚未宣稱 PASS**；下一個唯一集中命令為 repository root 的 `.\scripts\verify-v2-launch.ps1`。禁止 GitHub Actions。
+
+
+## 2026-10-19 — D-131 Windows first run: secondary-review guard regex typo
+- Windows `verify-v2-launch.ps1` 成功進入 [1/8] `verify:v2`; 前段 OCR synthetic regressions 皆通過，於 `test-passport-secondary-review-candidate.mjs` line 81 的 v6 lower-page regex assertion 中止。實際 service 含 `if (retry.compatibleCandidates.length > 0)`，但該行誤用重複跳脫 `\\(`／`\\.`，是測試本身錯誤，而非 v6 OCR 行為退步。
+- 將該一筆 regex 改成正確的 JavaScript literal；不改 production v5/v6 pipeline、模型、資料庫，也不宣稱後續 build / Docker / 真實驗收已通過。自動腳本在啟動隔離 Docker 前失敗並清理，正常 Docker 資料未受影響。需原 Windows 再集中執行一次完整驗收；GitHub Actions 禁止啟動。
