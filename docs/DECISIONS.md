@@ -1423,3 +1423,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 新增瀏覽器端 `frontend/src/services/excelWorkbook.ts`（不使用雲端服務，不新增 NPM 套件），輸出 Open XML XLSX；替換 `TourDetailPage.vue` CSV 下載，前端顯示 Excel。舊 CSV 合成測試改為生成 XLSX ZIP 並檢查多表、內容、欄寬與文字格式，且同步更新 launch guards。
 - D-132 原有英文姓／英文名欄位保留，可個別勾選；姓名無 MRZ 逗號格式時不臆測姓氏。日期欄按 `YYYY-MM-DD` 補零並輸出文字，避免 Excel 自動改格式。
 - **尚未 Windows 實測／Excel 實際開檔，不能宣稱此修改 PASS。** 不啟動 GitHub Actions，也不把使用者私人 CSV 或證件上傳 repository。
+
+
+## 2026-10-20 — D-133：護照號碼列為必須人工核對的高風險欄位
+- 檢查現行正式流程：前端審核原本只確認護照號碼非空，後端正式旅客寫入已檢查證號字元格式；一般批次的 MRZ 檢查碼證據不等同人工確認，VIZ 交叉辨識也不足以保證每張正確。
+- D-133 第一批在 `TourDetailPage.vue` 把護照號碼加強顯示，增加對原圖逐字核對的明確 checkbox；每次開啟／切換證件，以及改動證號後都重設。未勾選時前端不能儲存審核或修改護照證號。前端同步檢查 5–20 碼英數格式，對齊後端現有驗證。沒有改 OCR 選取、沒有新增 fallback、沒有修改現有資料。
+- 此為**前端操作安全門檻**，尚非後端獨立確認稽核欄位；不能聲稱 API 直接呼叫也已強制此勾選，也不能宣稱 OCR 自動準確率增加。正式回歸與 Windows UI 待驗證，禁止 GitHub Actions。
