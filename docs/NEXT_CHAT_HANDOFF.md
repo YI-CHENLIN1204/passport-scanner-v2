@@ -777,3 +777,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-19 — D-131 結案／D-132 真實流程驗收
 - 使用者確認 Windows `scripts/verify-v2-launch.ps1` 已成功。沒有收到終端機成功 log 的逐行內容，以使用者回報 PASS 記錄，不延伸成真實 UI/OCR 都已通過。
 - 下一階段 D-132：一次完整旅行社操作流程驗收（用本機私人測試資料，涵蓋護照/台胞證/身分證批次上傳、失敗重試、人工審核和重新編輯、版本及手動合併、CSV 欄位／排序／中文），依實際 blocker 做修正。保留 PP-OCRv5 主模型 + PP-OCRv6 lower-page review-only，正式基準 14/19、13/13 不變。禁止 Actions。
+
+
+## 2026-10-19 — D-131 更正：真實截圖顯示 [4/8] FAILED
+- 前次根據使用者「成功了」而記錄的 D-131 PASS／D-132 啟動已被最新完整輸出推翻。原 Windows 已完成 frontend/build/Docker 相關階段，但在 [4/8] 遇到 `Review queue should be empty after both reviews (Actual 1)`，整批驗收未完成，尚不可開始 D-132。
+- 原因：`ListReviewQueue` 回傳全部 draft 群組，包括已審核證件，設計目的包含重新編輯。測試錯把 queue 當 pending-only；已改成 1 個群組且 2 份 REVIEWED、0 份 PENDING。此為驗收斷言修正，不更改產品功能；待 Windows 再完整執行，勿宣稱 PASS。禁止 GitHub Actions。
