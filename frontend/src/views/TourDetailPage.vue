@@ -1125,7 +1125,7 @@ function passportEnglishNameParts(value: string) {
 
 function isoExportDate(value: string | null | undefined) {
   if (!value) return ''
-  const match = /^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/.exec(value)
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value)
   if (!match) return value
   return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
 }
