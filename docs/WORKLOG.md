@@ -1215,3 +1215,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 使用者 Windows 截圖顯示 `scripts/verify-v2-launch.ps1` 最終 `[8/8] Automated V2 launch acceptance passed`、`Restore completed successfully`，並成功清除驗收隔離 containers/network/volume。新增 D-132 合成異體字人工合併檢查位於 [4/8]，完整通過才會抵達 [8/8]。先前 JSON UTF-8 的 HTTP 400 已排除。
 - 另一張截圖是在腳本執行結束後直接輸入範例 `$parameters` 造成的互動式 PowerShell NullArray 錯誤，不屬於本次驗收失敗。
 - 範圍只包含合成資料的**明確人工合併**及資料保存，不等於真實跨證件掃描 UI、歷史多版本或 CSV 操作均已通過，也不代表字形等價可觸發自動合併。禁止 GitHub Actions；不記錄個資。
+
+
+## 2026-10-19 — D-132 CSV 真正函式合成測試（待 Windows 實跑）
+- 新增 `frontend/scripts/test-v2-export-functional.mjs`，從 `TourDetailPage.vue` 擷取實際 `escapeCsv`、`membersForExport`、`buildExportCsv` 函式並以 TypeScript transpile 執行合成案例，而不重寫 production CSV 邏輯。驗證中文姓名、含逗號欄位、欄位順序與值對齊、不同證件表的篩選、CRLF、Excel UTF-8 BOM 程式碼存在。
+- 將此測試接入前端 `verify:v2`。不讀真實證件、不上傳個資、不變更 production OCR 或 CSV 邏輯、不啟動 Actions。**尚未在 Windows 執行，不能宣稱 CSV 已實際 PASS。** 真實下載的內容與 Excel 開啟仍需 D-132 一次操作驗收。
