@@ -772,3 +772,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
   目前尚未在使用者 Windows 主機執行，因此不要寫成已 PASS；若失敗，保留完整 console output 修正該 blocker，不要轉回 OCR 規則研究。
 - 自動 PASS 後只剩一次真實瀏覽器驗收：三類證件批次／單張失敗重試、照片 zoom/pan/rotate、審核後再編輯、同人多版本、人工 merge 衝突阻擋、CSV 欄位選擇／排序／下載內容。**不要重跑 D-124～D-129 固定 19 張研究。**
 - 正式 OCR 基準仍護照 14/19、台胞證 13/13；v6 人工候選不計入全自動準確率。GitHub Actions 仍禁止啟動。
+
+
+## 2026-10-19 — D-131 結案／D-132 真實流程驗收
+- 使用者確認 Windows `scripts/verify-v2-launch.ps1` 已成功。沒有收到終端機成功 log 的逐行內容，以使用者回報 PASS 記錄，不延伸成真實 UI/OCR 都已通過。
+- 下一階段 D-132：一次完整旅行社操作流程驗收（用本機私人測試資料，涵蓋護照/台胞證/身分證批次上傳、失敗重試、人工審核和重新編輯、版本及手動合併、CSV 欄位／排序／中文），依實際 blocker 做修正。保留 PP-OCRv5 主模型 + PP-OCRv6 lower-page review-only，正式基準 14/19、13/13 不變。禁止 Actions。
