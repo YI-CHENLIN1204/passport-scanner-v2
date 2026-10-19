@@ -832,3 +832,9 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - 新增瀏覽器端 `frontend/src/services/excelWorkbook.ts`（不使用雲端服務，不新增 NPM 套件），輸出 Open XML XLSX；替換 `TourDetailPage.vue` CSV 下載，前端顯示 Excel。舊 CSV 合成測試改為生成 XLSX ZIP 並檢查多表、內容、欄寬與文字格式，且同步更新 launch guards。
 - D-132 原有英文姓／英文名欄位保留，可個別勾選；姓名無 MRZ 逗號格式時不臆測姓氏。日期欄按 `YYYY-MM-DD` 補零並輸出文字，避免 Excel 自動改格式。
 - **尚未 Windows 實測／Excel 實際開檔，不能宣稱此修改 PASS。** 不啟動 GitHub Actions，也不把使用者私人 CSV 或證件上傳 repository。
+
+
+## 2026-10-19 — D-132 Excel 匯出改為每種類一個獨立檔案（待 Windows 驗證）
+- 使用者已實測 Excel 格式成功，但要求總表、護照、台胞證、身分證應分別下載 `.xlsx`，而非置於一個檔案中的多個工作表。
+- `TourDetailPage.vue` 改為依勾選類型逐一產生獨立 XLSX，檔名為 `團別名稱-表別.xlsx`，單一檔案僅有自己的工作表；保留既有欄位勾選、拖曳排序、欄寬、置中、文字型證號與日期補零。
+- 更新 `test-v2-export-functional.mjs` 防止回到單一多工作表檔。瀏覽器可能詢問是否允許同一網站下載多個檔案；如被封鎖需使用者允許。未啟動 GitHub Actions，尚待 Windows `verify:v2` 與實際下載確認。
