@@ -15,7 +15,7 @@ assert.match(tour, /const exportColumns = ref<Record<ExportKind, string\[\]>>/)
 assert.match(tour, /function buildExportSheet\(kind: ExportKind\)/)
 assert.match(tour, /function exportConfiguredExcel/)
 assert.match(tour, /createExcelWorkbook/)
-assert.match(tour, /CSV 只會使用已審核並寫入正式資料的內容/)
+assert.match(tour, /Excel 只會使用已審核並寫入正式資料的內容/)
 assert.match(tour, /function dropExportField\(/)
 assert.match(tour, /persistExportColumns\(kind\)/)
 
