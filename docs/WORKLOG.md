@@ -1188,3 +1188,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 使用者截圖顯示 PENDING 護照的 v6 唯一 MRZ 相容中文姓名候選已預填；人工確認並儲存後，同一筆在審核視窗顯示 REVIEWED，中文姓名與英文姓名仍保留，旅客資料頁以英文姓名搜尋可查到正式旅客，顯示一份護照版本。
 - 這證實 UI 候選預填→人工審核→正式主檔建立及查詢成功；不代表 v6 自動選取率改善，也不代表跨證件合併、第二個同類證件版本、CSV 匯出或照片到期行為已由真實資料驗收。截圖含真實個資，不存入 repository，不記錄姓名／證號／生日原值。
 - 下一階段繼續集中驗證跨證件合併、歷史版本、CSV，禁止 GitHub Actions。
+
+
+## 2026-10-19 — D-132 跨證件異體字人工合併：新增獨立合成端到端驗收
+- 查閱最新 main 後確認：D-131 已對護照 + 台胞證相同姓名的合成審核及單一 traveler 建立通過，但未涵蓋 「温／溫」 兩種字形。D-132 的人工合併前後端比較鍵已提交，尚缺 runtime 證據。
+- 在 `scripts/verify-v2-launch.ps1` 的隔離 [4/8] 測試內新增兩筆合成正式 review：護照 U+6E29 與台胞證 U+6EAB、相同出生日期及性別；驗證不會因異體字直接自動合併、需明確呼叫既有人工 merge，merge 後目標 traveler 保留兩份 document versions，原文各自保留兩種字形，來源 traveler 不再獨立存在。增加 `test-v2-launch-guards.mjs` 防止驗收被移除。
+- 本輪**沒有修改自動合併規則**，也沒有跑 GitHub Actions。新增案例尚待原 Windows isolated acceptance 執行，不能宣稱 PASS；測試只用合成資料，不上傳護照或私人資訊。
