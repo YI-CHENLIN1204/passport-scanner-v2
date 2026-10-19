@@ -49,7 +49,8 @@
     "test:alternative-chinese-recognition": "node scripts/test-alternative-chinese-recognition.mjs",
     "test:training-quality-audit": "node scripts/test-training-quality-audit.mjs",
     "test:v2-launch-guards": "node scripts/test-v2-launch-guards.mjs",
-    "verify:v2": "npm run verify:ocr && npm run test:v2-launch-guards"
+    "verify:v2": "npm run verify:ocr && npm run test:v2-launch-guards && npm run test:v2-export-functional",
+    "test:v2-export-functional": "node scripts/test-v2-export-functional.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
