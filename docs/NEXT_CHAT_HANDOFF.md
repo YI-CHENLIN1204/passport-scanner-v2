@@ -782,3 +782,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-19 — D-131 更正：真實截圖顯示 [4/8] FAILED
 - 前次根據使用者「成功了」而記錄的 D-131 PASS／D-132 啟動已被最新完整輸出推翻。原 Windows 已完成 frontend/build/Docker 相關階段，但在 [4/8] 遇到 `Review queue should be empty after both reviews (Actual 1)`，整批驗收未完成，尚不可開始 D-132。
 - 原因：`ListReviewQueue` 回傳全部 draft 群組，包括已審核證件，設計目的包含重新編輯。測試錯把 queue 當 pending-only；已改成 1 個群組且 2 份 REVIEWED、0 份 PENDING。此為驗收斷言修正，不更改產品功能；待 Windows 再完整執行，勿宣稱 PASS。禁止 GitHub Actions。
+
+
+## 2026-10-19 — D-131 最終通過；D-132 啟動
+- 最新使用者 Windows 截圖已證實 `scripts/verify-v2-launch.ps1` 全部完成：`[8/8] Automated V2 launch acceptance passed`，backup restore 成功、restart persistence 階段完成、隔離 Docker stack/volume 成功清理。先前 4/8 failure 和誤記錄 PASS 已被此新證據取代。
+- D-131 結案，轉為 D-132 真實瀏覽器整批驗收：護照/台胞證/身分證掃描與重試、人工審核／再編輯、版本／合併保護、CSV。正式 pipeline `.29`，自動 OCR 基準 14/19 護照、13/13 台胞證；v6 人工候選不算自動正確率。不得啟動 Actions 或提交證件資料。
