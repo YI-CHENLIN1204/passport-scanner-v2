@@ -155,7 +155,7 @@ try {
     Wait-HttpOk "$frontendBase/api/health"
 
     $storeStatus = Invoke-Api -Method GET -Uri "$apiBase/api/document-store/status"
-    Assert-Equal $storeStatus.persistence "postgresql" "Persistence must be PostgreSQL."
+    Assert-Equal -Actual $storeStatus.persistence -Expected "postgresql" -Message "Persistence must be PostgreSQL."
 
     $requiredTables = @(
         "document_versions",
@@ -178,12 +178,12 @@ ORDER BY table_name;
 "@
 
     foreach ($table in $requiredTables) {
-        Assert-True ($tableRows -split "\r?\n" -contains $table) "Missing required table: $table"
+        Assert-True -Condition (($tableRows -split "\r?\n") -contains $table) -Message "Missing required table: $table"
     }
 
-    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM pg_constraint WHERE conname='fk_scan_items_saved_document_version';") "1" "Saved-document FK missing."
-    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='ux_document_versions_one_current_per_type' AND indexdef ILIKE '%WHERE%is_current%';") "1" "Current-document uniqueness index missing."
-    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM (SELECT traveler_id, document_type FROM document_versions WHERE is_current=TRUE GROUP BY traveler_id, document_type HAVING COUNT(*) > 1) AS duplicated;") "0" "Duplicate current document groups exist."
+    Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM pg_constraint WHERE conname='fk_scan_items_saved_document_version';") -Expected "1" -Message "Saved-document FK missing."
+    Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='ux_document_versions_one_current_per_type' AND indexdef ILIKE '%WHERE%is_current%';") -Expected "1" -Message "Current-document uniqueness index missing."
+    Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM (SELECT traveler_id, document_type FROM document_versions WHERE is_current=TRUE GROUP BY traveler_id, document_type HAVING COUNT(*) > 1) AS duplicated;") -Expected "0" -Message "Duplicate current document groups exist."
 
     Write-Host "[4/8] Synthetic batch -> review -> formal traveler/document flow"
     $tour = Invoke-Api -Method POST -Uri "$apiBase/api/tours" -Body @{
@@ -274,22 +274,22 @@ ORDER BY table_name;
     }
 
     $detail = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)"
-    Assert-Equal @($detail.members).Count 1 "The two reviewed documents should resolve to one traveler."
-    Assert-Equal @($detail.members[0].documents).Count 2 "The tour member should keep both document versions/types."
+    Assert-Equal -Actual (@($detail.members).Count) -Expected 1 -Message "The two reviewed documents should resolve to one traveler."
+    Assert-Equal -Actual (@($detail.members[0].documents).Count) -Expected 2 -Message "The tour member should keep both document versions/types."
 
     $docTypes = @($detail.members[0].documents | ForEach-Object { $_.documentType })
-    Assert-True ($docTypes -contains "PASSPORT") "Reviewed passport missing from formal tour data."
-    Assert-True ($docTypes -contains "TAIWAN_COMPATRIOT_PERMIT") "Reviewed permit missing from formal tour data."
+    Assert-True -Condition ($docTypes -contains "PASSPORT") -Message "Reviewed passport missing from formal tour data."
+    Assert-True -Condition ($docTypes -contains "TAIWAN_COMPATRIOT_PERMIT") -Message "Reviewed permit missing from formal tour data."
 
     $reviewQueue = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)/review-queue"
-    Assert-Equal @($reviewQueue).Count 0 "Review queue should be empty after both reviews."
+    Assert-Equal -Actual (@($reviewQueue).Count) -Expected 0 -Message "Review queue should be empty after both reviews."
 
     $deleteStatus = Get-StatusCode -Method DELETE -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)"
-    Assert-Equal $deleteStatus "400" "Reviewed scan must not be directly deletable."
+    Assert-Equal -Actual $deleteStatus -Expected "400" -Message "Reviewed scan must not be directly deletable."
 
     Write-Host "[5/8] Production photo retention preserves explicitly selected training copy"
     $trainingSampleId = Invoke-Psql "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id='$($permitItem.scanItemId)';"
-    Assert-True (-not [string]::IsNullOrWhiteSpace($trainingSampleId)) "Training sample was not created."
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($trainingSampleId)) -Message "Training sample was not created."
 
     $productionBefore = Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-production-before.png"
     $trainingAfter = Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-training-after.png"
@@ -313,11 +313,11 @@ ORDER BY table_name;
         Start-Sleep -Seconds 2
     }
 
-    Assert-Equal $imageBytes "0" "Expired production image bytes were not purged."
-    Assert-Equal (Get-StatusCode -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/image") "404" "Purged production image endpoint should return 404."
+    Assert-Equal -Actual $imageBytes -Expected "0" -Message "Expired production image bytes were not purged."
+    Assert-Equal -Actual (Get-StatusCode -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/image") -Expected "404" -Message "Purged production image endpoint should return 404."
 
     Invoke-WebRequest -Uri "$apiBase/api/ocr-training/samples/$trainingSampleId/image" -OutFile $trainingAfter -UseBasicParsing
-    Assert-True ((Get-Item $trainingAfter).Length -gt 0) "Training image copy should survive production retention purge."
+    Assert-True -Condition ((Get-Item $trainingAfter).Length -gt 0) -Message "Training image copy should survive production retention purge."
 
     Write-Host "[6/8] Backup archive + SHA256 + isolated restore"
     if (Test-Path -LiteralPath $backupDirectory) {
@@ -333,8 +333,8 @@ ORDER BY table_name;
         Sort-Object LastWriteTimeUtc -Descending |
         Select-Object -First 1
 
-    Assert-True ($null -ne $backupFile) "Backup dump was not created."
-    Assert-True (Test-Path -LiteralPath "$($backupFile.FullName).sha256.txt") "Backup SHA256 sidecar missing."
+    Assert-True -Condition ($null -ne $backupFile) -Message "Backup dump was not created."
+    Assert-True -Condition (Test-Path -LiteralPath "$($backupFile.FullName).sha256.txt") -Message "Backup SHA256 sidecar missing."
 
     $tourCountBefore = Invoke-Psql "SELECT COUNT(*) FROM tours;"
     $extraTour = Invoke-Api -Method POST -Uri "$apiBase/api/tours" -Body @{
@@ -344,7 +344,7 @@ ORDER BY table_name;
         requiredDocumentTypes = @("PASSPORT")
     }
 
-    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM tours;") ([int]$tourCountBefore + 1) "Restore marker tour was not inserted."
+    Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM tours;") -Expected ([int]$tourCountBefore + 1) -Message "Restore marker tour was not inserted."
 
     & (Join-Path $projectRoot "scripts/restore-db.ps1") -BackupFile $backupFile.FullName -Force -ComposeProjectName $projectName
     if ($LASTEXITCODE -ne 0) {
@@ -353,8 +353,8 @@ ORDER BY table_name;
 
     Wait-HttpOk "$apiBase/api/health"
     Wait-HttpOk "$frontendBase/api/health"
-    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM tours;") $tourCountBefore "Database restore did not return to the backup snapshot."
-    Assert-Equal (Get-StatusCode -Uri "$apiBase/api/tours/$($extraTour.tourId)") "404" "Post-backup marker survived restore unexpectedly."
+    Assert-Equal -Actual (Invoke-Psql "SELECT COUNT(*) FROM tours;") -Expected $tourCountBefore -Message "Database restore did not return to the backup snapshot."
+    Assert-Equal -Actual (Get-StatusCode -Uri "$apiBase/api/tours/$($extraTour.tourId)") -Expected "404" -Message "Post-backup marker survived restore unexpectedly."
 
     Write-Host "[7/8] Persistence after backend restart"
     & docker @composeArgs restart backend | Out-Null
@@ -364,8 +364,8 @@ ORDER BY table_name;
     Wait-HttpOk "$apiBase/api/health"
 
     $detailAfterRestart = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)"
-    Assert-Equal @($detailAfterRestart.members).Count 1 "Tour member data did not persist across backend restart."
-    Assert-Equal @($detailAfterRestart.members[0].documents).Count 2 "Document data did not persist across backend restart."
+    Assert-Equal -Actual (@($detailAfterRestart.members).Count) -Expected 1 -Message "Tour member data did not persist across backend restart."
+    Assert-Equal -Actual (@($detailAfterRestart.members[0].documents).Count) -Expected 2 -Message "Document data did not persist across backend restart."
 
     Write-Host "[8/8] Automated V2 launch acceptance passed"
     Write-Host ""
