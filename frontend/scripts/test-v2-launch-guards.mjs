@@ -16,7 +16,7 @@ assert.match(tour, /function buildExportCsv\(kind: ExportKind\)/)
 assert.match(tour, /function downloadCsvFile/)
 assert.match(tour, /\\ufeff/)
 assert.match(tour, /CSV 只會使用已審核並寫入正式資料的內容/)
-assert.match(tour, /function onDropExportField/)
+assert.match(tour, /function dropExportField\(/)
 assert.match(tour, /persistExportColumns\(kind\)/)
 
 // A pending record without its retained production image must not be reviewed.
