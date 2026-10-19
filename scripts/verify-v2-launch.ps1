@@ -201,14 +201,15 @@ ORDER BY table_name;
         documentType = "TAIWAN_COMPATRIOT_PERMIT"
     }
 
+    $syntheticName = -join ([char]0x738B, [char]0x5C0F, [char]0x660E)
     $imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
     $passportItem = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($passportBatch.scanBatchId)/items" -Body @{
         originalFileName = "acceptance-passport.png"
         imageContentType = "image/png"
         imageBase64 = $imageBase64
-        nameZh = "王小明"
-        nameZhOnDocument = "王小明"
+        nameZh = $syntheticName
+        nameZhOnDocument = $syntheticName
         nameEn = "WANG HSIAO MING"
         birthDate = "1990-01-15"
         gender = "M"
@@ -224,8 +225,8 @@ ORDER BY table_name;
         originalFileName = "acceptance-permit.png"
         imageContentType = "image/png"
         imageBase64 = $imageBase64
-        nameZh = "王小明"
-        nameZhOnDocument = "王小明"
+        nameZh = $syntheticName
+        nameZhOnDocument = $syntheticName
         nameEn = ""
         birthDate = "1990-01-15"
         gender = "M"
@@ -234,7 +235,7 @@ ORDER BY table_name;
         documentNumber = "12345678"
         issuingCountry = $null
         expiryDate = "2035-12-31"
-        ocrPayloadJson = "{\"totalMs\":250,\"orientationAttempts\":1,\"fallbackUsed\":false}"
+        ocrPayloadJson = '{"totalMs":250,"orientationAttempts":1,"fallbackUsed":false}'
     }
 
     $null = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($passportBatch.scanBatchId)/complete" -Body @{
@@ -247,8 +248,8 @@ ORDER BY table_name;
     }
 
     $null = Invoke-Api -Method PUT -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/review" -Body @{
-        nameZh = "王小明"
-        nameZhOnDocument = "王小明"
+        nameZh = $syntheticName
+        nameZhOnDocument = $syntheticName
         nameEn = ""
         birthDate = "1990-01-15"
         gender = "M"
@@ -261,8 +262,8 @@ ORDER BY table_name;
     }
 
     $null = Invoke-Api -Method PUT -Uri "$apiBase/api/scan-items/$($passportItem.scanItemId)/review" -Body @{
-        nameZh = "王小明"
-        nameZhOnDocument = "王小明"
+        nameZh = $syntheticName
+        nameZhOnDocument = $syntheticName
         nameEn = "WANG HSIAO MING"
         birthDate = "1990-01-15"
         gender = "M"
