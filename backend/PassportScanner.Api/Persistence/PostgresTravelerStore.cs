@@ -997,7 +997,9 @@ public sealed class PostgresTravelerStore(
 
         if (!string.IsNullOrWhiteSpace(target.NameZh) &&
             !string.IsNullOrWhiteSpace(source.NameZh) &&
-            !string.Equals(target.NameZh, source.NameZh,
+            !string.Equals(
+                NormalizeNameVariantForComparison(target.NameZh),
+                NormalizeNameVariantForComparison(source.NameZh),
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
@@ -2004,6 +2006,11 @@ public sealed class PostgresTravelerStore(
                 "性別與國民身分證統一編號第 2 碼不一致。");
         }
     }
+
+    // Comparison-only equivalence. Never rewrite a passport's printed name.
+    // U+6E29 (温) and U+6EAB (溫) share this narrowly reviewed key.
+    private static string NormalizeNameVariantForComparison(string value) =>
+        NormalizeIdentityName(value).Replace('\u6E29', '\u6EAB');
 
     private static string NormalizeIdentityName(string value) =>
         string.Concat(
