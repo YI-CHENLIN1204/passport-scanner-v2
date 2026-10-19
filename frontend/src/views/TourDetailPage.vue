@@ -1646,6 +1646,17 @@ watch(
             (document.nameZh || printedName).replaceAll('温', '溫'),
           ).value
         : document.nameZh
+    // Only prefill the review form, never the OCR result or saved scan.
+    // A second-model suggestion must still be checked against the photo
+    // and explicitly saved by the operator before it becomes formal data.
+    const passportNameForReview =
+      document.documentType === 'PASSPORT' &&
+      document.reviewStatus === 'PENDING' &&
+      !passportReviewName.trim() &&
+      document.chineseNameReviewStatus === 'suggested' &&
+      document.chineseNameReviewCandidate
+        ? document.chineseNameReviewCandidate
+        : passportReviewName
 
     reviewForm.value = {
       nameZh:
@@ -1653,7 +1664,7 @@ watch(
           'TAIWAN_COMPATRIOT_PERMIT' &&
         document.reviewStatus === 'PENDING'
           ? suggestedTraditionalName
-          : passportReviewName,
+          : passportNameForReview,
       nameZhOnDocument:
         document.documentType ===
           'TAIWAN_COMPATRIOT_PERMIT'
@@ -3042,7 +3053,7 @@ onBeforeUnmount(() => {
                   {{ currentDocument.chineseNameReviewCandidate }}
                 </strong>
                 <small>
-                  已通過現有 MRZ 拼音一致性；系統沒有自動寫入，仍請對照照片。
+                  已通過現有 MRZ 拼音一致性；主模型空白時先預填審核表單，尚未儲存為正式資料，仍請對照照片。
                 </small>
               </div>
               <button
