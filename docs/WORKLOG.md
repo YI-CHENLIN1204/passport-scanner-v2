@@ -1194,3 +1194,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 查閱最新 main 後確認：D-131 已對護照 + 台胞證相同姓名的合成審核及單一 traveler 建立通過，但未涵蓋 「温／溫」 兩種字形。D-132 的人工合併前後端比較鍵已提交，尚缺 runtime 證據。
 - 在 `scripts/verify-v2-launch.ps1` 的隔離 [4/8] 測試內新增兩筆合成正式 review：護照 U+6E29 與台胞證 U+6EAB、相同出生日期及性別；驗證不會因異體字直接自動合併、需明確呼叫既有人工 merge，merge 後目標 traveler 保留兩份 document versions，原文各自保留兩種字形，來源 traveler 不再獨立存在。增加 `test-v2-launch-guards.mjs` 防止驗收被移除。
 - 本輪**沒有修改自動合併規則**，也沒有跑 GitHub Actions。新增案例尚待原 Windows isolated acceptance 執行，不能宣稱 PASS；測試只用合成資料，不上傳護照或私人資訊。
+
+
+## 2026-10-19 — D-132 異體字端到端驗收暫停於 HTTP 400（原因待回應內容）
+- Windows 截圖：原本 D-131 步驟成功啟動隔離 Docker 並進入 [4/8]，新增 D-132 `manual merge with equivalent name glyphs` 測試呼叫 API 時得到 HTTP 400；故 D-132 此案例 **沒有 PASS**，亦未進入後續 retention/restore 段落。本次隔離 stack / volume 已清除，不影響原本資料。
+- 目前錯誤輸出只有 Invoke-RestMethod 400，**不足以判斷是護照或台胞證請求、欄位格式、抑或後端驗證**。不得猜測原因或放寬正式驗證器。更新 `scripts/verify-v2-launch.ps1` 的純合成資料 Invoke-Api 錯誤處理，補印 HTTP method、endpoint、status 與 JSON response details，下一次執行可直接知道根因。此次僅改善診斷，尚待 Windows 結果；禁止 Actions。
