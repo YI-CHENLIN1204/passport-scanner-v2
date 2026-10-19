@@ -1,0 +1,411 @@
+param(
+    [int]$FrontendPort = 15173,
+    [int]$BackendPort = 15080,
+    [switch]$KeepStack,
+    [switch]$SkipHostBuild
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$projectName = "passport-scanner-v2-acceptance"
+$composeArgs = @("compose", "-p", $projectName)
+$apiBase = "http://localhost:$BackendPort"
+$frontendBase = "http://localhost:$FrontendPort"
+$backupDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-v2-acceptance-backup"
+
+$previousFrontendPort = $env:FRONTEND_PORT
+$previousBackendPort = $env:BACKEND_PORT
+
+function Assert-Equal {
+    param(
+        [Parameter(Mandatory = $true)]$Actual,
+        [Parameter(Mandatory = $true)]$Expected,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    if ("$Actual" -ne "$Expected") {
+        throw "$Message Expected='$Expected' Actual='$Actual'"
+    }
+}
+
+function Assert-True {
+    param(
+        [Parameter(Mandatory = $true)][bool]$Condition,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    if (-not $Condition) {
+        throw $Message
+    }
+}
+
+function Invoke-Api {
+    param(
+        [Parameter(Mandatory = $true)][string]$Method,
+        [Parameter(Mandatory = $true)][string]$Uri,
+        $Body = $null
+    )
+
+    $parameters = @{
+        Method = $Method
+        Uri = $Uri
+    }
+
+    if ($null -ne $Body) {
+        $parameters["ContentType"] = "application/json"
+        $parameters["Body"] = $Body | ConvertTo-Json -Depth 20 -Compress
+    }
+
+    return Invoke-RestMethod @parameters
+}
+
+function Invoke-Psql {
+    param(
+        [Parameter(Mandatory = $true)][string]$Sql
+    )
+
+    $output = & docker @composeArgs exec -T database psql -U passport_scanner -d passport_scanner -Atc $Sql
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "PostgreSQL command failed: $Sql"
+    }
+
+    return (($output | Out-String).Trim())
+}
+
+function Wait-HttpOk {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [int]$Attempts = 45
+    )
+
+    for ($i = 0; $i -lt $Attempts; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 5
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+                return
+            }
+        }
+        catch {
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for $Uri"
+}
+
+function Get-StatusCode {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [string]$Method = "GET"
+    )
+
+    $status = & curl.exe -s -o NUL -w "%{http_code}" -X $Method $Uri
+    if ($LASTEXITCODE -ne 0) {
+        throw "curl.exe failed for $Method $Uri"
+    }
+
+    return "$status".Trim()
+}
+
+Set-Location $projectRoot
+$env:FRONTEND_PORT = "$FrontendPort"
+$env:BACKEND_PORT = "$BackendPort"
+
+try {
+    Write-Host "=== V2 launch acceptance: isolated local environment ==="
+    Write-Host "Docker project: $projectName"
+    Write-Host "Frontend: $frontendBase"
+    Write-Host "Backend:  $apiBase"
+    Write-Host ""
+
+    if (-not $SkipHostBuild) {
+        Write-Host "[1/8] Frontend OCR regression + V2 launch guards + build"
+        Push-Location (Join-Path $projectRoot "frontend")
+        try {
+            npm.cmd run verify:v2
+            if ($LASTEXITCODE -ne 0) {
+                throw "Frontend verify:v2 failed."
+            }
+        }
+        finally {
+            Pop-Location
+        }
+
+        Write-Host "[2/8] Backend build"
+        dotnet build (Join-Path $projectRoot "backend/PassportScanner.Api/PassportScanner.Api.csproj")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Backend build failed."
+        }
+    }
+    else {
+        Write-Host "[1-2/8] Host builds skipped by request."
+    }
+
+    Write-Host "[3/8] Build and start isolated Docker stack"
+    & docker @composeArgs up -d --build database backend frontend
+    if ($LASTEXITCODE -ne 0) {
+        throw "Isolated Docker stack failed to start."
+    }
+
+    Wait-HttpOk "$apiBase/api/health"
+    Wait-HttpOk "$frontendBase/api/health"
+
+    $storeStatus = Invoke-Api -Method GET -Uri "$apiBase/api/document-store/status"
+    Assert-Equal $storeStatus.persistence "postgresql" "Persistence must be PostgreSQL."
+
+    $requiredTables = @(
+        "document_versions",
+        "scan_batches",
+        "scan_items",
+        "tour_member_documents",
+        "tour_members",
+        "tour_person_drafts",
+        "tours",
+        "training_samples",
+        "travelers"
+    )
+
+    $tableRows = Invoke-Psql @"
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema='public'
+  AND table_name IN ('document_versions','scan_batches','scan_items','tour_member_documents','tour_members','tour_person_drafts','tours','training_samples','travelers')
+ORDER BY table_name;
+"@
+
+    foreach ($table in $requiredTables) {
+        Assert-True ($tableRows -split "\r?\n" -contains $table) "Missing required table: $table"
+    }
+
+    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM pg_constraint WHERE conname='fk_scan_items_saved_document_version';") "1" "Saved-document FK missing."
+    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='ux_document_versions_one_current_per_type' AND indexdef ILIKE '%WHERE%is_current%';") "1" "Current-document uniqueness index missing."
+    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM (SELECT traveler_id, document_type FROM document_versions WHERE is_current=TRUE GROUP BY traveler_id, document_type HAVING COUNT(*) > 1) AS duplicated;") "0" "Duplicate current document groups exist."
+
+    Write-Host "[4/8] Synthetic batch -> review -> formal traveler/document flow"
+    $tour = Invoke-Api -Method POST -Uri "$apiBase/api/tours" -Body @{
+        tourName = "V2 Acceptance Tour"
+        departureDate = "2099-10-10"
+        returnDate = "2099-10-12"
+        requiredDocumentTypes = @("PASSPORT", "TAIWAN_COMPATRIOT_PERMIT")
+    }
+
+    $passportBatch = Invoke-Api -Method POST -Uri "$apiBase/api/tours/$($tour.tourId)/scan-batches" -Body @{
+        documentType = "PASSPORT"
+    }
+    $permitBatch = Invoke-Api -Method POST -Uri "$apiBase/api/tours/$($tour.tourId)/scan-batches" -Body @{
+        documentType = "TAIWAN_COMPATRIOT_PERMIT"
+    }
+
+    $imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+    $passportItem = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($passportBatch.scanBatchId)/items" -Body @{
+        originalFileName = "acceptance-passport.png"
+        imageContentType = "image/png"
+        imageBase64 = $imageBase64
+        nameZh = "王小明"
+        nameZhOnDocument = "王小明"
+        nameEn = "WANG HSIAO MING"
+        birthDate = "1990-01-15"
+        gender = "M"
+        nationality = "TWN"
+        nationalIdNumber = $null
+        documentNumber = "T12345678"
+        issuingCountry = "TWN"
+        expiryDate = "2035-12-31"
+        ocrPayloadJson = "{}"
+    }
+
+    $permitItem = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($permitBatch.scanBatchId)/items" -Body @{
+        originalFileName = "acceptance-permit.png"
+        imageContentType = "image/png"
+        imageBase64 = $imageBase64
+        nameZh = "王小明"
+        nameZhOnDocument = "王小明"
+        nameEn = ""
+        birthDate = "1990-01-15"
+        gender = "M"
+        nationality = $null
+        nationalIdNumber = $null
+        documentNumber = "12345678"
+        issuingCountry = $null
+        expiryDate = "2035-12-31"
+        ocrPayloadJson = "{\"totalMs\":250,\"orientationAttempts\":1,\"fallbackUsed\":false}"
+    }
+
+    $null = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($passportBatch.scanBatchId)/complete" -Body @{
+        attemptCount = 1
+        failedCount = 0
+    }
+    $null = Invoke-Api -Method POST -Uri "$apiBase/api/scan-batches/$($permitBatch.scanBatchId)/complete" -Body @{
+        attemptCount = 2
+        failedCount = 1
+    }
+
+    $null = Invoke-Api -Method PUT -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/review" -Body @{
+        nameZh = "王小明"
+        nameZhOnDocument = "王小明"
+        nameEn = ""
+        birthDate = "1990-01-15"
+        gender = "M"
+        nationality = $null
+        nationalIdNumber = $null
+        documentNumber = "12345678"
+        issuingCountry = $null
+        expiryDate = "2035-12-31"
+        useForTraining = $true
+    }
+
+    $null = Invoke-Api -Method PUT -Uri "$apiBase/api/scan-items/$($passportItem.scanItemId)/review" -Body @{
+        nameZh = "王小明"
+        nameZhOnDocument = "王小明"
+        nameEn = "WANG HSIAO MING"
+        birthDate = "1990-01-15"
+        gender = "M"
+        nationality = "TWN"
+        nationalIdNumber = $null
+        documentNumber = "T12345678"
+        issuingCountry = "TWN"
+        expiryDate = "2035-12-31"
+        useForTraining = $false
+    }
+
+    $detail = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)"
+    Assert-Equal @($detail.members).Count 1 "The two reviewed documents should resolve to one traveler."
+    Assert-Equal @($detail.members[0].documents).Count 2 "The tour member should keep both document versions/types."
+
+    $docTypes = @($detail.members[0].documents | ForEach-Object { $_.documentType })
+    Assert-True ($docTypes -contains "PASSPORT") "Reviewed passport missing from formal tour data."
+    Assert-True ($docTypes -contains "TAIWAN_COMPATRIOT_PERMIT") "Reviewed permit missing from formal tour data."
+
+    $reviewQueue = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)/review-queue"
+    Assert-Equal @($reviewQueue).Count 0 "Review queue should be empty after both reviews."
+
+    $deleteStatus = Get-StatusCode -Method DELETE -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)"
+    Assert-Equal $deleteStatus "400" "Reviewed scan must not be directly deletable."
+
+    Write-Host "[5/8] Production photo retention preserves explicitly selected training copy"
+    $trainingSampleId = Invoke-Psql "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id='$($permitItem.scanItemId)';"
+    Assert-True (-not [string]::IsNullOrWhiteSpace($trainingSampleId)) "Training sample was not created."
+
+    $productionBefore = Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-production-before.png"
+    $trainingAfter = Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-training-after.png"
+
+    Invoke-WebRequest -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/image" -OutFile $productionBefore -UseBasicParsing
+    Invoke-Psql "UPDATE scan_items SET delete_after = NOW() - INTERVAL '1 hour' WHERE scan_item_id='$($permitItem.scanItemId)';" | Out-Null
+
+    & docker @composeArgs restart backend | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Backend restart failed during retention check."
+    }
+
+    Wait-HttpOk "$apiBase/api/health"
+
+    $imageBytes = ""
+    for ($i = 0; $i -lt 30; $i++) {
+        $imageBytes = Invoke-Psql "SELECT octet_length(image_bytes) FROM scan_items WHERE scan_item_id='$($permitItem.scanItemId)';"
+        if ($imageBytes -eq "0") {
+            break
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    Assert-Equal $imageBytes "0" "Expired production image bytes were not purged."
+    Assert-Equal (Get-StatusCode -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)/image") "404" "Purged production image endpoint should return 404."
+
+    Invoke-WebRequest -Uri "$apiBase/api/ocr-training/samples/$trainingSampleId/image" -OutFile $trainingAfter -UseBasicParsing
+    Assert-True ((Get-Item $trainingAfter).Length -gt 0) "Training image copy should survive production retention purge."
+
+    Write-Host "[6/8] Backup archive + SHA256 + isolated restore"
+    if (Test-Path -LiteralPath $backupDirectory) {
+        Remove-Item -LiteralPath $backupDirectory -Recurse -Force
+    }
+
+    & (Join-Path $projectRoot "scripts/backup-db.ps1") -OutputDirectory $backupDirectory -ComposeProjectName $projectName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance backup failed."
+    }
+
+    $backupFile = Get-ChildItem -LiteralPath $backupDirectory -Filter "*.dump" |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+
+    Assert-True ($null -ne $backupFile) "Backup dump was not created."
+    Assert-True (Test-Path -LiteralPath "$($backupFile.FullName).sha256.txt") "Backup SHA256 sidecar missing."
+
+    $tourCountBefore = Invoke-Psql "SELECT COUNT(*) FROM tours;"
+    $extraTour = Invoke-Api -Method POST -Uri "$apiBase/api/tours" -Body @{
+        tourName = "Acceptance Restore Rollback Marker"
+        departureDate = "2099-11-01"
+        returnDate = "2099-11-03"
+        requiredDocumentTypes = @("PASSPORT")
+    }
+
+    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM tours;") ([int]$tourCountBefore + 1) "Restore marker tour was not inserted."
+
+    & (Join-Path $projectRoot "scripts/restore-db.ps1") -BackupFile $backupFile.FullName -Force -ComposeProjectName $projectName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance restore failed."
+    }
+
+    Wait-HttpOk "$apiBase/api/health"
+    Wait-HttpOk "$frontendBase/api/health"
+    Assert-Equal (Invoke-Psql "SELECT COUNT(*) FROM tours;") $tourCountBefore "Database restore did not return to the backup snapshot."
+    Assert-Equal (Get-StatusCode -Uri "$apiBase/api/tours/$($extraTour.tourId)") "404" "Post-backup marker survived restore unexpectedly."
+
+    Write-Host "[7/8] Persistence after backend restart"
+    & docker @composeArgs restart backend | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Backend restart failed."
+    }
+    Wait-HttpOk "$apiBase/api/health"
+
+    $detailAfterRestart = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)"
+    Assert-Equal @($detailAfterRestart.members).Count 1 "Tour member data did not persist across backend restart."
+    Assert-Equal @($detailAfterRestart.members[0].documents).Count 2 "Document data did not persist across backend restart."
+
+    Write-Host "[8/8] Automated V2 launch acceptance passed"
+    Write-Host ""
+    Write-Host "Remaining browser-only acceptance:"
+    Write-Host "  - real batch upload/OCR retry with private passport, permit and ID images"
+    Write-Host "  - review viewer zoom/pan/rotate and re-edit"
+    Write-Host "  - configurable CSV field selection/order and downloaded file inspection"
+    Write-Host "These require the operator's private local data/UI and are intentionally not automated here."
+}
+finally {
+    if (Test-Path -LiteralPath $backupDirectory) {
+        Remove-Item -LiteralPath $backupDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Remove-Item -LiteralPath (Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-production-before.png") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path ([System.IO.Path]::GetTempPath()) "passport-scanner-training-after.png") -Force -ErrorAction SilentlyContinue
+
+    if (-not $KeepStack) {
+        Write-Host ""
+        Write-Host "Cleaning isolated acceptance stack..."
+        & docker @composeArgs down -v --remove-orphans | Out-Null
+    }
+    else {
+        Write-Host ""
+        Write-Host "Acceptance stack kept because -KeepStack was specified."
+    }
+
+    if ($null -eq $previousFrontendPort) {
+        Remove-Item Env:FRONTEND_PORT -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:FRONTEND_PORT = $previousFrontendPort
+    }
+
+    if ($null -eq $previousBackendPort) {
+        Remove-Item Env:BACKEND_PORT -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:BACKEND_PORT = $previousBackendPort
+    }
+
+    Set-Location $projectRoot
+}
