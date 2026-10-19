@@ -85,7 +85,8 @@ const mergeBlockedReason = computed(() => {
   if (
     target.nameZh?.trim() &&
     source.nameZh?.trim() &&
-    target.nameZh.trim() !== source.nameZh.trim()
+    target.nameZh.trim().replaceAll('温', '溫') !==
+      source.nameZh.trim().replaceAll('温', '溫')
   ) {
     return '中文姓名不同，請先確認及修正，不能直接合併。'
   }
