@@ -803,3 +803,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-19 — D-132 新增跨證件異體字端到端檢查（待 Windows 執行）
 - main 加入隔離驗收新增案例：對合成護照「温…」與台胞證「溫…」分別建立 traveler，要求不得只因異體字自動合併，再明確執行人工 merge；檢查合併後兩份證件版本與不同原文字形都保留。已有 D-131 的完整合成驗收不被移除。
 - 未修改正式 OCR、正式旅客自動合併、私人照片與資料集。下一次集中 Windows `scripts/verify-v2-launch.ps1` 才能證實新案例；請勿稱為已通過。
+
+
+## 2026-10-19 — D-132 異體字端到端驗收暫停於 HTTP 400（原因待回應內容）
+- Windows 截圖：原本 D-131 步驟成功啟動隔離 Docker 並進入 [4/8]，新增 D-132 `manual merge with equivalent name glyphs` 測試呼叫 API 時得到 HTTP 400；故 D-132 此案例 **沒有 PASS**，亦未進入後續 retention/restore 段落。本次隔離 stack / volume 已清除，不影響原本資料。
+- 目前錯誤輸出只有 Invoke-RestMethod 400，**不足以判斷是護照或台胞證請求、欄位格式、抑或後端驗證**。不得猜測原因或放寬正式驗證器。更新 `scripts/verify-v2-launch.ps1` 的純合成資料 Invoke-Api 錯誤處理，補印 HTTP method、endpoint、status 與 JSON response details，下一次執行可直接知道根因。此次僅改善診斷，尚待 Windows 結果；禁止 Actions。
