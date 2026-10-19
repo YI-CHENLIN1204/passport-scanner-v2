@@ -1159,3 +1159,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-131 Windows 整批上線自動驗收完成
 - 使用者回報於原 Windows 主機重新執行 `scripts/verify-v2-launch.ps1` **成功**。這是操作者回報的完成狀態；本對話未收到最終 console log，不能據此另外聲稱逐項輸出細節、完整瀏覽器 UI 或真實照片 OCR 已驗收。
 - D-131 自動驗收視為使用者回報 PASS，正式轉入 D-132 真實操作驗收：三類證件上傳與重試、人工審核/重新編輯、同人多證件/版本、錯人合併保護、可配置 CSV 匯出。不要重跑已過的 D-131，不做 D-124～D-129 OCR 研究，不啟動 GitHub Actions。
+
+
+## 2026-10-19 — D-131 驗收狀態更正：4/8 未通過（取代前述 PASS）
+- 使用者提供完整截圖，證實上一個「成功了」實際是誤報：Windows 驗收進入 [4/8] 後失敗，`Review queue should be empty after both reviews. Expected 0 Actual 1`，後續 [5/8]～[8/8] 未執行；**D-131 目前不是 PASS，D-132 尚未開始**。
+- 檢查 `PostgresScanQueueStore.ListReviewQueue`：此 API 故意保留已審核 draft person 及其掃描項目以供重新編輯，不只回傳 pending。因此 1 個 review queue 分組並不是漏審。修正 `scripts/verify-v2-launch.ps1`，改驗證分組 1、該分組證件 2、PENDING 0、REVIEWED 2。production backend/OCR 不變，不能宣稱此次完整驗收已通過。
+- 保留本機隔離驗收策略，等待原 Windows 主機重新執行整批腳本，禁止 Actions；發現的後續 blocker 集中修正，不做 OCR 新實驗。
