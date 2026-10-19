@@ -1,9 +1,15 @@
 param(
-    [string]$OutputDirectory = ".\\backups"
+    [string]$OutputDirectory = ".\\backups",
+    [string]$ComposeProjectName = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$composeArgs = @("compose")
+if (-not [string]::IsNullOrWhiteSpace($ComposeProjectName)) {
+    $composeArgs += @("-p", $ComposeProjectName)
+}
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $fileName = "passport_scanner-$timestamp.dump"
@@ -15,24 +21,24 @@ $outputPath = Join-Path $outputDirectoryFull $fileName
 $containerPath = "/tmp/passport_scanner-backup.dump"
 
 Write-Host "Starting PostgreSQL database..."
-docker compose up -d database
+& docker @composeArgs up -d database
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to start database container."
 }
 
 Write-Host "Creating PostgreSQL custom-format backup..."
-docker compose exec -T database pg_dump -U passport_scanner -d passport_scanner -Fc -f $containerPath
+& docker @composeArgs exec -T database pg_dump -U passport_scanner -d passport_scanner -Fc -f $containerPath
 if ($LASTEXITCODE -ne 0) {
     throw "pg_dump failed."
 }
 
 Write-Host "Copying backup to host..."
-docker compose cp "database:$containerPath" $outputPath
+& docker @composeArgs cp "database:$containerPath" $outputPath
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to copy backup from database container."
 }
 
-docker compose exec -T database rm -f $containerPath | Out-Null
+& docker @composeArgs exec -T database rm -f $containerPath | Out-Null
 
 $hash = (Get-FileHash -Algorithm SHA256 -Path $outputPath).Hash
 $hashPath = "$outputPath.sha256.txt"
