@@ -1141,3 +1141,11 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - D-129 固定 19 張瀏覽器實測：正式護照 14/19，v6 唯一正確人工候選 1，錯誤 0，歧義 3。broad VIZ 正確 0；lower-page 正確 1、歧義 3；D-128 contrast-review 正確 0、錯誤 0、歧義 0。
 - 依預設停止標準撤回 D-128 的 contrast normalization helper 與第三次模型辨識，移除其來源型別和驗收統計，保留 PP-OCRv5 正式主線與 v6 lower-page 人工候選；不再用這組固定 Validation 微調亮度增益或裁切參數。
 - 本次僅修正程式及文件，尚待 Windows verify:ocr / Docker Build；不能宣稱正式準確率改善。GitHub Actions 禁止執行。
+
+
+## 2026-10-19 — D-131：集中建立 V2 上線驗收入口（待原 Windows 主機執行）
+- 接手時先查 `origin/main`：實際 HEAD 已是 D-130 commit `a65cfd8c3c6902cafba974b88a0b45da10ffb096`，因此沒有重做對比度撤回。production 搜尋確認 `normalizePassportNameRoiLuminance` / `contrast-review` 已移除；剩餘命中僅歷史記錄與 negative regression guard。
+- 盤點現有功能後確認 retention worker、Traveler merge、DocumentVersion、CSV、backup/restore 都已存在；本輪不重造功能，改把原本只能散落驗證的上線風險收斂成 `scripts/verify-v2-launch.ps1`。
+- 新驗收環境與日常 5173/5080、正常 PostgreSQL volume 隔離：Docker project `passport-scanner-v2-acceptance`、ports 15173/15080、獨立 volume；完成後預設刪除。腳本會跑 `npm.cmd run verify:v2`（含既有 `verify:ocr`）、`dotnet build`、Docker build/health/schema、合成 batch/review、正式資料建立、已審核不可刪除、retention、Training copy、backup/restore、restart persistence。
+- `docker-compose.yml` host port 改成環境變數可覆寫但預設仍 5173/5080；`backup-db.ps1` / `restore-db.ps1` 新增可選 Compose project，正常手動備份／還原指令不變。新增靜態 guard 防止驗收腳本誤用正常 ports/project。
+- `docs/V2_LAUNCH_ACCEPTANCE.md` 明確拆成「自動驗收」與「必須用私人真實影像／瀏覽器完成的一次驗收」。本環境無法替代使用者 Windows + Docker 執行，**尚未宣稱 PASS**；下一個唯一集中命令為 repository root 的 `.\scripts\verify-v2-launch.ps1`。禁止 GitHub Actions。
