@@ -1405,3 +1405,9 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - 驗收使用 Docker project `passport-scanner-v2-acceptance`、預設 host ports 15173/15080 與獨立 volume；`docker-compose.yml` 僅把原 5173/5080 改成可覆寫且保留相同預設值。backup/restore 腳本新增可選 `ComposeProjectName`，未指定時既有正式用法不變。驗收結束預設 `down -v` 清除隔離資料。
 - 新增 `frontend/scripts/test-v2-launch-guards.mjs` 與 `npm.cmd run verify:v2`；`verify:v2` 仍完整包含 `verify:ocr`，並額外鎖定 CSV、人工審核、版本語意、人工合併衝突與隔離驗收基礎設施。沒有啟動 GitHub Actions，也不讀私人證件。
 - 新增 `docs/V2_LAUNCH_ACCEPTANCE.md` 作 release gate。自動腳本仍待原 Windows 主機實際執行，故目前只能稱「已提交／已靜態檢查」，不能稱 V2 已通過上線驗收。自動 PASS 後只需做一次真實瀏覽器批次／重試／審核再編輯／CSV 下載驗收，不再重跑 D-124～D-129。
+
+
+## 2026-10-19 — D-132：候選只預填待審核表單；人工合併採字形等價鍵
+- PP-OCRv6 唯一 MRZ 相容建議可以預填空白 PENDING 護照的人工審核表單，但 OCR 自動結果、DB 寫入與正式 accuracy 保持不變。沒有 operator 明確保存就不是 reviewed。
+- 字形比對僅針對「温／溫」已知等價對，於 frontend/backend 人工合併衝突判斷中採用比較鍵；不改證件原文字形，不以字形等價獨立觸發自動合併，不放寬其他身分檢查。
+- 提交的是程式碼及回歸 guard，尚待原 Windows 實際測試；GitHub Actions 禁止執行。
