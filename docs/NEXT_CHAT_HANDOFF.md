@@ -843,3 +843,8 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 ## 2026-10-20 — D-132 Excel 分檔匯出使用者確認完成
 - 使用者於更新後回覆「好了」，依此記錄四個表別改為各自下載獨立 XLSX 的實際操作已完成。未收到新下載檔逐格驗算，故不宣稱每個工作表所有資料皆另經人工逐筆核對。
 - Excel 欄寬、文字證號、日期補零及可選英文姓／英文名設計保留；後續重點移至「同一旅客多份同類證件的歷史版本保留」，優先以合成資料回歸驗證，不為測試修改真實證件，也不重新做 OCR 固定 Validation。GitHub Actions 禁止啟動。
+
+
+## 2026-10-20 — D-133 待驗收事項
+- 本輪只更新前端護照號碼核對流程：欄位醒目、必須勾選已對照原圖才可儲存、證號修改及切換證件時要重新核對；前端格式守衛與 backend 相同。
+- D-132 Excel 分檔、跨證件合併及護照多掃描歷史已得到使用者確認，不需重做；D-133 仍待 Windows Build 與 UI 實測，不可稱 PASS。既有真實個資不得上傳 GitHub，禁止 GitHub Actions。
