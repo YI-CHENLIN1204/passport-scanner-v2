@@ -1245,3 +1245,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 使用者已實測 Excel 格式成功，但要求總表、護照、台胞證、身分證應分別下載 `.xlsx`，而非置於一個檔案中的多個工作表。
 - `TourDetailPage.vue` 改為依勾選類型逐一產生獨立 XLSX，檔名為 `團別名稱-表別.xlsx`，單一檔案僅有自己的工作表；保留既有欄位勾選、拖曳排序、欄寬、置中、文字型證號與日期補零。
 - 更新 `test-v2-export-functional.mjs` 防止回到單一多工作表檔。瀏覽器可能詢問是否允許同一網站下載多個檔案；如被封鎖需使用者允許。未啟動 GitHub Actions，尚待 Windows `verify:v2` 與實際下載確認。
+
+
+## 2026-10-20 — D-132 Excel 分檔匯出使用者確認完成
+- 使用者於更新後回覆「好了」，依此記錄四個表別改為各自下載獨立 XLSX 的實際操作已完成。未收到新下載檔逐格驗算，故不宣稱每個工作表所有資料皆另經人工逐筆核對。
+- Excel 欄寬、文字證號、日期補零及可選英文姓／英文名設計保留；後續重點移至「同一旅客多份同類證件的歷史版本保留」，優先以合成資料回歸驗證，不為測試修改真實證件，也不重新做 OCR 固定 Validation。GitHub Actions 禁止啟動。
