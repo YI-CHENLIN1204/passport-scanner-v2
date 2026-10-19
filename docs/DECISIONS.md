@@ -1397,3 +1397,11 @@ per-tour snapshot 是團別當時已確認的正式資料，因此 Traveler / Do
 - D-129 固定 19 張瀏覽器實測：正式護照 14/19，v6 唯一正確人工候選 1，錯誤 0，歧義 3。broad VIZ 正確 0；lower-page 正確 1、歧義 3；D-128 contrast-review 正確 0、錯誤 0、歧義 0。
 - 依預設停止標準撤回 D-128 的 contrast normalization helper 與第三次模型辨識，移除其來源型別和驗收統計，保留 PP-OCRv5 正式主線與 v6 lower-page 人工候選；不再用這組固定 Validation 微調亮度增益或裁切參數。
 - 本次僅修正程式及文件，尚待 Windows verify:ocr / Docker Build；不能宣稱正式準確率改善。GitHub Actions 禁止執行。
+
+
+## 2026-10-19 — D-131：V2 上線最低驗收改為隔離本機一鍵流程
+- 新對話重新查 GitHub `main` 後確認 D-130 已實際提交（起始 HEAD `a65cfd8c`）：D-128 `contrast-review` 已由 production code 撤回，僅歷史文件與「不得恢復」回歸守衛保留字串；PP-OCRv5 正式主線、PP-OCRv6 `broad-viz`／已證明有用的 `lower-page` 人工候選、安全 MRZ 條件與歧義保護均保留。
+- 不再新增 OCR 對比／拼音／固定 19 張規則。新增 `scripts/verify-v2-launch.ps1`，把既有本機 OCR regression/build、backend build、Docker、schema、synthetic batch/review、正式 Traveler/DocumentVersion、reviewed delete protection、production photo retention、Training copy、database backup/restore 與 restart persistence 集中成一次本機驗收。
+- 驗收使用 Docker project `passport-scanner-v2-acceptance`、預設 host ports 15173/15080 與獨立 volume；`docker-compose.yml` 僅把原 5173/5080 改成可覆寫且保留相同預設值。backup/restore 腳本新增可選 `ComposeProjectName`，未指定時既有正式用法不變。驗收結束預設 `down -v` 清除隔離資料。
+- 新增 `frontend/scripts/test-v2-launch-guards.mjs` 與 `npm.cmd run verify:v2`；`verify:v2` 仍完整包含 `verify:ocr`，並額外鎖定 CSV、人工審核、版本語意、人工合併衝突與隔離驗收基礎設施。沒有啟動 GitHub Actions，也不讀私人證件。
+- 新增 `docs/V2_LAUNCH_ACCEPTANCE.md` 作 release gate。自動腳本仍待原 Windows 主機實際執行，故目前只能稱「已提交／已靜態檢查」，不能稱 V2 已通過上線驗收。自動 PASS 後只需做一次真實瀏覽器批次／重試／審核再編輯／CSV 下載驗收，不再重跑 D-124～D-129。
