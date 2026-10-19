@@ -284,7 +284,14 @@ ORDER BY table_name;
     Assert-True -Condition ($docTypes -contains "TAIWAN_COMPATRIOT_PERMIT") -Message "Reviewed permit missing from formal tour data."
 
     $reviewQueue = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)/review-queue"
-    Assert-Equal -Actual (@($reviewQueue | Where-Object { $null -ne $_ }).Count) -Expected 0 -Message "Review queue should be empty after both reviews."
+    $queuePeople = @($reviewQueue | Where-Object { $null -ne $_ })
+    Assert-Equal -Actual $queuePeople.Count -Expected 1 -Message "Reviewed traveler group must remain available for re-edit."
+    $queueDocuments = @($queuePeople | ForEach-Object { $_.documents } | Where-Object { $null -ne $_ })
+    Assert-Equal -Actual $queueDocuments.Count -Expected 2 -Message "Both reviewed scan records must remain in the review queue."
+    $pendingDocuments = @($queueDocuments | Where-Object { $_.reviewStatus -eq "PENDING" })
+    Assert-Equal -Actual $pendingDocuments.Count -Expected 0 -Message "No pending documents should remain after both reviews."
+    $reviewedDocuments = @($queueDocuments | Where-Object { $_.reviewStatus -eq "REVIEWED" })
+    Assert-Equal -Actual $reviewedDocuments.Count -Expected 2 -Message "Both scan records must be reviewed."
 
     $deleteStatus = Get-StatusCode -Method DELETE -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)"
     Assert-Equal -Actual $deleteStatus -Expected "400" -Message "Reviewed scan must not be directly deletable."
