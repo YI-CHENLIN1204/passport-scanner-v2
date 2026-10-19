@@ -760,3 +760,15 @@ Post-commit diff review caught and corrected a malformed Docker candidate-model 
 - D-129 固定 19 張瀏覽器實測：正式護照 14/19，v6 唯一正確人工候選 1，錯誤 0，歧義 3。broad VIZ 正確 0；lower-page 正確 1、歧義 3；D-128 contrast-review 正確 0、錯誤 0、歧義 0。
 - 依預設停止標準撤回 D-128 的 contrast normalization helper 與第三次模型辨識，移除其來源型別和驗收統計，保留 PP-OCRv5 正式主線與 v6 lower-page 人工候選；不再用這組固定 Validation 微調亮度增益或裁切參數。
 - 本次僅修正程式及文件，尚待 Windows verify:ocr / Docker Build；不能宣稱正式準確率改善。GitHub Actions 禁止執行。
+
+
+## 2026-10-19 — D-131：D-130 已確認完成，下一步只跑一次 V2 本機上線驗收
+- 新對話開始時 GitHub `main` 實際 HEAD 已為 `a65cfd8c3c6902cafba974b88a0b45da10ffb096`（`revert: remove ineffective v6 contrast retry after validation [skip ci]`），所以 D-130 **已提交**，不要再重做。production code 已無 D-128 contrast retry；PP-OCRv6 lower-page review-only rescue 保留。
+- 已新增 D-131 `scripts/verify-v2-launch.ps1` 和 `docs/V2_LAUNCH_ACCEPTANCE.md`。驗收以獨立 Docker project/ports/volume 執行，不碰正常 5173/5080 與正常 PostgreSQL volume；會把 frontend `verify:v2`（其中包含完整 `verify:ocr`）、backend build、Docker、schema、synthetic batch/review、retention、backup/restore、restart persistence 一次跑完。
+- 原 Windows 主機更新後只需在 repo root 執行：
+  ```powershell
+  .\scripts\verify-v2-launch.ps1
+  ```
+  目前尚未在使用者 Windows 主機執行，因此不要寫成已 PASS；若失敗，保留完整 console output 修正該 blocker，不要轉回 OCR 規則研究。
+- 自動 PASS 後只剩一次真實瀏覽器驗收：三類證件批次／單張失敗重試、照片 zoom/pan/rotate、審核後再編輯、同人多版本、人工 merge 衝突阻擋、CSV 欄位選擇／排序／下載內容。**不要重跑 D-124～D-129 固定 19 張研究。**
+- 正式 OCR 基準仍護照 14/19、台胞證 13/13；v6 人工候選不計入全自動準確率。GitHub Actions 仍禁止啟動。
