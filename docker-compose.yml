@@ -4,7 +4,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-5173}:80"
     depends_on:
       - backend
 
@@ -12,7 +12,7 @@ services:
     build:
       context: ./backend/PassportScanner.Api
     ports:
-      - "5080:8080"
+      - "${BACKEND_PORT:-5080}:8080"
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - FrontendOrigin=http://localhost:5173
