@@ -23,13 +23,10 @@ assert.match(tour, /persistExportColumns\(kind\)/)
 assert.match(tour, /document\?\.reviewStatus === 'PENDING'[\s\S]*!document\.imageAvailable/)
 assert.match(tour, /覆核照片已依保存期限刪除，無法完成人工審核/)
 
-// D-133 passport number must be visually verified before UI review save.
-assert.match(tour, /const passportNumberVisuallyConfirmed = ref\(false\)/)
-assert.match(tour, /if \(!passportNumberVisuallyConfirmed\.value\)/)
-assert.match(tour, /reviewForm\.value\.documentNumber/)
-assert.match(tour, /passportNumberVisuallyConfirmed\.value = false/)
-assert.match(tour, /我已對照原圖確認護照號碼正確/)
+// D-133 keeps format checks and a prominent number, without extra clicks.
+assert.match(tour, /護照號碼必須為 5 至 20 碼英文字母或數字/)
 assert.match(tour, /passport-number-critical/)
+assert.doesNotMatch(tour, /passportNumberVisuallyConfirmed|passport-number-confirmation/)
 
 // Version labels are scan-order labels only; do not imply issuance/current validity.
 assert.match(tour, /function documentVersionLabel/)
