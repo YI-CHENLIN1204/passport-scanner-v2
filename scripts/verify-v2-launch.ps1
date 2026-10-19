@@ -284,7 +284,7 @@ ORDER BY table_name;
     Assert-True -Condition ($docTypes -contains "TAIWAN_COMPATRIOT_PERMIT") -Message "Reviewed permit missing from formal tour data."
 
     $reviewQueue = Invoke-Api -Method GET -Uri "$apiBase/api/tours/$($tour.tourId)/review-queue"
-    Assert-Equal -Actual (@($reviewQueue).Count) -Expected 0 -Message "Review queue should be empty after both reviews."
+    Assert-Equal -Actual (@($reviewQueue | Where-Object { $null -ne $_ }).Count) -Expected 0 -Message "Review queue should be empty after both reviews."
 
     $deleteStatus = Get-StatusCode -Method DELETE -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)"
     Assert-Equal -Actual $deleteStatus -Expected "400" -Message "Reviewed scan must not be directly deletable."
