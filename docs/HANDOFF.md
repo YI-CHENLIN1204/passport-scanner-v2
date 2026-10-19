@@ -1,5 +1,12 @@
 # 護照掃描系統 V2 — 交接入口（持續維護）
 
+
+## 2026-10-19 — 最新接手狀態：D-130 已提交；D-131 上線驗收入口待原 Windows 執行
+- 重新查 GitHub `main` 後確認 D-130 已由 commit `a65cfd8c3c6902cafba974b88a0b45da10ffb096` 提交，不要再重做 D-128 contrast removal。正式基準仍護照 14/19、台胞證 13/13；PP-OCRv6 僅人工候選，lower-page 保留，contrast-review 已撤回。
+- 最新工作已轉向 V2 上線：新增 `scripts/verify-v2-launch.ps1` 與 `docs/V2_LAUNCH_ACCEPTANCE.md`，用獨立 Docker project `passport-scanner-v2-acceptance`、15173/15080 ports、獨立 volume 集中驗證 frontend `verify:v2`（含 `verify:ocr`）、backend build、schema、batch/review、正式資料、retention、backup/restore、restart persistence。
+- **尚未在使用者 Windows 主機實際跑完 D-131**，不可標記 PASS。下一步只需 `git pull origin main` 後在 repo root 執行 `.\scripts\verify-v2-launch.ps1`；通過後再做一次真實瀏覽器/私人影像驗收。不要再跑 D-124～D-129，也不要啟動 GitHub Actions。
+
+
 ## 2026-10-13 — Validation 樣本品質匿名稽核（尚待本機驗證）
 - 使用者懷疑持續 14/19 的問題包含早期隨意保留的測試樣本，且過去不清楚如何取消。已確認後端 `SetSelection(false)` 會移除一般 `TrainingSamples` 複本，但保護固定 Test baseline；操作入口在原團別證件審核視窗「保留此樣本供 OCR 改善」勾選框，不能把排除訓練樣本誤當成刪正式旅客／已審核證件。
 - 在 OCR 品質頁新增只讀 Validation 人工標準答案匿名稽核（不執行 OCR、不下載照片、不讀 fixed Test）：中文姓名缺漏、出生日期格式與明顯可疑年份（1900 年以前或未來）、已填但驗證失敗的台灣身分證字號、簡單占位文字訊號。只輸出整體數字，不輸出任何姓名／字號／樣本 ID；每一異常是待人工確認而非自動剔除。沒有填身分證號的護照不視為錯誤。
