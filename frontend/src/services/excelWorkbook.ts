@@ -108,16 +108,14 @@ function zip(files: { path: string; data: string }[]) {
   put16(ev, 10, files.length)
   put32(ev, 12, centralLength)
   put32(ev, 16, offset)
-  return new Uint8Array(
-    [...chunks, ...central, end].reduce((sum, part) => sum + part.length, 0),
-  ).map((_, index) => {
-    let remaining = index
-    for (const part of [...chunks, ...central, end]) {
-      if (remaining < part.length) return part[remaining]
-      remaining -= part.length
-    }
-    return 0
-  })
+  const parts = [...chunks, ...central, end]
+  const output = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
+  let pos = 0
+  for (const part of parts) {
+    output.set(part, pos)
+    pos += part.length
+  }
+  return output
 }
 
 export function createExcelWorkbook(sheets: ExcelSheet[]): Uint8Array {
