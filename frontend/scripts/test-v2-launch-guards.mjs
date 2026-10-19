@@ -32,6 +32,11 @@ assert.match(travelers, /英文姓名不同，請先確認及修正，不能直�
 assert.match(travelers, /中文姓名不同，請先確認及修正，不能直接合併/)
 assert.match(travelerStore, /兩筆旅客的英文姓名不同，請先人工確認並修正，系統不會直接合併/)
 assert.match(travelerStore, /兩筆旅客的中文姓名不同，請先人工確認並修正，系統不會直接合併/)
+assert.match(travelerStore, /NormalizeNameVariantForComparison\(target\.NameZh\)/)
+assert.match(travelerStore, /NormalizeNameVariantForComparison\(source\.NameZh\)/)
+assert.match(travelerStore, /Replace\('\\u6E29', '\\u6EAB'\)/)
+assert.match(travelers, /replaceAll\('温', '溫'\)/)
+
 
 
 // D-131 local acceptance must stay isolated from the operator's normal stack.
