@@ -2062,7 +2062,7 @@ onBeforeUnmount(() => {
             :disabled="exporting"
             @click="openExportModal"
           >
-            匯出 CSV
+            匯出 Excel
           </button>
 
           <button
@@ -2461,11 +2461,11 @@ onBeforeUnmount(() => {
       >
         <header>
           <div>
-            <p class="page-kicker">CSV EXPORT</p>
+            <p class="page-kicker">EXCEL EXPORT</p>
             <h2>匯出團別資料</h2>
             <p>
               先選擇要輸出的表，再勾選欄位；
-              已勾選欄位可拖曳調整 CSV 欄位順序。
+              已勾選欄位可拖曳調整 Excel 欄位順序。
             </p>
           </div>
 
@@ -2490,7 +2490,7 @@ onBeforeUnmount(() => {
             張待審核，
             {{ exportMissingPersonCount }}
             位旅客至少缺一種本團必收證件。
-            CSV 只會使用已審核並寫入正式資料的內容，
+            Excel 只會使用已審核並寫入正式資料的內容，
             不會把待審核 OCR 結果當成可信資料輸出。
           </span>
         </div>
