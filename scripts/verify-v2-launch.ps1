@@ -64,17 +64,27 @@ function Invoke-Api {
     catch {
         # This runner uses synthetic test data only. Keep API status and
         # validation error details instead of hiding the root cause.
-        $response = $_.Exception.Response
+        $caught = $_
+        $response = $caught.Exception.Response
         $status = if ($null -ne $response) { [int]$response.StatusCode } else { "unknown" }
-        $details = $_.ErrorDetails.Message
+        $details = ""
+        if ($null -ne $caught.ErrorDetails) {
+            $details = [string]$caught.ErrorDetails.Message
+        }
         if ([string]::IsNullOrWhiteSpace($details) -and $null -ne $response) {
             try {
-                $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
-                $details = $reader.ReadToEnd()
+                $stream = $response.GetResponseStream()
+                if ($null -ne $stream) {
+                    $reader = New-Object System.IO.StreamReader($stream)
+                    $details = $reader.ReadToEnd()
+                }
             }
             catch {
                 $details = "(response body unavailable)"
             }
+        }
+        if ([string]::IsNullOrWhiteSpace($details)) {
+            $details = [string]$caught.Exception.Message
         }
         throw "Synthetic API request failed: $Method $Uri; HTTP $status; details: $details"
     }
