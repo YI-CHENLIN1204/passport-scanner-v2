@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs'
 const tour = readFileSync('src/views/TourDetailPage.vue', 'utf8')
 const travelers = readFileSync('src/views/TravelersPage.vue', 'utf8')
 const travelerStore = readFileSync('../backend/PassportScanner.Api/Persistence/PostgresTravelerStore.cs', 'utf8')
+const compose = readFileSync('../docker-compose.yml', 'utf8')
+const backup = readFileSync('../scripts/backup-db.ps1', 'utf8')
+const restore = readFileSync('../scripts/restore-db.ps1', 'utf8')
+const acceptance = readFileSync('../scripts/verify-v2-launch.ps1', 'utf8')
 
 // Launch-critical CSV behavior stays configurable and local to reviewed formal data.
 assert.match(tour, /type ExportKind =[\s\S]*'TOTAL'[\s\S]*'PASSPORT'[\s\S]*'TAIWAN_COMPATRIOT_PERMIT'[\s\S]*'TAIWAN_NATIONAL_ID'/)
@@ -30,3 +34,14 @@ assert.match(travelerStore, /兩筆旅客的英文姓名不同，請先人工確
 assert.match(travelerStore, /兩筆旅客的中文姓名不同，請先人工確認並修正，系統不會直接合併/)
 
 console.log('V2 launch static guards passed.')
+
+// D-131 local acceptance must stay isolated from the operator's normal stack.
+assert.match(compose, /\$\{FRONTEND_PORT:-5173\}:80/)
+assert.match(compose, /\$\{BACKEND_PORT:-5080\}:8080/)
+assert.match(backup, /ComposeProjectName/)
+assert.match(restore, /ComposeProjectName/)
+assert.match(acceptance, /passport-scanner-v2-acceptance/)
+assert.match(acceptance, /15173/)
+assert.match(acceptance, /15080/)
+assert.match(acceptance, /down -v --remove-orphans/)
+assert.doesNotMatch(acceptance, /workflow_dispatch|gh workflow|GitHub Actions/)
