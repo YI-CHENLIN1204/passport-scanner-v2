@@ -2,124 +2,61 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 
-const source = readFileSync('src/views/TourDetailPage.vue', 'utf8')
+const vue = readFileSync('src/views/TourDetailPage.vue', 'utf8')
+const service = readFileSync('src/services/excelWorkbook.ts', 'utf8')
+const js = ts.transpileModule(
+  service.replace(/export type ExcelSheet = \{[\s\S]*?\n\}/, ''),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText
+const module = { exports: {} }
+new Function('module', 'exports', js)(module, module.exports)
+const { createExcelWorkbook } = module.exports
 
-// Exercise the actual production CSV functions, not reimplemented copies.
-// These helpers are deliberately extracted only inside this synthetic test.
-function extract(start, end) {
-  const from = source.indexOf(start)
-  const until = source.indexOf(end, from + start.length)
-  assert.ok(from >= 0 && until > from, `Missing CSV function: ${start}`)
-  return source.slice(from, until)
+const bytes = createExcelWorkbook([
+  {
+    name: '護照',
+    headers: ['中文姓名', '英文姓', '護照號碼', '有效期限'],
+    rows: [['温明', 'WEN', 'A00123', '2035-04-07']],
+  },
+  {
+    name: '總表',
+    headers: ['姓名', '身分證字號'],
+    rows: [['溫明', 'A012345678'], ['零前綴', '00123456']],
+  },
+])
+assert.equal(Buffer.from(bytes.subarray(0, 4)).toString('hex'), '504b0304')
+
+// Read local ZIP headers to inspect real generated Excel contents.
+const entries = new Map()
+const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+let pos = 0
+while (pos + 30 < bytes.length && view.getUint32(pos, true) === 0x04034b50) {
+  const length = view.getUint32(pos + 18, true)
+  const nameLength = view.getUint16(pos + 26, true)
+  const extraLength = view.getUint16(pos + 28, true)
+  const name = new TextDecoder().decode(bytes.subarray(pos + 30, pos + 30 + nameLength))
+  const offset = pos + 30 + nameLength + extraLength
+  entries.set(name, new TextDecoder().decode(bytes.subarray(offset, offset + length)))
+  pos = offset + length
 }
+assert.ok(entries.has('[Content_Types].xml'))
+assert.ok(entries.has('xl/workbook.xml'))
+assert.ok(entries.has('xl/styles.xml'))
+assert.ok(entries.has('xl/worksheets/sheet1.xml'))
+assert.ok(entries.has('xl/worksheets/sheet2.xml'))
+assert.match(entries.get('xl/workbook.xml'), /name="護照"/)
+assert.match(entries.get('xl/workbook.xml'), /name="總表"/)
+assert.match(entries.get('xl/worksheets/sheet1.xml'), /温明/)
+assert.match(entries.get('xl/worksheets/sheet1.xml'), /A00123/)
+assert.match(entries.get('xl/worksheets/sheet1.xml'), /2035-04-07/)
+assert.match(entries.get('xl/worksheets/sheet2.xml'), /00123456/)
+assert.match(entries.get('xl/worksheets/sheet1.xml'), /customWidth="1"/)
+assert.match(entries.get('xl/styles.xml'), /horizontal="center"/)
+assert.match(entries.get('xl/styles.xml'), /numFmtId="49"/)
+assert.match(vue, /function buildExportSheet\(kind: ExportKind\)/)
+assert.match(vue, /createExcelWorkbook\(kinds\.map\(buildExportSheet\)\)/)
+assert.match(vue, /exportConfiguredExcel/)
+assert.match(vue, /\.xlsx/)
+assert.doesNotMatch(vue, /downloadCsvFile|exportConfiguredCsv/)
 
-const code = [
-  extract('function passportEnglishNameParts(', 'function exportFieldValue('),
-  extract('function escapeCsv(', 'function membersForExport('),
-  extract('function membersForExport(', 'function buildExportCsv('),
-  extract('function buildExportCsv(', 'function safeFilename('),
-].join('\n')
-
-const js = ts.transpileModule(code, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022 },
-}).outputText
-
-const data = {
-  tour: { requiredDocumentTypes: ['PASSPORT', 'TAIWAN_COMPATRIOT_PERMIT'] },
-  members: [
-    {
-      nameZh: '溫明',
-      nameEn: 'WEN MING',
-      birthDate: '1991-05-06',
-      gender: 'M',
-      nationality: 'TWN',
-      nationalIdNumber: '',
-      documents: [
-        { documentType: 'PASSPORT', documentNumber: 'T88776655' },
-        { documentType: 'TAIWAN_COMPATRIOT_PERMIT', documentNumber: '87654320' },
-      ],
-    },
-    {
-      nameZh: '測試,「人」',
-      nameEn: 'TEST PERSON',
-      birthDate: '1992-02-03',
-      gender: 'F',
-      nationality: 'TWN',
-      nationalIdNumber: '',
-      documents: [{ documentType: 'PASSPORT', documentNumber: 'T77889900' }],
-    },
-  ],
-}
-
-const detail = { value: data }
-const exportColumns = { value: {
-  TOTAL: ['passportNumber', 'nameZh', 'birthDate'],
-  PASSPORT: ['nameZh', 'passportNumber'],
-  TAIWAN_COMPATRIOT_PERMIT: ['nameZh', 'permitNumber'],
-  TAIWAN_NATIONAL_ID: ['nameZh'],
-} }
-const labels = {
-  passportNumber: '護照號碼',
-  nameZh: '中文姓名',
-  birthDate: '出生日期',
-  permitNumber: '台胞證號碼',
-}
-const exportFieldsFor = kind =>
-  Object.keys(labels).map(key => ({ key, label: labels[key] }))
-const exportFieldValue = (member, key) => ({
-  passportNumber: member.documents.find(d => d.documentType === 'PASSPORT')?.documentNumber ?? '',
-  permitNumber: member.documents.find(d => d.documentType === 'TAIWAN_COMPATRIOT_PERMIT')?.documentNumber ?? '',
-  nameZh: member.nameZh,
-  birthDate: member.birthDate,
-})[key] ?? ''
-
-const load = new Function(
-  'detail', 'exportColumns', 'exportFieldsFor', 'exportFieldValue',
-  `${js}; return { escapeCsv, membersForExport, buildExportCsv, passportEnglishNameParts, isoExportDate }`,
-)
-const { escapeCsv, membersForExport, buildExportCsv, passportEnglishNameParts, isoExportDate } =
-  load(detail, exportColumns, exportFieldsFor, exportFieldValue)
-
-
-assert.deepEqual(passportEnglishNameParts('PAN, PEI JUN'), { surname: 'PAN', givenNames: 'PEI JUN' })
-assert.deepEqual(passportEnglishNameParts('LEE, AN'), { surname: 'LEE', givenNames: 'AN' })
-assert.deepEqual(passportEnglishNameParts('UNSTRUCTURED NAME'), { surname: '', givenNames: '' })
-assert.equal(isoExportDate('2035-4-7'), '2035-04-07')
-assert.equal(isoExportDate('2035-04-07'), '2035-04-07')
-assert.ok(source.includes("case 'nameEnSurname':"))
-assert.ok(source.includes("case 'nameEnGivenNames':"))
-assert.ok(source.includes("return isoExportDate(passport?.expiryDate)"))
-
-assert.equal(escapeCsv('a"b,c'), '"a""b,c"')
-assert.equal(escapeCsv('溫明'), '"溫明"')
-assert.deepEqual(membersForExport('TAIWAN_COMPATRIOT_PERMIT').map(m => m.nameZh), ['溫明'])
-assert.equal(
-  buildExportCsv('TOTAL'),
-  [
-    '"護照號碼","中文姓名","出生日期"',
-    '"T88776655","溫明","1991-05-06"',
-    '"T77889900","測試,「人」","1992-02-03"',
-  ].join('\r\n'),
-)
-assert.equal(
-  buildExportCsv('TAIWAN_COMPATRIOT_PERMIT'),
-  ['"中文姓名","台胞證號碼"', '"溫明","87654320"'].join('\r\n'),
-)
-
-// Changing the chosen column order must change both header and values.
-exportColumns.value.TOTAL = ['birthDate', 'nameZh']
-assert.equal(
-  buildExportCsv('TOTAL').split('\r\n')[0],
-  '"出生日期","中文姓名"',
-)
-assert.equal(
-  buildExportCsv('TOTAL').split('\r\n')[1],
-  '"1991-05-06","溫明"',
-)
-
-assert.match(source, /const blob = new Blob/)
-assert.ok(source.includes(String.raw`'\ufeff'`))
-assert.match(source, /exportConfiguredCsv\(\)/)
-assert.match(source, /persistExportColumns\(kind\)/)
-
-console.log('D-132 production CSV synthetic content, filtering, and column order passed.')
+console.log('D-132 XLSX workbook, multi-sheet, widths, center alignment, and text IDs passed.')
