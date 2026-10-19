@@ -179,6 +179,16 @@ const exportFieldDefinitions: ExportFieldDefinition[] = [
     kinds: ['TOTAL', 'PASSPORT'],
   },
   {
+    key: 'nameEnSurname',
+    label: '英文姓（Surname）',
+    kinds: ['TOTAL', 'PASSPORT'],
+  },
+  {
+    key: 'nameEnGivenNames',
+    label: '英文名（Given names）',
+    kinds: ['TOTAL', 'PASSPORT'],
+  },
+  {
     key: 'birthDate',
     label: '出生日期',
     kinds: [
@@ -889,6 +899,8 @@ function defaultExportColumns(kind: ExportKind) {
     TOTAL: [
       'nameZh',
       'nameEn',
+      'nameEnSurname',
+      'nameEnGivenNames',
       'birthDate',
       'gender',
       'nationality',
@@ -1098,6 +1110,26 @@ function exportDocument(
   )
 }
 
+// Passport MRZ uses SURNAME, GIVEN NAMES. Never guess the surname
+// from the last whitespace-separated word if the separator is absent.
+function passportEnglishNameParts(value: string) {
+  const separator = value.indexOf(',')
+  if (separator < 0) {
+    return { surname: '', givenNames: '' }
+  }
+  return {
+    surname: value.slice(0, separator).trim().toUpperCase(),
+    givenNames: value.slice(separator + 1).trim().toUpperCase(),
+  }
+}
+
+function isoExportDate(value: string | null | undefined) {
+  if (!value) return ''
+  const match = /^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/.exec(value)
+  if (!match) return value
+  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+}
+
 function exportFieldValue(
   member: TourMemberResponse,
   key: string,
@@ -1117,8 +1149,12 @@ function exportFieldValue(
       return member.nameZh
     case 'nameEn':
       return member.nameEn
+    case 'nameEnSurname':
+      return passportEnglishNameParts(member.nameEn).surname
+    case 'nameEnGivenNames':
+      return passportEnglishNameParts(member.nameEn).givenNames
     case 'birthDate':
-      return member.birthDate
+      return isoExportDate(member.birthDate)
     case 'gender':
       return member.gender
     case 'nationality':
@@ -1130,11 +1166,11 @@ function exportFieldValue(
     case 'passportIssuingCountry':
       return passport?.issuingCountry ?? ''
     case 'passportExpiryDate':
-      return passport?.expiryDate ?? ''
+      return isoExportDate(passport?.expiryDate)
     case 'permitNumber':
       return permit?.documentNumber ?? ''
     case 'permitExpiryDate':
-      return permit?.expiryDate ?? ''
+      return isoExportDate(permit?.expiryDate)
     case 'nationalIdDocumentNumber':
       return nationalId?.documentNumber ?? ''
     default:
