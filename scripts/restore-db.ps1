@@ -2,11 +2,18 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BackupFile,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [string]$ComposeProjectName = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$composeArgs = @("compose")
+if (-not [string]::IsNullOrWhiteSpace($ComposeProjectName)) {
+    $composeArgs += @("-p", $ComposeProjectName)
+}
 
 if (-not (Test-Path -LiteralPath $BackupFile -PathType Leaf)) {
     throw "Backup file not found: $BackupFile"
@@ -51,54 +58,54 @@ if (-not $Force) {
 }
 
 Write-Host "Starting PostgreSQL database..."
-docker compose up -d database
+& docker @composeArgs up -d database
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to start database container."
 }
 
 Write-Host "Copying backup into database container..."
-docker compose cp $backupFullPath "database:$containerPath"
+& docker @composeArgs cp $backupFullPath "database:$containerPath"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to copy backup into database container."
 }
 
 Write-Host "Checking backup archive..."
-docker compose exec -T database pg_restore --list $containerPath | Out-Null
+& docker @composeArgs exec -T database pg_restore --list $containerPath | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    docker compose exec -T database rm -f $containerPath | Out-Null
+    & docker @composeArgs exec -T database rm -f $containerPath | Out-Null
     throw "Backup archive is not readable by pg_restore. Restore aborted before changing the database."
 }
 
 Write-Host "Backup archive is readable."
 
 Write-Host "Stopping application services..."
-docker compose stop frontend backend
+& docker @composeArgs stop frontend backend
 if ($LASTEXITCODE -ne 0) {
-    docker compose exec -T database rm -f $containerPath | Out-Null
+    & docker @composeArgs exec -T database rm -f $containerPath | Out-Null
     throw "Failed to stop application services."
 }
 
 Write-Host "Replacing database..."
-docker compose exec -T database psql -U passport_scanner -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS passport_scanner WITH (FORCE);"
+& docker @composeArgs exec -T database psql -U passport_scanner -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS passport_scanner WITH (FORCE);"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to drop current database."
 }
 
-docker compose exec -T database psql -U passport_scanner -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE passport_scanner OWNER passport_scanner;"
+& docker @composeArgs exec -T database psql -U passport_scanner -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE passport_scanner OWNER passport_scanner;"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to create replacement database."
 }
 
 Write-Host "Restoring backup..."
-docker compose exec -T database pg_restore -U passport_scanner -d passport_scanner --no-owner --exit-on-error $containerPath
+& docker @composeArgs exec -T database pg_restore -U passport_scanner -d passport_scanner --no-owner --exit-on-error $containerPath
 if ($LASTEXITCODE -ne 0) {
     throw "pg_restore failed."
 }
 
-docker compose exec -T database rm -f $containerPath | Out-Null
+& docker @composeArgs exec -T database rm -f $containerPath | Out-Null
 
 Write-Host "Starting application..."
-docker compose up -d --build
+& docker @composeArgs up -d --build
 if ($LASTEXITCODE -ne 0) {
     throw "Database restored, but application rebuild/start failed."
 }
