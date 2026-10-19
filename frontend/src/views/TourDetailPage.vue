@@ -1534,6 +1534,9 @@ const reviewFormErrors = computed(() => {
   }
 
   if (document?.documentType === 'PASSPORT') {
+    if (!/^[A-Z0-9]{5,20}$/.test(form.documentNumber.trim().toUpperCase())) {
+      errors.push('護照號碼必須為 5 至 20 碼英文字母或數字，請依原圖核對。')
+    }
     if (!passportNumberVisuallyConfirmed.value) {
       errors.push('請先對照護照原圖確認護照號碼，並勾選已確認。')
     }
