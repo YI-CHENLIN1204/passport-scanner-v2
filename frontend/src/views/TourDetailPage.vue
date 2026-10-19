@@ -26,6 +26,7 @@ import {
   type TourDetailResponse,
   type TourMemberResponse,
 } from '../services/api'
+import { createExcelWorkbook, type ExcelSheet } from '../services/excelWorkbook'
 
 const props = defineProps<{
   tourId: string
@@ -1178,10 +1179,6 @@ function exportFieldValue(
   }
 }
 
-function escapeCsv(value: string) {
-  return `"${String(value).replace(/"/g, '""')}"`
-}
-
 function membersForExport(kind: ExportKind) {
   if (!detail.value) return []
 
@@ -1191,106 +1188,67 @@ function membersForExport(kind: ExportKind) {
 
   return detail.value.members.filter(member =>
     member.documents.some(
-      document =>
-        document.documentType === kind,
+      document => document.documentType === kind,
     ),
   )
 }
 
-function buildExportCsv(kind: ExportKind) {
+function buildExportSheet(kind: ExportKind): ExcelSheet {
   const columns = exportColumns.value[kind]
   const fieldMap = new Map(
-    exportFieldsFor(kind).map(field => [
-      field.key,
-      field,
-    ]),
+    exportFieldsFor(kind).map(field => [field.key, field]),
   )
-
-  const header = columns.map(key =>
-    escapeCsv(fieldMap.get(key)?.label ?? key),
-  )
-
-  const rows = membersForExport(kind).map(member =>
-    columns.map(key =>
-      escapeCsv(exportFieldValue(member, key)),
+  return {
+    name: exportKindLabel(kind),
+    headers: columns.map(key => fieldMap.get(key)?.label ?? key),
+    rows: membersForExport(kind).map(member =>
+      columns.map(key => exportFieldValue(member, key)),
     ),
-  )
-
-  return [
-    header.join(','),
-    ...rows.map(row => row.join(',')),
-  ].join('\r\n')
-}
-
-function safeFilename(value: string) {
-  return value
-    .replace(/[\\/:*?"<>|]/g, '-')
-    .trim()
-}
-
-function downloadCsvFile(
-  filename: string,
-  content: string,
-) {
-  const blob = new Blob(
-    ['\ufeff', content],
-    { type: 'text/csv;charset=utf-8' },
-  )
-  const url = URL.createObjectURL(blob)
-
-  try {
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = filename
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-  } finally {
-    URL.revokeObjectURL(url)
   }
 }
 
-async function exportConfiguredCsv() {
+function safeFilename(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, '-').trim()
+}
+
+async function exportConfiguredExcel() {
   if (!detail.value || exporting.value) return
 
   const kinds = exportKindsForTour().filter(
     kind => exportSelectedKinds.value.includes(kind),
   )
-
   if (!kinds.length) {
     error.value = '請至少選擇一個要輸出的表。'
     return
   }
-
   for (const kind of kinds) {
     if (!exportColumns.value[kind].length) {
-      error.value =
-        `${exportKindLabel(kind)}至少要選擇一個欄位。`
+      error.value = `${exportKindLabel(kind)}至少要選擇一個欄位。`
       return
     }
   }
 
   exporting.value = true
   error.value = ''
-
   try {
-    const base = safeFilename(
-      detail.value.tour.tourName,
-    )
-
-    for (const kind of kinds) {
-      downloadCsvFile(
-        `${base}-${exportKindLabel(kind)}.csv`,
-        buildExportCsv(kind),
-      )
+    const bytes = createExcelWorkbook(kinds.map(buildExportSheet))
+    const blob = new Blob([Uint8Array.from(bytes)], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    try {
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${safeFilename(detail.value.tour.tourName)}.xlsx`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+    } finally {
+      URL.revokeObjectURL(url)
     }
-
     exportOpen.value = false
   } catch (err) {
-    error.value =
-      err instanceof Error
-        ? err.message
-        : '匯出失敗。'
+    error.value = err instanceof Error ? err.message : 'Excel 匯出失敗。'
   } finally {
     exporting.value = false
   }
@@ -2665,14 +2623,14 @@ onBeforeUnmount(() => {
               exporting ||
               !exportSelectedKinds.length
             "
-            @click="exportConfiguredCsv"
+            @click="exportConfiguredExcel"
           >
             {{
               exporting
                 ? '匯出中…'
                 : '匯出 ' +
                   exportSelectedKinds.length +
-                  ' 個 CSV'
+                  ' 個工作表（Excel）'
             }}
           </button>
         </footer>
