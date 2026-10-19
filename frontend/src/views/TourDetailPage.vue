@@ -148,7 +148,6 @@ const reviewDragStart = ref({
   panY: 0,
 })
 let reviewResizeObserver: ResizeObserver | null = null
-const passportNumberVisuallyConfirmed = ref(false)
 const reviewUseForTraining = ref(false)
 const trainingSelectionSaving = ref(false)
 const reviewForm = ref<ReviewScanItemRequest>({
@@ -1537,9 +1536,6 @@ const reviewFormErrors = computed(() => {
     if (!/^[A-Z0-9]{5,20}$/.test(form.documentNumber.trim().toUpperCase())) {
       errors.push('護照號碼必須為 5 至 20 碼英文字母或數字，請依原圖核對。')
     }
-    if (!passportNumberVisuallyConfirmed.value) {
-      errors.push('請先對照護照原圖確認護照號碼，並勾選已確認。')
-    }
     if (!form.nameEn.trim()) {
       errors.push('請確認英文姓名。')
     }
@@ -1621,11 +1617,6 @@ const reviewImageTransform = computed(() => {
   ].join(' ')
 })
 
-watch(
-  () => reviewForm.value.documentNumber,
-  () => { passportNumberVisuallyConfirmed.value = false },
-)
-
 const canSaveReview = computed(
   () =>
     Boolean(currentDocument.value) &&
@@ -1636,7 +1627,6 @@ const canSaveReview = computed(
 watch(
   () => currentDocument.value?.scanItemId,
   () => {
-    passportNumberVisuallyConfirmed.value = false
     const document = currentDocument.value
     if (!document) return
 
@@ -3190,17 +3180,6 @@ onBeforeUnmount(() => {
                 spellcheck="false"
               />
             </label>
-            <div
-              v-if="currentDocument.documentType === 'PASSPORT'"
-              class="passport-number-confirmation"
-            >
-              <strong>護照號碼核對（訂票／簽證重要欄位）</strong>
-              <p>請對照左側護照資料頁，逐字確認英文字母及數字。不能只依賴 OCR 或 MRZ 檢查碼。</p>
-              <label>
-                <input v-model="passportNumberVisuallyConfirmed" type="checkbox" />
-                我已對照原圖確認護照號碼正確
-              </label>
-            </div>
 
             <template
               v-if="
@@ -4776,12 +4755,4 @@ button:disabled {
   letter-spacing: .07em;
   border: 2px solid #b45309;
 }
-.passport-number-confirmation {
-  padding: 12px 14px;
-  border: 1px solid #f1ca8c;
-  border-radius: 12px;
-  background: #fffaf0;
-}
-.passport-number-confirmation p { margin: 6px 0 10px; font-size: .85rem; }
-.passport-number-confirmation label { display: flex; align-items: center; gap: 10px; }
 </style>
