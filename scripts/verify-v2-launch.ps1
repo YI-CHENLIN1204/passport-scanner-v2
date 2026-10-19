@@ -296,6 +296,83 @@ ORDER BY table_name;
     $deleteStatus = Get-StatusCode -Method DELETE -Uri "$apiBase/api/scan-items/$($permitItem.scanItemId)"
     Assert-Equal -Actual $deleteStatus -Expected "400" -Message "Reviewed scan must not be directly deletable."
 
+    Write-Host "[4/8] D-132 manual merge with equivalent name glyphs"
+    # Use a separate synthetic cohort. The two names are different literal
+    # Unicode spellings; the formal original document names must survive.
+    $wenLiteral = -join ([char]0x6E29, [char]0x660E)
+    $wenTraditional = -join ([char]0x6EAB, [char]0x660E)
+    $reviewedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $glyphTour = Invoke-Api -Method POST -Uri "$apiBase/api/tours" -Body @{
+        tourName = "D132 Glyph Merge Acceptance"
+        departureDate = "2099-11-10"
+        returnDate = "2099-11-12"
+        requiredDocumentTypes = @("PASSPORT", "TAIWAN_COMPATRIOT_PERMIT")
+    }
+
+    $glyphPassport = Invoke-Api -Method POST -Uri "$apiBase/api/passport-reviews?tourId=$($glyphTour.tourId)" -Body @{
+        schemaVersion = 2
+        documentType = "passport"
+        chineseName = $wenLiteral
+        englishName = "WEN MING"
+        passportNumber = "T88776655"
+        nationality = "TWN"
+        issuingState = "TWN"
+        birthDate = "1991-05-06"
+        sex = "M"
+        expiryDate = "2035-01-01"
+        verification = @{
+            passportNumberCheckDigit = $true
+            birthDateCheckDigit = $true
+            expiryDateCheckDigit = $true
+            compositeCheckDigit = $true
+        }
+        reviewAssertions = @{
+            chineseNameVisuallyConfirmed = $true
+            englishNameVisuallyConfirmed = $true
+        }
+        ocr = @{
+            engine = "paddleocr-ppocrv5"
+            line2Validated = $true
+            chineseNameSource = "name-field"
+            chineseNameScore = 0.9
+            chineseNameRomanizationStatus = "compatible"
+            fallbackUsed = $false
+            averageScore = 0.9
+        }
+        reviewedAt = $reviewedAt
+    }
+
+    $glyphPermit = Invoke-Api -Method POST -Uri "$apiBase/api/taiwan-compatriot-permit-reviews?tourId=$($glyphTour.tourId)" -Body @{
+        schemaVersion = 1
+        documentType = "taiwan-compatriot-permit"
+        chineseName = $wenTraditional
+        permitNumber = "87654320"
+        birthDate = "1991-05-06"
+        sex = "M"
+        expiryDate = "2035-01-01"
+        reviewAssertions = @{
+            allFieldsVisuallyConfirmed = $true
+        }
+        ocr = @{
+            engine = "paddleocr-ppocrv5"
+            extractedFieldCount = 5
+            averageScore = 0.9
+        }
+        reviewedAt = $reviewedAt
+    }
+
+    Assert-True -Condition ($glyphPassport.travelerId -ne $glyphPermit.travelerId) -Message "Variant-only identities must not trigger new automatic traveler merging."
+    $glyphMerged = Invoke-Api -Method POST -Uri "$apiBase/api/travelers/$($glyphPassport.travelerId)/merge" -Body @{
+        sourceTravelerId = $glyphPermit.travelerId
+    }
+    Assert-Equal -Actual $glyphMerged.traveler.travelerId -Expected $glyphPassport.travelerId -Message "Explicit equivalent-glyph merge must preserve target traveler."
+    Assert-Equal -Actual (@($glyphMerged.documents).Count) -Expected 2 -Message "Explicit glyph merge must preserve both document versions."
+    $glyphOriginals = @($glyphMerged.documents | ForEach-Object { $_.nameZhOnDocument })
+    Assert-True -Condition ($glyphOriginals -contains $wenLiteral) -Message "Passport printed name must retain its original glyph."
+    Assert-True -Condition ($glyphOriginals -contains $wenTraditional) -Message "Permit printed name must retain its original glyph."
+    Assert-Equal -Actual (Get-StatusCode -Uri "$apiBase/api/travelers/$($glyphPermit.travelerId)") -Expected "404" -Message "Source traveler must not remain independently after confirmed merge."
+
     Write-Host "[5/8] Production photo retention preserves explicitly selected training copy"
     $trainingSampleId = Invoke-Psql "SELECT training_sample_id FROM training_samples WHERE source_scan_item_id='$($permitItem.scanItemId)';"
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($trainingSampleId)) -Message "Training sample was not created."
