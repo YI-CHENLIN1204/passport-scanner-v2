@@ -232,6 +232,17 @@ frontend/.env.example
 
 V3 才考慮旅客自行拍攝／上傳證件；ERP / CRM 整合也不屬於目前 V2 範圍。
 
+
+## V2 上線驗收
+
+不要使用 GitHub Actions 做正式驗收。原 Windows 主機從 repository root 執行：
+
+```powershell
+.\scripts\verify-v2-launch.ps1
+```
+
+此流程會使用獨立 Docker project、15173/15080 host ports 與獨立 PostgreSQL volume，集中執行 frontend `verify:v2`、backend build、Docker/schema、合成 batch/review、production photo retention、backup/restore 與 restart persistence，不會讀取正常開發資料庫。完整 release gate 與仍需真人瀏覽器操作的項目見 `docs/V2_LAUNCH_ACCEPTANCE.md`。
+
 ## PaddleOCR 模型 CORS
 
 開發環境不要讓瀏覽器直接向 Paddle 官方模型 CDN 抓取模型。部分 CDN 回應可能帶有與目前 localhost port 不一致的 `Access-Control-Allow-Origin`，例如先前在 5174 載入後，切回 5173 可能收到只允許 5174 的快取回應。
