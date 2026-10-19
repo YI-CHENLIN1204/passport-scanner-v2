@@ -1199,3 +1199,8 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-19 — D-132 異體字端到端驗收暫停於 HTTP 400（原因待回應內容）
 - Windows 截圖：原本 D-131 步驟成功啟動隔離 Docker 並進入 [4/8]，新增 D-132 `manual merge with equivalent name glyphs` 測試呼叫 API 時得到 HTTP 400；故 D-132 此案例 **沒有 PASS**，亦未進入後續 retention/restore 段落。本次隔離 stack / volume 已清除，不影響原本資料。
 - 目前錯誤輸出只有 Invoke-RestMethod 400，**不足以判斷是護照或台胞證請求、欄位格式、抑或後端驗證**。不得猜測原因或放寬正式驗證器。更新 `scripts/verify-v2-launch.ps1` 的純合成資料 Invoke-Api 錯誤處理，補印 HTTP method、endpoint、status 與 JSON response details，下一次執行可直接知道根因。此次僅改善診斷，尚待 Windows 結果；禁止 Actions。
+
+
+## 2026-10-19 — D-132 診斷腳本 PowerShell StrictMode 二次阻擋已修正
+- 原 Windows 回報 D-132 [4/8] API 失敗後，`Invoke-Api` catch 區塊因 `ErrorDetails` 為 null 而直接讀取 `.Message`，產生 `PropertyNotFoundException`，遮蔽原始 HTTP 400；並非證明正式 OCR 或旅客合併邏輯錯誤。
+- 已先把錯誤紀錄保存為 `$caught`，確認 `ErrorDetails` 非 null 才取 `.Message`，否則嘗試讀 response stream，最後以 exception 訊息 fallback。下一次可顯示 endpoint、HTTP code 與後端回應，確認真實欄位問題。本次未碰 backend 業務驗證；D-132 測試仍待 Windows 通過。禁止 Actions。
