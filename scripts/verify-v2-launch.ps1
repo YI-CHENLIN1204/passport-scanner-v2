@@ -54,8 +54,11 @@ function Invoke-Api {
     }
 
     if ($null -ne $Body) {
-        $parameters["ContentType"] = "application/json"
-        $parameters["Body"] = $Body | ConvertTo-Json -Depth 20 -Compress
+        $parameters["ContentType"] = "application/json; charset=utf-8"
+        $json = $Body | ConvertTo-Json -Depth 20 -Compress
+        # Windows PowerShell 5.1 may transmit JSON strings using a legacy
+        # encoding. Send explicit UTF-8 bytes so Chinese test names survive.
+        $parameters["Body"] = [System.Text.Encoding]::UTF8.GetBytes($json)
     }
 
     try {
