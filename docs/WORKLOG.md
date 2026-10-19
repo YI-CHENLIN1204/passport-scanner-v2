@@ -1232,3 +1232,10 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 - 前端 CSV 欄位新增 `nameEnSurname` 英文姓、`nameEnGivenNames` 英文名選項，從既有護照 MRZ 表示的 `SURNAME, GIVEN NAMES` 拆解；無逗號時留白避免猜錯姓。維持原英文全名欄位。生日／護照和台胞證有效期限在輸出前若符合年-月-日格式則月日補零；不改正式存檔資料。
 - 更新 `test-v2-export-functional.mjs` 涵蓋姓名拆解和日期補零。CSV 純文字檔不能解決 Excel 欄寬及 Excel 自行轉型，應另新增正式 xlsx 匯出能力後再進行實際 UI 驗收；目前未宣稱系統已支援 xlsx。用上傳 CSV 另生成對話內 Excel 排版檢視版，並未上傳個資 GitHub。
 - 證號應保留原始英數字串、不得去掉英文字母或轉數字；使用者對英文字母「不一樣」的具體期待待釐清。證件版本測試使用同人另一本有效證件（或純合成測試資料），不得任意改造真實護照號碼。
+
+
+## 2026-10-19 — D-132：正式下載由 CSV 改為 Excel XLSX（待 Windows 驗證）
+- 使用者要求不要 CSV；Excel 中護照號碼、身分證字號、台胞證號碼有英文字母或純數字時對齊不一致，欄寬太窄，日期月日須兩位數。正式 UI 匯出已改為單一 `.xlsx` 檔，依勾選產生多工作表；原欄位勾選與拖曳排序維持。預設所有儲存格以文字保留英數證號、前導零與日期字串，統一置中；欄寬根據內容估算，標題加粗、凍結首列及篩選。
+- 新增瀏覽器端 `frontend/src/services/excelWorkbook.ts`（不使用雲端服務，不新增 NPM 套件），輸出 Open XML XLSX；替換 `TourDetailPage.vue` CSV 下載，前端顯示 Excel。舊 CSV 合成測試改為生成 XLSX ZIP 並檢查多表、內容、欄寬與文字格式，且同步更新 launch guards。
+- D-132 原有英文姓／英文名欄位保留，可個別勾選；姓名無 MRZ 逗號格式時不臆測姓氏。日期欄按 `YYYY-MM-DD` 補零並輸出文字，避免 Excel 自動改格式。
+- **尚未 Windows 實測／Excel 實際開檔，不能宣稱此修改 PASS。** 不啟動 GitHub Actions，也不把使用者私人 CSV 或證件上傳 repository。
