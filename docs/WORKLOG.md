@@ -1250,3 +1250,9 @@ Scope: only an optional pilot, not a replacement of browser-based production; no
 ## 2026-10-20 — D-132 Excel 分檔匯出使用者確認完成
 - 使用者於更新後回覆「好了」，依此記錄四個表別改為各自下載獨立 XLSX 的實際操作已完成。未收到新下載檔逐格驗算，故不宣稱每個工作表所有資料皆另經人工逐筆核對。
 - Excel 欄寬、文字證號、日期補零及可選英文姓／英文名設計保留；後續重點移至「同一旅客多份同類證件的歷史版本保留」，優先以合成資料回歸驗證，不為測試修改真實證件，也不重新做 OCR 固定 Validation。GitHub Actions 禁止啟動。
+
+
+## 2026-10-20 — D-133 程式變更（待 Windows 驗證）
+- 已檢查 `TourDetailPage.vue` 審核及 `PostgresScanQueueStore.ReviewItem`：批次正式審核先有原圖保存判斷及後端正式證件格式驗證，但 UI 未強制核對護照號碼。
+- 新增護照號碼高對比欄位、明確原圖核對 checkbox、每次換證／輸入更動清除核對、未核對禁止儲存；加入 V2 regression static guards。沒有改 OCR、MRZ 安全門檻或既有 DB 欄位。
+- 尚待原 Windows `npm.cmd run verify:v2` 與實際 UI 審核測試。後續再針對真正可用的 MRZ/checkdigit evidence 決定是否強化 API 記錄；避免盲目新增模型或無效診斷。
